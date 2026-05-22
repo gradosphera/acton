@@ -989,6 +989,81 @@ fn localnet_admin_dump_and_load_state_roundtrip() {
 }
 
 #[test]
+fn localnet_admin_set_shard_account_updates_selected_account() {
+    let project = ProjectBuilder::new("localnet-admin-set-shard-account").build();
+    let node = project.localnet().start();
+    let source = "0:1111111111111111111111111111111111111111111111111111111111111111";
+    let target = "0:2222222222222222222222222222222222222222222222222222222222222222";
+
+    let fund = node.post_json(
+        "/acton_fundAccount",
+        &json!({
+            "address": source,
+            "amount": 1_000_000_000u128,
+        }),
+    );
+    let source_info = wait_for_ok_response(
+        &node,
+        &format!("/api/v2/getAddressInformation?address={source}"),
+        Duration::from_secs(5),
+    );
+    let source_balance = parse_address_balance(&source_info);
+    let source_shard_response = wait_for_ok_response(
+        &node,
+        &format!("/api/v2/getShardAccountCell?address={source}"),
+        Duration::from_secs(5),
+    );
+    let source_shard_boc = shard_account_cell_boc64(&source_shard_response).to_owned();
+
+    let set = node.post_json(
+        "/acton_setShardAccount",
+        &json!({
+            "address": target,
+            "shard_account": source_shard_boc,
+        }),
+    );
+    let target_info_after_set = wait_for_ok_response(
+        &node,
+        &format!("/api/v2/getAddressInformation?address={target}"),
+        Duration::from_secs(5),
+    );
+    let target_balance_after_set = parse_address_balance(&target_info_after_set);
+    let target_shard_response = wait_for_ok_response(
+        &node,
+        &format!("/api/v2/getShardAccountCell?address={target}"),
+        Duration::from_secs(5),
+    );
+    let target_shard_boc = shard_account_cell_boc64(&target_shard_response).to_owned();
+
+    let invalid = node.post_json(
+        "/acton_setShardAccount",
+        &json!({
+            "address": target,
+            "shard_account": "not-a-boc",
+        }),
+    );
+
+    let snapshot = json!({
+        "fund": summarize_admin_response(&fund),
+        "set": summarize_admin_response(&set),
+        "source_balance": source_balance.to_string(),
+        "target_balance_after_set": target_balance_after_set.to_string(),
+        "target_cell_matches_source": target_shard_boc == source_shard_boc,
+        "target_after_set": summarize_shard_account_cell_response(&target_shard_response, None),
+        "invalid": summarize_admin_response(&invalid),
+    });
+
+    assertion().eq(
+        pretty_json_for_snapshot(&snapshot, project.path()),
+        snapbox::file!(
+            "snapshots/localnet/test_localnet_admin_set_shard_account_updates_selected_account.summary.json"
+        ),
+    );
+
+    node.stop();
+}
+
+#[test]
 fn localnet_script_println_net_send_in_broadcast_shows_synthetic_hint() {
     let project = ProjectBuilder::new("localnet-broadcast-println-net-send")
         .contract("child", CHILD_CONTRACT)

@@ -1,6 +1,6 @@
 use crate::executor::{ExecContext, TvmExecutor};
 use crate::localnet::compute_normalized_ext_in_hash;
-use crate::remote::{RemoteProvider, fetch_remote_shard_account};
+use crate::remote::{RemoteProvider, account_meta_from_shard_account, fetch_remote_shard_account};
 use crate::storage::{
     self, GlobalLibraryEntry, GlobalLibraryLookup, JettonMasterMeta, NftItemMeta,
 };
@@ -497,11 +497,16 @@ impl Node {
             lt,
         )?;
 
-        self.detect_jetton_masters(&dst)?;
-        self.detect_jetton_wallets(&dst)?;
-        self.detect_nft_items(&dst)?;
+        self.detect_assets(&dst)?;
 
         Ok((block_meta, tx_meta))
+    }
+
+    fn detect_assets(&mut self, addr: &Addr) -> anyhow::Result<()> {
+        self.detect_jetton_masters(addr)?;
+        self.detect_jetton_wallets(addr)?;
+        self.detect_nft_items(addr)?;
+        Ok(())
     }
 
     fn detect_jetton_wallets(&mut self, addr: &Addr) -> anyhow::Result<()> {
@@ -1448,6 +1453,55 @@ impl Node {
 
         // Create empty shard account
         Self::empty_shard_account_boc()
+    }
+
+    pub fn set_shard_account(
+        &mut self,
+        addr: &Addr,
+        shard_account_boc: BocBytes,
+    ) -> anyhow::Result<()> {
+        let old_boc = self.get_shard_account(addr).ok();
+        self.clear_detected_assets(addr);
+
+        let cell = Boc::decode(&shard_account_boc).context("Failed to decode ShardAccount BOC")?;
+        let shard_account = cell
+            .parse::<ShardAccount>()
+            .context("Failed to parse ShardAccount BOC")?;
+        let meta =
+            account_meta_from_shard_account(&shard_account, &shard_account_boc, &mut self.cas)?;
+        let lt = meta.last_trans_lt.unwrap_or(self.globals.global_lt);
+
+        self.persist_account_meta(addr, &meta)?;
+        self.latest.accounts.insert(*addr, meta);
+        self.update_public_libraries_from_account_diff(
+            addr,
+            old_boc.as_ref(),
+            Some(&shard_account_boc),
+            lt,
+        )?;
+        self.detect_assets(addr)?;
+
+        Ok(())
+    }
+
+    fn clear_detected_assets(&mut self, addr: &Addr) {
+        self.history.jetton_masters.remove(addr);
+        self.history.jetton_wallets.remove(addr);
+        self.history.nft_items.remove(addr);
+    }
+
+    fn persist_account_meta(&self, addr: &Addr, meta: &AccountMeta) -> anyhow::Result<()> {
+        let Some(conn) = &self.conn else {
+            return Ok(());
+        };
+
+        let account_data = serde_json::to_vec(meta)?;
+        conn.lock().expect("Failed to lock DB connection").execute(
+            "INSERT OR REPLACE INTO accounts (address, data) VALUES (?1, ?2)",
+            params![addr.addr.to_vec(), account_data],
+        )?;
+
+        Ok(())
     }
 
     pub fn get_shard_account_at_block(

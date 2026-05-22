@@ -90,6 +90,7 @@ No other v3 endpoints are exposed by the local development node at the moment.
 | `POST` | `/acton_loadState`            | JSON body: `{"path":"<SNAPSHOT_PATH>"}`                                                  | Replaces the current node state with a JSON state snapshot.                               |
 | `GET`  | `/acton_getStateSource`       | No params                                                                                | Returns current state source used for account resolution (`Local` or `Remote`).           |
 | `POST` | `/acton_setStateSource`       | JSON enum payload (`"Local"` or `{"Remote": {...}}`)                                     | Switches account state source at runtime.                                                 |
+| `POST` | `/acton_setShardAccount`      | JSON body: `{"address":"<ADDR>","shard_account":"<BASE64_BOC>"}`                         | Replaces the selected account state with a base64-encoded `ShardAccount` BOC.             |
 
 <Callout type="warn">
   Control routes are intended for local development tooling and should not be exposed publicly.

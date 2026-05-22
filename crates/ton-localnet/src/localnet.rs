@@ -187,6 +187,11 @@ pub(crate) enum Request {
         seqno: Option<u32>,
         resp: oneshot::Sender<anyhow::Result<BocBytes>>,
     },
+    SetShardAccount {
+        address: Addr,
+        shard_account: BocBytes,
+        resp: oneshot::Sender<anyhow::Result<()>>,
+    },
     GetTransactions {
         address: Addr,
         limit: usize,
@@ -417,6 +422,25 @@ impl Localnet {
             .send(Request::GetShardAccountCell {
                 address,
                 seqno,
+                resp,
+            })
+            .await?;
+        rx.await?
+    }
+
+    pub async fn set_shard_account(
+        &self,
+        address_str: String,
+        shard_account: String,
+    ) -> anyhow::Result<()> {
+        let address = Self::parse_addr(&address_str)?;
+        let shard_account =
+            BocBytes::from_base64(&shard_account).context("Invalid shard_account base64")?;
+        let (resp, rx) = oneshot::channel();
+        self.tx
+            .send(Request::SetShardAccount {
+                address,
+                shard_account,
                 resp,
             })
             .await?;
@@ -942,6 +966,14 @@ fn process_loop_request(node: &mut Node, req: Request) {
             resp,
         } => {
             let res = node.get_shard_account_at_block(&address, seqno);
+            let _ = resp.send(res);
+        }
+        Request::SetShardAccount {
+            address,
+            shard_account,
+            resp,
+        } => {
+            let res = node.set_shard_account(&address, shard_account);
             let _ = resp.send(res);
         }
         Request::GetTransactions {

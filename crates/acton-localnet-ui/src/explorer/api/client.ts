@@ -313,6 +313,15 @@ export class TonClient {
     }
   }
 
+  async setShardAccount(address: string, shardAccount: string): Promise<void> {
+    const url = this.buildUrl(this.addressNameBaseUrl, "/acton_setShardAccount")
+    await this.request<null>(url, "Failed to set shard account", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({address, shard_account: shardAccount}),
+    })
+  }
+
   getEndpoints(): {readonly apiV2: string; readonly apiV3: string; readonly admin: string} {
     return {
       apiV2: this.buildUrl(this.v2BaseUrl, "").toString().replace(/\/$/, ""),

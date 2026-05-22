@@ -4,7 +4,7 @@ use crate::node;
 use crate::server::StartupWallet;
 use crate::server::models::{
     FaucetRequest, GetAddressNameQuery, GetCompilerAbiQuery, RegisterCompilerAbisRequest,
-    SetAddressNameRequest, StatePathRequest,
+    SetAddressNameRequest, SetShardAccountRequest, StatePathRequest,
 };
 use crate::types::Hash256;
 use axum::{Json, extract::State};
@@ -94,6 +94,17 @@ pub async fn set_state_source(
     Json(payload): Json<node::StateSource>,
 ) -> Json<Value> {
     handle_result(node.set_state_source(payload), |()| Value::Null).await
+}
+
+pub async fn set_shard_account(
+    State(node): State<Arc<Localnet>>,
+    Json(payload): Json<SetShardAccountRequest>,
+) -> Json<Value> {
+    handle_result(
+        node.set_shard_account(payload.address, payload.shard_account),
+        |()| Value::Null,
+    )
+    .await
 }
 
 pub async fn set_address_name(

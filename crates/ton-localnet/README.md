@@ -13,6 +13,22 @@ Errors are returned with HTTP status and request-error payload:
 }
 ```
 
+## `/acton_setShardAccount`
+
+`/acton_setShardAccount` is a local control endpoint for replacing one account
+state with a serialized `ShardAccount`.
+
+Request body:
+
+```json
+{
+  "address": "<ADDR>",
+  "shard_account": "<BASE64_BOC>"
+}
+```
+
+`shard_account` must be a base64-encoded `ShardAccount` BOC string.
+
 ## `/api/v3/addressInformation`
 
 `/api/v3/addressInformation` is implemented as a v3-compatible view over
