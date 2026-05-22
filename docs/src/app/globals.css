@@ -64,6 +64,19 @@ pre {
   font-family: var(--font-geist-mono), "Courier New", monospace;
 }
 
+.prose h2:has(+ .availability-badge) {
+  margin-bottom: 0.5rem;
+}
+
+.prose .availability-badge {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.prose .availability-badge + figure {
+  margin-top: 1rem;
+}
+
 figure.shiki > div[role="region"] {
   max-height: 44rem;
 }

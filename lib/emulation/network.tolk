@@ -183,6 +183,8 @@ type SendResultList = BigArray<SendResult>
 
 /// Metadata returned when an external-in message fails before producing an
 /// accepted transaction trace.
+///
+/// Available since Acton 1.1.
 struct ExternalSendError {
     /// Error message returned by the emulator.
     message: string
@@ -206,6 +208,8 @@ struct ExternalSendError {
 /// `expect(result).toHaveExternalVmExitCode(...)` for diagnostics.
 /// Use [ExternalSendResult.unwrap] when a trace is required, or
 /// [ExternalSendResult.isAccepted] when the test needs to branch on the result.
+///
+/// Available since Acton 1.1.
 struct ExternalSendResult {
     /// Produced transaction trace, or `null` if the external-in message was not accepted.
     transactions: SendResultList?
@@ -221,6 +225,8 @@ fun SendResultList.at(self, index: int): SendResult {
 }
 
 /// Returns `true` when the external-in message produced a transaction trace.
+///
+/// Available since Acton 1.1.
 fun ExternalSendResult.isAccepted(self): bool {
     return self.transactions != null;
 }
@@ -235,6 +241,8 @@ fun ExternalSendResult.isAccepted(self): bool {
 ///
 /// The `location` parameter is filled automatically and is only used for
 /// diagnostics; user code should normally omit it.
+///
+/// Available since Acton 1.1.
 fun ExternalSendResult.unwrap(
     self,
     location: string = reflect.sourceLocationAsString(),
@@ -273,6 +281,8 @@ fun ExternalSendResult.__failExternalSend(self, context: string, location: strin
 ///
 /// The `location` parameter is filled automatically and is only used for
 /// diagnostics; user code should normally omit it.
+///
+/// Available since Acton 1.1.
 fun ExternalSendResult.at(
     self,
     index: int,
@@ -287,6 +297,8 @@ fun ExternalSendResult.at(
 ///
 /// The `location` parameter is filled automatically and is only used for
 /// diagnostics; user code should normally omit it.
+///
+/// Available since Acton 1.1.
 fun ExternalSendResult.giveName(
     self,
     nameForUI: string,
@@ -408,6 +420,8 @@ fun SendResultList.waitForTrace(
 }
 
 /// Wait for the first transaction produced by [net.sendExternal].
+///
+/// Available since Acton 1.1.
 fun ExternalSendResult.waitForFirstTransaction(
     self,
     quiet: bool = false,
@@ -421,6 +435,8 @@ fun ExternalSendResult.waitForFirstTransaction(
 }
 
 /// Wait for the full trace produced by [net.sendExternal].
+///
+/// Available since Acton 1.1.
 fun ExternalSendResult.waitForTrace(
     self,
     quiet: bool = false,
@@ -479,6 +495,8 @@ struct SearchParams {
     /// ```
     state_init: (Cell<StateInit?> -> bool) | Cell<StateInit?> | null = null
     /// Send mode of the parent action that produced this transaction.
+    ///
+    /// Available since Acton 1.1.
     sendMode: (uint32 -> bool) | uint32 | null = null
 }
 
@@ -668,6 +686,8 @@ fun SendResultList.findExternalOutMessage<TBody = unknown>(
 }
 
 /// Find an external-out message in the trace produced by [net.sendExternal].
+///
+/// Available since Acton 1.1.
 fun ExternalSendResult.findExternalOutMessage<TBody = unknown>(
     self,
     params: ExternalOutSearchParams = {},
@@ -1117,6 +1137,8 @@ fun cell.__asPayload(self): Cell<cell> {
 /// On failure, Acton reports the external status, emulator reason, VM exit code
 /// when available, a known exit-code description or ABI error name, source
 /// location, and the full backtrace when the test is run with `--backtrace full`.
+///
+/// Available since Acton 1.1.
 fun Expectation<ExternalSendResult>.toBeAccepted(self): void {
     if (self.value.transactions != null) {
         return;
@@ -1125,6 +1147,8 @@ fun Expectation<ExternalSendResult>.toBeAccepted(self): void {
 }
 
 /// Expect the external-in message to be rejected before acceptance.
+///
+/// Available since Acton 1.1.
 fun Expectation<ExternalSendResult>.toBeNotAccepted(self): void {
     if (self.value.error != null && self.value.error.externalNotAccepted) {
         return;
@@ -1144,6 +1168,8 @@ fun Expectation<ExternalSendResult>.toBeNotAccepted(self): void {
 ///
 /// This matcher is intended for rejected external-in messages. For accepted
 /// external messages, use transaction matchers on the produced [SendResultList].
+///
+/// Available since Acton 1.1.
 fun Expectation<ExternalSendResult>.toHaveExternalVmExitCode(self, exitCode: int): void {
     if (
         self.value.error != null && self.value.error.vmExitCode != null &&

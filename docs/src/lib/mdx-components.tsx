@@ -8,6 +8,7 @@ import {
   CommandOptions,
   CommandOptionTitle,
 } from "@/components/CommandOptions"
+import {AvailabilityBadge} from "@/components/AvailabilityBadge"
 import {Callout} from "@/components/Callout"
 import {APIPage} from "@/components/api-page"
 import {File, Files, Folder} from "@/components/Files"
@@ -22,6 +23,7 @@ export function getMDXComponents(components?: MDXComponents): MDXComponents {
     CommandOptionMeta,
     CommandOptions,
     CommandOptionTitle,
+    AvailabilityBadge,
     Cards,
     Card,
     APIPage,

@@ -136,6 +136,8 @@ fun parseCellFromHex(cellHex: string): cell {
 
 /// Decode a root cell from base64-encoded BOC bytes.
 ///
+/// Available since Acton 1.1.
+///
 /// `cellBase64` must be a valid BOC serialized as base64.
 /// Invalid or malformed input (including non-BOC payloads) fails with an error like
 /// `Failed to decode cell base64 <input>`.
