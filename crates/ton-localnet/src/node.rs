@@ -1782,29 +1782,19 @@ impl Node {
             layout: None,
         };
 
-        let boc = BocRepr::encode(message)?;
-        let hash = compute_boc_hash(&boc)?;
-        self.cas.put(boc.clone().into(), hash);
-
-        // 2. Register MsgMeta
-        let msg_meta = parse_msg_meta(&boc, hash)?;
-        self.history.msg_by_hash.insert(hash, msg_meta);
-
-        // 3. Decrease Giver balance
+        // Decrease giver balance before injecting the internal message. The local faucet
+        // models a single destination transaction, so the source account is adjusted here.
         giver_meta.cached_balance = Some(giver_balance - amount);
         self.latest.accounts.insert(GIVER_ADDR, giver_meta);
 
-        // 4. Enqueue internal message
-        self.pool.push_internal(hash);
-
-        // 5. Mine one
-        let (block_meta, tx_meta) = self.mine_one()?;
+        let (_, tx_hash, block_seqno, _) =
+            self.send_internal_boc(BocRepr::encode(message)?.into())?;
 
         Ok(serde_json::json!({
             "ok": true,
             "result": {
-                "tx_hash": tx_meta.tx_hash.to_hex(),
-                "block_seqno": block_meta.seqno
+                "tx_hash": tx_hash.to_hex(),
+                "block_seqno": block_seqno
             }
         }))
     }
