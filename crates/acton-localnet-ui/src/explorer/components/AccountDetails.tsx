@@ -513,11 +513,15 @@ export const AccountDetails: React.FC<AccountDetailsProps> = ({
                   </TableRow>
                 )
               })}
+              {(!holders || holders.length === 0) && (
+                <TableRow className={styles.emptyRow}>
+                  <TableCell colSpan={3} className={styles.emptyCell}>
+                    <div className={styles.emptyState}>No holders found.</div>
+                  </TableCell>
+                </TableRow>
+              )}
             </TableBody>
           </Table>
-          {(!holders || holders.length === 0) && (
-            <div className={styles.empty}>No holders found.</div>
-          )}
         </CardContent>
       ) : (
         <ContractCode

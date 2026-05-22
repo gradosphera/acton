@@ -96,6 +96,25 @@
   background-color: var(--tonscan-row-hover) !important;
 }
 
+.emptyRow:hover {
+  background: transparent !important;
+}
+
+.emptyCell {
+  padding: 18px 16px 20px !important;
+  text-align: center;
+}
+
+.emptyState {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 56px;
+  color: var(--tonscan-text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+}
+
 .clickableRow {
   cursor: pointer;
 }
