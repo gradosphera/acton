@@ -5,9 +5,9 @@ use crate::storage::{
     self, GlobalLibraryEntry, GlobalLibraryLookup, JettonMasterMeta, NftItemMeta,
 };
 use crate::storage::{
-    AccountDelta, AccountMeta, AccountStatus, BlockMeta, CellStore, Globals, History, Indexes,
-    LatestState, MessageInfo, MessagePool, MsgMeta, PendingCommit, ReverseLtKey, TraceNode,
-    TransactionInfo, TxMeta,
+    AccountDelta, AccountMeta, AccountStatePreview, AccountStatus, BlockMeta, CellStore, Globals,
+    History, Indexes, LatestState, MessageInfo, MessagePool, MsgMeta, PendingCommit, ReverseLtKey,
+    TraceNode, TransactionInfo, TxMeta,
 };
 use crate::types::{Addr, BocBytes, Hash256, Lt, Seqno};
 use anyhow::Context;
@@ -1251,6 +1251,8 @@ impl Node {
                     in_msg,
                     out_msgs,
                     tx_boc,
+                    account_state_before: None,
+                    account_state_after: None,
                 }
             })
             .collect()
@@ -1313,6 +1315,8 @@ impl Node {
             in_msg,
             out_msgs,
             tx_boc,
+            account_state_before: None,
+            account_state_after: None,
         })
     }
 
@@ -1566,6 +1570,11 @@ impl Node {
                     }),
                     out_msgs,
                     tx_boc: exec_result.tx_boc,
+                    account_state_before: account_state_preview_from_boc(&shard_account_boc),
+                    account_state_after: exec_result
+                        .new_account_boc
+                        .as_ref()
+                        .and_then(account_state_preview_from_boc),
                 },
                 children: Vec::new(),
                 external_hash: Some(msg_hash),
@@ -1720,6 +1729,48 @@ fn compute_boc_hash(boc: &[u8]) -> anyhow::Result<Hash256> {
     let cell = Boc::decode(boc)?;
     let hash = cell.repr_hash();
     Ok(Hash256(*hash.as_array()))
+}
+
+fn account_state_preview_from_boc(shard_account_boc: &BocBytes) -> Option<AccountStatePreview> {
+    let hash = compute_boc_hash(shard_account_boc).ok()?;
+    let cell = Boc::decode(shard_account_boc).ok()?;
+    let shard_account = cell.parse::<ShardAccount>().ok()?;
+    let optional_account = shard_account.account.load().ok()?;
+    let Some(account) = optional_account.0 else {
+        return Some(AccountStatePreview {
+            hash,
+            balance: 0,
+            status: AccountStatus::Nonexist,
+            code_hash: None,
+            data_hash: None,
+            frozen_hash: None,
+        });
+    };
+
+    let mut code_hash = None;
+    let mut data_hash = None;
+    let mut frozen_hash = None;
+    let status = match account.state {
+        AccountState::Uninit => AccountStatus::Uninit,
+        AccountState::Active(state) => {
+            code_hash = state.code.map(|cell| Hash256(*cell.repr_hash().as_array()));
+            data_hash = state.data.map(|cell| Hash256(*cell.repr_hash().as_array()));
+            AccountStatus::Active
+        }
+        AccountState::Frozen(state) => {
+            frozen_hash = Some(Hash256(state.0));
+            AccountStatus::Frozen
+        }
+    };
+
+    Some(AccountStatePreview {
+        hash,
+        balance: account.balance.tokens.into(),
+        status,
+        code_hash,
+        data_hash,
+        frozen_hash,
+    })
 }
 
 fn collect_code_data_cells(
