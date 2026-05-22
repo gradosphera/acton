@@ -5,7 +5,9 @@ use crate::external_send::{SendBocContext, format_send_boc_error};
 use crate::tonconnect::TonConnectSession;
 use crate::wallets::open_wallets;
 use acton_config::color::OwoColorize;
-use acton_config::config::{ActonConfig, global_libraries_path, project_root};
+use acton_config::config::{
+    ActonConfig, LibrariesFile, LibraryConfig, global_libraries_path, project_root,
+};
 use anyhow::{Context, anyhow};
 use chrono::{DateTime, Local};
 use inquire::{Select, Text};
@@ -13,7 +15,7 @@ use std::collections::HashSet;
 use std::fs;
 use std::fs::File;
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use tasm_core::printer::FormatOptions;
 use tempfile::TempDir;
@@ -89,11 +91,27 @@ pub fn publish_cmd(
     };
 
     let library_hash = library_code_cell.repr_hash();
+    let library_hash_hex = hex::encode(library_hash);
     println!(
         "  {} Library hash: {}",
         "→".blue().bold(),
-        format!("0x{}", hex::encode(library_hash)).dimmed()
+        format!("0x{library_hash_hex}").dimmed()
     );
+
+    if maybe_top_up_tracked_library_before_publish(
+        &config,
+        &library_hash_hex,
+        &network,
+        duration_arg.clone(),
+        wallet_name.clone(),
+        tonconnect,
+        tonconnect_port,
+        amount_arg.clone(),
+        yes,
+        project_root(),
+    )? {
+        return Ok(());
+    }
 
     let duration_seconds = if let Some(d) = duration_arg {
         parse_duration(&d)?
@@ -182,6 +200,7 @@ pub fn publish_cmd(
 
     let custom_networks = config.custom_networks();
     let api_client = TonApiClient::new(network.clone(), custom_networks)?;
+    warn_if_library_exists_on_chain(library_hash, &network, &api_client);
 
     let message_info = IntMsgInfo {
         ihr_disabled: true,
@@ -211,12 +230,12 @@ pub fn publish_cmd(
     println!(
         "  {} Library should be available soon at hash: {}",
         "→".blue().bold(),
-        format!("0x{}", hex::encode(library_hash)).dimmed()
+        format!("0x{library_hash_hex}").dimmed()
     );
 
     save_library(
         contract_id.as_deref().unwrap_or("unknown"),
-        &hex::encode(library_hash),
+        &library_hash_hex,
         &Boc::encode_base64(&library_code_cell),
         &format_std_address(&publisher_address, &network),
         duration_seconds,
@@ -234,6 +253,193 @@ pub fn publish_cmd(
 
     println!("  {} Library info saved", "✓".green().bold());
     Ok(())
+}
+
+struct TrackedLibraryMatch {
+    id: String,
+    library: LibraryConfig,
+    metadata_path: PathBuf,
+    source_label: &'static str,
+}
+
+#[allow(clippy::too_many_arguments)]
+fn maybe_top_up_tracked_library_before_publish(
+    config: &ActonConfig,
+    library_hash: &str,
+    network: &Network,
+    duration_arg: Option<String>,
+    wallet_name: Option<String>,
+    tonconnect: bool,
+    tonconnect_port: u16,
+    amount_arg: Option<String>,
+    yes: bool,
+    project_root: &Path,
+) -> anyhow::Result<bool> {
+    let matches = find_tracked_library_matches(project_root, library_hash, network)?;
+    if matches.is_empty() {
+        return Ok(false);
+    }
+
+    println!(
+        "  {} Library with this hash is already tracked on {}:",
+        "⚠".yellow().bold(),
+        network
+    );
+    for tracked in &matches {
+        println!(
+            "    - {} in {} ({})",
+            tracked.id.cyan(),
+            tracked.source_label,
+            tracked.library.account.yellow()
+        );
+    }
+    println!(
+        "    {}",
+        "Top-up is usually cheaper than publishing and funding another masterchain library account."
+            .dimmed()
+    );
+
+    if yes {
+        return Ok(false);
+    }
+
+    let top_up_existing = inquire::Confirm::new(
+        "Top up an existing tracked library instead of publishing a new one?",
+    )
+    .with_default(true)
+    .prompt()?;
+
+    if !top_up_existing {
+        return Ok(false);
+    }
+
+    let selected = select_tracked_library_match(&matches)?;
+    topup_library_entry(
+        config,
+        &selected.id,
+        &selected.library,
+        duration_arg,
+        wallet_name,
+        tonconnect,
+        tonconnect_port,
+        amount_arg,
+        yes,
+        Some(&selected.metadata_path),
+    )?;
+
+    Ok(true)
+}
+
+fn select_tracked_library_match(
+    matches: &[TrackedLibraryMatch],
+) -> anyhow::Result<&TrackedLibraryMatch> {
+    if matches.len() == 1 {
+        return Ok(&matches[0]);
+    }
+
+    let options = matches
+        .iter()
+        .map(|tracked| {
+            format!(
+                "{} in {} ({})",
+                tracked.id, tracked.source_label, tracked.library.account
+            )
+        })
+        .collect::<Vec<_>>();
+    let selected = Select::new("Select tracked library to top up:", options.clone()).prompt()?;
+    let selected_index = options
+        .iter()
+        .position(|option| option == &selected)
+        .unwrap_or(0);
+    Ok(&matches[selected_index])
+}
+
+fn find_tracked_library_matches(
+    project_root: &Path,
+    library_hash: &str,
+    network: &Network,
+) -> anyhow::Result<Vec<TrackedLibraryMatch>> {
+    let mut matches = Vec::new();
+    collect_tracked_library_matches(
+        &project_root.join("libraries.toml"),
+        "local libraries.toml",
+        library_hash,
+        network,
+        &mut matches,
+    )?;
+
+    if let Some(global_path) = global_libraries_path() {
+        collect_tracked_library_matches(
+            &global_path,
+            "global.libraries.toml",
+            library_hash,
+            network,
+            &mut matches,
+        )?;
+    }
+
+    Ok(matches)
+}
+
+fn collect_tracked_library_matches(
+    path: &Path,
+    source_label: &'static str,
+    library_hash: &str,
+    network: &Network,
+    matches: &mut Vec<TrackedLibraryMatch>,
+) -> anyhow::Result<()> {
+    if !path.exists() {
+        return Ok(());
+    }
+
+    let content =
+        fs::read_to_string(path).with_context(|| format!("Failed to read {}", path.display()))?;
+    let libraries_file = toml::from_str::<LibrariesFile>(&content)
+        .with_context(|| format!("Failed to parse {}", path.display()))?;
+    let Some(libraries) = libraries_file.libraries else {
+        return Ok(());
+    };
+
+    for (id, library) in libraries.libraries {
+        if library.hash.eq_ignore_ascii_case(library_hash)
+            && stored_library_network_matches(&library.network, network)
+        {
+            matches.push(TrackedLibraryMatch {
+                id,
+                library,
+                metadata_path: path.to_path_buf(),
+                source_label,
+            });
+        }
+    }
+
+    Ok(())
+}
+
+fn stored_library_network_matches(stored: &Network, target: &Network) -> bool {
+    let stored_network = stored.to_string();
+    Network::from_str(&stored_network)
+        .or_else(|_| Network::from_str(&format!("custom:{stored_network}")))
+        .is_ok_and(|normalized| normalized == *target)
+}
+
+fn warn_if_library_exists_on_chain(
+    library_hash: &HashBytes,
+    network: &Network,
+    api_client: &TonApiClient,
+) {
+    if api_client.get_library_by_hash(library_hash).is_ok() {
+        println!(
+            "  {} Library code with this hash is already available on-chain on {}.",
+            "⚠".yellow().bold(),
+            network
+        );
+        println!(
+            "    {}",
+            "Publishing again will fund another masterchain account; use `acton library topup` if you already track the existing account."
+                .dimmed()
+        );
+    }
 }
 
 enum LibrarySender {
@@ -586,10 +792,37 @@ pub fn topup_cmd(
         .get(&lib_name)
         .ok_or_else(|| anyhow!(error_fmt::library_not_found(&config, &lib_name)))?;
 
+    topup_library_entry(
+        &config,
+        &lib_name,
+        lib,
+        duration_arg,
+        wallet_name,
+        tonconnect,
+        tonconnect_port,
+        amount_arg,
+        yes,
+        None,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn topup_library_entry(
+    config: &ActonConfig,
+    lib_name: &str,
+    lib: &LibraryConfig,
+    duration_arg: Option<String>,
+    wallet_name: Option<String>,
+    tonconnect: bool,
+    tonconnect_port: u16,
+    amount_arg: Option<String>,
+    yes: bool,
+    metadata_path: Option<&Path>,
+) -> anyhow::Result<()> {
     let network = Network::from_str(&lib.network.to_string())?;
     validate_tonconnect_options(tonconnect, wallet_name.as_deref(), &network)?;
     let sender =
-        prepare_library_sender(&config, &network, wallet_name, tonconnect, tonconnect_port)?;
+        prepare_library_sender(config, &network, wallet_name, tonconnect, tonconnect_port)?;
 
     let amount_to_send_nanoton = if let Some(amount_str) = amount_arg {
         parse_ton_to_nanoton(&amount_str)?
@@ -674,8 +907,24 @@ pub fn topup_cmd(
     );
 
     let last_topup_timestamp = Local::now().to_rfc3339();
-    update_library_last_topup_timestamp(project_root(), &lib_name, &last_topup_timestamp)
+    if let Some(metadata_path) = metadata_path {
+        let updated = update_library_last_topup_timestamp_in_file(
+            metadata_path,
+            lib_name,
+            &last_topup_timestamp,
+        )
         .context("Top-up transaction was sent, but failed to update library metadata")?;
+        if !updated {
+            anyhow::bail!(
+                "Top-up transaction was sent, but library '{}' metadata was not found in {}",
+                lib_name,
+                metadata_path.display()
+            );
+        }
+    } else {
+        update_library_last_topup_timestamp(project_root(), lib_name, &last_topup_timestamp)
+            .context("Top-up transaction was sent, but failed to update library metadata")?;
+    }
 
     Ok(())
 }
