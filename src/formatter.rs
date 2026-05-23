@@ -1727,33 +1727,11 @@ See https://ton-blockchain.github.io/acton/docs/wallets for more information
             )));
         }
 
-        if let Some(missing_libraries) = self.emulations.find_tx_missing_libraries(tx.lt)
-            && !missing_libraries.is_empty()
-        {
-            let mut missing_libraries = missing_libraries.iter().cloned().collect::<Vec<_>>();
-            missing_libraries.sort_unstable();
-
-            if missing_libraries.len() == 1 {
-                extra_infos.push(FormattedExtraInfo::Tree(format!(
-                    "Library {} is missing, which is what causes this error",
-                    missing_libraries.join(", ").yellow()
-                )));
-            } else {
-                extra_infos.push(FormattedExtraInfo::Tree(format!(
-                    "Missing libraries: {}",
-                    missing_libraries.join(", ").yellow()
-                )));
+        if let Some(missing_libraries) = self.emulations.find_tx_missing_libraries(tx.lt) {
+            for line in Self::format_missing_libraries_help_lines(missing_libraries.iter().cloned())
+            {
+                extra_infos.push(FormattedExtraInfo::Tree(line));
             }
-            extra_infos.push(FormattedExtraInfo::Tree(
-                "This most likely happened because the library is not registered in tests"
-                    .to_owned(),
-            ));
-            extra_infos.push(FormattedExtraInfo::Tree(format!(
-                "To manually register library use {} somewhere in {}-like function",
-                "testing.registerLibrary(code)".yellow(),
-                "setupTests()".yellow(),
-            )));
-            extra_infos.push(FormattedExtraInfo::Tree("Learn more about libraries in documentation: https://ton-blockchain.github.io/acton/docs/libraries".to_owned()));
         }
 
         self.format_transaction_backtrace(tx, child_prefix, extra_infos);
@@ -3050,6 +3028,40 @@ impl FormatterContext<'_> {
         code.to_string()
     }
 
+    fn format_missing_libraries_help_lines(
+        missing_libraries: impl IntoIterator<Item = String>,
+    ) -> Vec<String> {
+        let mut missing_libraries = missing_libraries.into_iter().collect::<Vec<_>>();
+        missing_libraries.sort_unstable();
+
+        if missing_libraries.is_empty() {
+            return Vec::new();
+        }
+
+        let mut lines = Vec::new();
+        if missing_libraries.len() == 1 {
+            lines.push(format!(
+                "Library {} is missing, which is what causes this error",
+                missing_libraries.join(", ").yellow()
+            ));
+        } else {
+            lines.push(format!(
+                "Missing libraries: {}",
+                missing_libraries.join(", ").yellow()
+            ));
+        }
+        lines.push(
+            "This most likely happened because the library is not registered in tests".to_owned(),
+        );
+        lines.push(format!(
+            "To manually register library use {} somewhere in {}-like function",
+            "testing.registerLibrary(code)".yellow(),
+            "setupTests()".yellow(),
+        ));
+        lines.push("Learn more about libraries in documentation: https://ton-blockchain.github.io/acton/docs/libraries".to_owned());
+        lines
+    }
+
     #[must_use]
     pub fn format_get_method_assert_failure_title(failure: &GetMethodAssertFailure) -> String {
         if failure.vm_exit_code == 11 {
@@ -3082,7 +3094,9 @@ impl FormatterContext<'_> {
     pub fn format_get_method_assert_failure(&self, failure: &GetMethodAssertFailure) -> String {
         let mut output = Self::format_get_method_assert_failure_title(failure);
 
-        if failure.vm_exit_code == 11 || failure.vm_exit_code == 2 {
+        if (failure.vm_exit_code == 11 || failure.vm_exit_code == 2)
+            && failure.missing_libraries.is_empty()
+        {
             return output;
         }
 
@@ -3093,6 +3107,12 @@ impl FormatterContext<'_> {
             failure.vm_exit_code.to_string().yellow()
         )
         .ok();
+
+        for line in
+            Self::format_missing_libraries_help_lines(failure.missing_libraries.iter().cloned())
+        {
+            writeln!(details, "{line}").ok();
+        }
 
         let replayed_exception = retrace::find_exception_info(&failure.vm_log, &failure.source_map);
 

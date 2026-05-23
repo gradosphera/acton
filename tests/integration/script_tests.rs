@@ -2857,6 +2857,122 @@ fn test_script_run_get_method_failure_shows_nested_get_method_error() {
         );
 }
 
+fn script_get_method_missing_library_project(name: &str) -> Project {
+    ProjectBuilder::new(name)
+        .contract(
+            "getter",
+            r"
+            fun onInternalMessage(_: InMessage) {}
+            fun onBouncedMessage(_: InMessageBounced) {}
+
+            get fun currentCounter(): int {
+                return 123;
+            }
+        ",
+        )
+        .script_file(
+            "get_missing_library",
+            r#"
+            import "../../lib/build"
+            import "../../lib/emulation/network"
+            import "../../lib/emulation/testing"
+            import "../../lib/testing/expect"
+            import "../../lib/types/message"
+            import "../../lib/types/transaction"
+            import "../../lib/tlb/maybe"
+            import "@stdlib/exotic-cells"
+
+            fun replaceCodeWithMissingLibraryReference(contractAddress: address): void {
+                val shard = testing.getShardAccount(contractAddress);
+                expect(shard).toBeNotNull();
+
+                val account = shard!.account.load();
+                expect(account is TlbAccountInfo).toBeTrue();
+
+                if (account is TlbAccountInfo && account.storage.state is TlbAccountStateActive) {
+                    val stateInit = account.storage.state.stateInit;
+                    val patchedAccount = TlbAccountInfo {
+                        addr: account.addr,
+                        storageStat: account.storageStat,
+                        storage: {
+                            lastTransLt: account.storage.lastTransLt,
+                            balance: account.storage.balance,
+                            state: TlbAccountStateActive {
+                                stateInit: StateInit {
+                                    fixedPrefixLength: stateInit.fixedPrefixLength,
+                                    special: stateInit.special,
+                                    code: build("getter").toLibraryReference(),
+                                    data: stateInit.data,
+                                    library: stateInit.library,
+                                },
+                            },
+                        },
+                    };
+                    var patchedShard = shard!;
+                    patchedShard.account = (patchedAccount as TlbAccount).toCell();
+                    testing.setShardAccount(contractAddress, patchedShard);
+                }
+            }
+
+            fun main() {
+                val deployer = testing.treasury("deployer");
+                val init = ContractState {
+                    code: build("getter"),
+                    data: createEmptyCell(),
+                };
+                val address = AutoDeployAddress { stateInit: init }.calculateAddress();
+
+                val deployRes = net.send(
+                    deployer.address,
+                    createMessage({
+                        bounce: false,
+                        value: ton("1"),
+                        dest: {
+                            stateInit: init,
+                        },
+                    }),
+                );
+                expect(deployRes).toHaveSuccessfulDeploy({ to: address });
+
+                replaceCodeWithMissingLibraryReference(address);
+
+                val _: int = net.runGetMethod(address, "currentCounter");
+            }
+        "#,
+        )
+        .build()
+}
+
+#[test]
+fn test_script_run_get_method_missing_library_reference_shows_failure() {
+    let project = script_get_method_missing_library_project("script-get-method-missing-library");
+
+    project
+        .acton()
+        .script("scripts/get_missing_library.tolk")
+        .run()
+        .failure()
+        .assert_snapshot_matches(
+            "integration/snapshots/script/test_script_run_get_method_missing_library_reference_shows_failure.stdout.txt",
+        );
+}
+
+#[test]
+fn test_script_run_get_method_missing_library_reference_with_backtrace_full_shows_failure() {
+    let project =
+        script_get_method_missing_library_project("script-get-method-missing-library-backtrace");
+
+    project
+        .acton()
+        .script("scripts/get_missing_library.tolk")
+        .with_backtrace("full")
+        .run()
+        .failure()
+        .assert_snapshot_matches(
+            "integration/snapshots/script/test_script_run_get_method_missing_library_reference_with_backtrace_full_shows_failure.stdout.txt",
+        );
+}
+
 #[test]
 fn test_script_output_snapshot() {
     let project = ProjectBuilder::new("script-snapshot")

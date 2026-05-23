@@ -87,6 +87,7 @@ pub struct GetMethodAssertFailure {
     pub vm_exit_code: i32,
     pub suggested_name: Option<String>,
     pub vm_log: Arc<str>,
+    pub missing_libraries: Vec<String>,
     pub source_map: Arc<SourceMap>,
     pub abi: Option<Arc<ContractABI>>,
     pub caller_trace: Option<TolkTraceInfo>,

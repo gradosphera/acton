@@ -2501,9 +2501,14 @@ fn run_get_method_impl(
         .map(|t| Boc::encode_base64(&t))
         .context("Cannot serialize tuple")?;
 
+    let mut missing_libraries_ctx = MissingLibrariesContext::default();
+
     let result = if ctx.debug.is_enabled() {
-        let step_executor = StepGetExecutor::new(&args_b64, &params, Some(&config_b64))
+        let mut step_executor = StepGetExecutor::new(&args_b64, &params, Some(&config_b64))
             .context("Cannot create get executor")?;
+        step_executor
+            .register_missing_library_callback(&mut missing_libraries_ctx, missing_library_callback)
+            .context("Cannot register missing library callback")?;
         step_executor
             .prepare(method_id, &args_b64)
             .context("Cannot prepare get method")?;
@@ -2550,11 +2555,26 @@ fn run_get_method_impl(
 
         result
     } else {
-        let executor = GetExecutor::new(&params).context("Cannot create get executor")?;
+        let mut executor = GetExecutor::new(&params).context("Cannot create get executor")?;
+        executor
+            .register_missing_library_callback(&mut missing_libraries_ctx, missing_library_callback)
+            .context("Cannot register missing library callback")?;
         executor
             .run_get_method(&args_b64, &params, Some(&config_b64))
             .context("Cannot run get method")?
     };
+
+    let mut missing_libraries = match &result {
+        GetMethodResult::Success(result) => result
+            .missing_library
+            .iter()
+            .cloned()
+            .collect::<HashSet<_>>(),
+        GetMethodResult::Error(_) => HashSet::new(),
+    };
+    missing_libraries.extend(missing_libraries_ctx.into_set());
+    let mut missing_libraries = missing_libraries.into_iter().collect::<Vec<_>>();
+    missing_libraries.sort_unstable();
 
     match result {
         GetMethodResult::Success(result) => {
@@ -2602,6 +2622,7 @@ fn run_get_method_impl(
                         vm_exit_code: result.vm_exit_code,
                         suggested_name,
                         vm_log: result.vm_log,
+                        missing_libraries,
                         source_map,
                         abi: abi.clone(),
                         caller_trace: None,
