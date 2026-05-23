@@ -825,6 +825,77 @@ fn test_script_shows_transaction_bodies_with_show_bodies_flag() {
         );
 }
 
+#[test]
+fn test_script_trace_uses_script_imported_abi_for_message_names() {
+    let project = ProjectBuilder::new("script-imported-abi-message-names")
+        .file(
+            "contracts/script_only_messages",
+            r"
+struct (0xF8000003) ScriptOnlyTraceMsg {
+    queryId: uint64
+    amount: coins
+}
+",
+        )
+        .contract(
+            "opaque_sink",
+            r"
+fun onInternalMessage(_: InMessage) {}
+fun onBouncedMessage(_: InMessageBounced) {}
+",
+        )
+        .script_file(
+            "print_imported_abi_txs",
+            r#"
+import "../../lib/build"
+import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
+import "../../lib/io"
+import "../contracts/script_only_messages"
+
+fun main() {
+    val sender = testing.treasury("sender");
+    val init = ContractState {
+        code: build("opaque_sink"),
+        data: createEmptyCell(),
+    };
+    val sinkAddress = AutoDeployAddress { stateInit: init }.calculateAddress();
+
+    net.send(sender.address, createMessage({
+        bounce: false,
+        value: ton("1"),
+        dest: {
+            stateInit: init,
+        },
+    }));
+
+    val txs = net.send(sender.address, createMessage({
+        bounce: false,
+        value: ton("0.1"),
+        dest: sinkAddress,
+        body: ScriptOnlyTraceMsg {
+            queryId: 17,
+            amount: ton("0.03"),
+        },
+    }));
+
+    println(txs);
+}
+"#,
+        )
+        .build();
+
+    project
+        .acton()
+        .script("scripts/print_imported_abi_txs.tolk")
+        .show_bodies()
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/script/test_script_trace_uses_script_imported_abi_for_message_names.stdout.txt",
+        );
+}
+
 const PRECOMPILED_SCRIPT_REMOTE_CONTRACT: &str = r"
 struct (0xF8200002) PrecompiledRemotePing {
     queryId: uint64

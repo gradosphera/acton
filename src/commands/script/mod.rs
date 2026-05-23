@@ -199,6 +199,7 @@ fn run_script_file(
             let stack = parse_script_stack_args(result.abi.as_ref(), &args)?;
             let source_map = Arc::new(result.source_map.unwrap_or_default());
             execute_script(
+                Path::new(file_path),
                 &code_cell,
                 &data_cell,
                 stack,
@@ -232,6 +233,7 @@ struct ScriptResult {
 
 #[allow(clippy::too_many_arguments)]
 fn execute_script(
+    file_path: &Path,
     code_cell: &Cell,
     data_cell: &Cell,
     stack: Tuple,
@@ -285,6 +287,15 @@ fn execute_script(
     };
     let mut world_state = WorldState::new(resolver, config_b64)?;
     let mut build_cache = BuildCache::new();
+    build_cache.memoize(
+        "script",
+        "script",
+        file_path,
+        &params.code,
+        *code_cell.repr_hash(),
+        source_map.clone(),
+        abi.clone(),
+    );
     let mut file_build_cache = FileBuildCache::new(None)?;
     let mut known_addresses = KnownAddresses::new();
     let mut known_code_cell = FxHashMap::default();
