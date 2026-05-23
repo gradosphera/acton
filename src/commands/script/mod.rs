@@ -409,45 +409,54 @@ fn print_script_result<'a>(ctx: &'a Context<'a>, result: ScriptResult) {
     match &result.result {
         GetMethodResult::Success(success_result) => {
             let exit_code = success_result.vm_exit_code;
+            let has_assert_failure = ctx.asserts.assert_failure.is_some();
 
             if exit_code != 0 {
                 print_nonzero_script_exit_code(ctx, success_result, &result, exit_code);
+            }
 
-                if let Some(assert_failure) = ctx.asserts.assert_failure.as_ref() {
-                    let formatter = FormatterContext::from_context(ctx);
+            if has_assert_failure {
+                print_script_assert_failure(ctx);
+            }
 
-                    if let AssertFailure::WalletNotFound(failure) = assert_failure {
-                        let message = formatter.format_wallet_not_found_message(failure);
-                        let highlighted_message =
-                            FormatterContext::highlight_actual_expected(&message);
-                        eprintln!("{} {}", "Error:".bright_red(), highlighted_message);
-
-                        if let Some(location) = &failure.location {
-                            println!("{} at {}", "└─".dimmed(), location.format().dimmed());
-                        }
-                    } else {
-                        let detailed_message =
-                            formatter.format_detailed_assert_failure(assert_failure);
-
-                        if detailed_message.is_empty() {
-                            println!("{}", "└─".dimmed());
-                        } else {
-                            println!("{detailed_message}");
-                        }
-                    }
-                }
-
+            if exit_code != 0 || has_assert_failure {
                 let _ = stdout().flush();
                 let _ = stderr().flush();
             }
 
-            std::process::exit(i32::from(exit_code != 0));
+            std::process::exit(i32::from(exit_code != 0 || has_assert_failure));
         }
         GetMethodResult::Error(error) => {
             println!("{} {}", "Execution error:".red(), error.error.red());
             let _ = stdout().flush();
             let _ = stderr().flush();
             std::process::exit(1);
+        }
+    }
+}
+
+fn print_script_assert_failure<'a>(ctx: &'a Context<'a>) {
+    let Some(assert_failure) = ctx.asserts.assert_failure.as_ref() else {
+        return;
+    };
+
+    let formatter = FormatterContext::from_context(ctx);
+
+    if let AssertFailure::WalletNotFound(failure) = assert_failure {
+        let message = formatter.format_wallet_not_found_message(failure);
+        let highlighted_message = FormatterContext::highlight_actual_expected(&message);
+        eprintln!("{} {}", "Error:".bright_red(), highlighted_message);
+
+        if let Some(location) = &failure.location {
+            println!("{} at {}", "└─".dimmed(), location.format().dimmed());
+        }
+    } else {
+        let detailed_message = formatter.format_detailed_assert_failure(assert_failure);
+
+        if detailed_message.is_empty() {
+            println!("{}", "└─".dimmed());
+        } else {
+            println!("{detailed_message}");
         }
     }
 }

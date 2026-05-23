@@ -2634,6 +2634,57 @@ fn test_script_run_get_method_on_contract_without_code_shows_actionable_error() 
 }
 
 #[test]
+fn test_script_run_get_method_failure_shows_nested_get_method_error() {
+    let project = ProjectBuilder::new("script-get-method-nested-failure")
+        .contract(
+            "failing_getter",
+            r"
+            fun onInternalMessage(_: InMessage) {}
+            fun onBouncedMessage(_: InMessageBounced) {}
+
+            get fun fail_get(): int {
+                throw 123;
+            }
+        ",
+        )
+        .script_file(
+            "get_nested_failure",
+            r#"
+            import "../../lib/build"
+            import "../../lib/emulation/network"
+            import "../../lib/emulation/testing"
+
+            fun main() {
+                val deployer = testing.treasury("deployer");
+                val init = ContractState {
+                    code: build("failing_getter"),
+                    data: createEmptyCell(),
+                };
+                val address = AutoDeployAddress { stateInit: init }.calculateAddress();
+
+                net.send(deployer.address, createMessage({
+                    bounce: false,
+                    value: ton("1"),
+                    dest: { stateInit: init },
+                }));
+
+                val _: int = net.runGetMethod(address, "fail_get");
+            }
+        "#,
+        )
+        .build();
+
+    project
+        .acton()
+        .script("scripts/get_nested_failure.tolk")
+        .run()
+        .failure()
+        .assert_snapshot_matches(
+            "integration/snapshots/script/test_script_run_get_method_failure_shows_nested_get_method_error.stdout.txt",
+        );
+}
+
+#[test]
 fn test_script_output_snapshot() {
     let project = ProjectBuilder::new("script-snapshot")
         .script_file(
