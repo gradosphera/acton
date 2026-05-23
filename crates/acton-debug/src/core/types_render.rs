@@ -330,7 +330,7 @@ impl RenderedValue {
                 writeln!(
                     out,
                     "{} {} {}",
-                    pretty_magenta(type_name, options),
+                    pretty_type_name(type_name, options),
                     pretty_dimmed(value, options),
                     pretty_dimmed("{", options)
                 )?;
@@ -351,7 +351,7 @@ impl RenderedValue {
             } => write!(
                 out,
                 "{} {}",
-                pretty_magenta(type_name, options),
+                pretty_type_name(type_name, options),
                 pretty_cell_like_value(value, raw.as_ref(), &[], options)
             ),
             RenderedValue::UnionCase {
@@ -372,7 +372,7 @@ impl RenderedValue {
                 write!(
                     out,
                     "{} {}{}",
-                    pretty_magenta(type_name, options),
+                    pretty_type_name(type_name, options),
                     pretty_dimmed("{", options),
                     pretty_dimmed("}", options)
                 )
@@ -382,7 +382,7 @@ impl RenderedValue {
                 writeln!(
                     out,
                     "{} {}",
-                    pretty_magenta(type_name, options),
+                    pretty_type_name(type_name, options),
                     pretty_dimmed("{", options)
                 )?;
                 for (name, value) in fields {
@@ -420,7 +420,7 @@ impl RenderedValue {
                 write!(
                     out,
                     "{} (lazy, unresolved)",
-                    pretty_magenta(type_name, options)
+                    pretty_type_name(type_name, options)
                 )
             }
         }
@@ -596,6 +596,32 @@ fn pretty_magenta(value: &str, options: &PrettyRenderOptions) -> String {
     } else {
         value.to_owned()
     }
+}
+
+fn pretty_type_name(value: &str, options: &PrettyRenderOptions) -> String {
+    if !options.colorize {
+        return value.to_owned();
+    }
+
+    // simple lexer to colorize only words in `Cell<int32>`-like types
+    let mut out = String::with_capacity(value.len());
+    let mut ident_start = None;
+    for (idx, ch) in value.char_indices() {
+        if ch.is_ascii_alphanumeric() || ch == '_' {
+            ident_start.get_or_insert(idx);
+            continue;
+        }
+
+        if let Some(start) = ident_start.take() {
+            out.push_str(&pretty_magenta(&value[start..idx], options));
+        }
+        out.push(ch);
+    }
+    if let Some(start) = ident_start {
+        out.push_str(&pretty_magenta(&value[start..], options));
+    }
+
+    out
 }
 
 fn pretty_cyan(value: &str, options: &PrettyRenderOptions) -> String {
@@ -3710,6 +3736,35 @@ mod tests {
 
     fn loc() -> SrcRange {
         SrcRange(vec![0, 0, 0, 0, 0])
+    }
+
+    #[test]
+    fn pretty_type_name_keeps_generic_punctuation_uncolored() {
+        let options = PrettyRenderOptions {
+            colorize: true,
+            ..Default::default()
+        };
+        let magenta = |value: &str| value.magenta().to_string();
+
+        assert_eq!(
+            pretty_type_name("Cell<DedustSwapParams>", &options),
+            format!("{}<{}>", magenta("Cell"), magenta("DedustSwapParams"))
+        );
+        assert_eq!(
+            pretty_type_name("map<uint8, Cell<array<OutAction>>>", &options),
+            format!(
+                "{}<{}, {}<{}<{}>>>",
+                magenta("map"),
+                magenta("uint8"),
+                magenta("Cell"),
+                magenta("array"),
+                magenta("OutAction")
+            )
+        );
+        assert_eq!(
+            pretty_type_name("Cell<DedustSwapParams>", &PrettyRenderOptions::default()),
+            "Cell<DedustSwapParams>"
+        );
     }
 
     #[test]
