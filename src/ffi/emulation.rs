@@ -26,7 +26,7 @@ use path_absolutize::Absolutize;
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::{Arc, LazyLock};
 use std::time::{Duration, Instant, UNIX_EPOCH};
@@ -260,14 +260,23 @@ fn build_impl(ctx: &mut Context, stk: &mut Tuple, path: String, id: String) -> a
         return Ok(());
     }
 
+    let allow_no_entrypoint = is_types_tolk_path(&path);
+    let cache_profile = if allow_no_entrypoint {
+        "1.4+allow-no-entrypoint"
+    } else {
+        "1.4"
+    };
+
     // File build cache is persistent cache that outlives reruns. If this contract was already
     // built we return cached cell for the contract. Since lookup in this cache is quite expensive
     // we also add cache entry to runtime build cache.
-    if let Some(cached_entry) =
-        ctx.build
-            .file_build_cache
-            .get(&path_display, ctx.build.need_debug_info, false, 2, "1.4")
-    {
+    if let Some(cached_entry) = ctx.build.file_build_cache.get(
+        &path_display,
+        ctx.build.need_debug_info,
+        false,
+        2,
+        cache_profile,
+    ) {
         let elapsed = start_time.elapsed();
         info!(
             "Build {path_display} from file cache ({}) in {elapsed:?}",
@@ -297,7 +306,9 @@ fn build_impl(ctx: &mut Context, stk: &mut Tuple, path: String, id: String) -> a
     let compile_start = Instant::now();
 
     let mappings = ctx.env.config.mappings();
-    let compiler = tolk_compiler::Compiler::new(2).with_mappings(&mappings);
+    let compiler = tolk_compiler::Compiler::new(2)
+        .with_mappings(&mappings)
+        .with_allow_no_entrypoint(allow_no_entrypoint);
     let result = compiler.compile(&path, ctx.build.need_debug_info);
 
     let compile_time = compile_start.elapsed();
@@ -312,7 +323,7 @@ fn build_impl(ctx: &mut Context, stk: &mut Tuple, path: String, id: String) -> a
                 ctx.build.need_debug_info,
                 false,
                 2,
-                "1.4",
+                cache_profile,
             ) {
                 warn!("Failed to build cached code BoC for {path_display}: {err}");
             }
@@ -347,6 +358,12 @@ fn build_impl(ctx: &mut Context, stk: &mut Tuple, path: String, id: String) -> a
     }
 
     Ok(())
+}
+
+fn is_types_tolk_path(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|file_name| file_name.to_str())
+        .is_some_and(|file_name| file_name.ends_with(".types.tolk"))
 }
 
 pub(crate) fn compilation_result_for_code(
