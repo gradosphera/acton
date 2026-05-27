@@ -203,6 +203,18 @@
   outline: 1px solid var(--border-color);
 }
 
+.skippedTraceTab,
+.skippedTraceTab:hover {
+  color: var(--text-muted);
+  background-color: var(--bg-secondary-color);
+  cursor: default;
+  opacity: 0.75;
+}
+
+.skippedTraceTab:disabled {
+  pointer-events: none;
+}
+
 .activeTraceTab {
   color: var(--text-primary);
   background-color: var(--bg-color);

@@ -800,6 +800,116 @@ fn save_test_trace_keeps_custom_trace_names() {
 }
 
 #[test]
+fn save_test_trace_skips_traces_hidden_from_ui() {
+    let project = trace_project(
+        "h-save-trace-hide-from-ui",
+        r#"
+        get fun `test-hide-trace-from-ui`() {
+            val counter = Counter.fromStorage();
+            val deployer = testing.treasury("deployer");
+            val deployMsg = createMessage({
+                bounce: false,
+                value: ton("1.0"),
+                dest: {
+                    stateInit: counter.init,
+                },
+            });
+
+            val deployTxs = net.send(deployer.address, deployMsg);
+            deployTxs.giveName("visible-deploy");
+            expect(deployTxs.size()).toEqual(1);
+
+            val directHidden = net.send(
+                deployer.address,
+                createMessage({
+                    bounce: false,
+                    value: ton("0.2"),
+                    dest: counter.address,
+                }),
+            );
+            directHidden.giveName("direct-hidden");
+            directHidden.hideTraceFromUi();
+            expect(directHidden.size()).toEqual(1);
+
+            val externalHidden = net.send(
+                deployer.address,
+                createMessage({
+                    bounce: false,
+                    value: ton("0.2"),
+                    dest: counter.address,
+                }),
+            );
+            externalHidden.giveName("external-hidden");
+            val acceptedExternalHidden = ExternalSendResult {
+                transactions: externalHidden,
+                error: null,
+                destination: counter.address,
+            };
+            acceptedExternalHidden.hideTraceFromUi();
+            expect(externalHidden.size()).toEqual(1);
+
+            val visiblePing = net.send(
+                deployer.address,
+                createMessage({
+                    bounce: false,
+                    value: ton("0.2"),
+                    dest: counter.address,
+                }),
+            );
+            visiblePing.giveName("visible-ping");
+            expect(visiblePing.size()).toEqual(1);
+        }
+        "#,
+    );
+
+    let output = project
+        .acton()
+        .test()
+        .arg("--save-test-trace")
+        .arg("trace-hide-from-ui")
+        .run()
+        .success();
+
+    output
+        .assert_passed(1)
+        .assert_file_exists("trace-hide-from-ui/test-hide-trace-from-ui_trace.json")
+        .assert_file_exists("trace-hide-from-ui/contracts/simple.json");
+
+    let trace = read_json_from_project(
+        &project,
+        "trace-hide-from-ui/test-hide-trace-from-ui_trace.json",
+    );
+    let traces = trace["traces"]
+        .as_array()
+        .unwrap_or_else(|| panic!("Missing traces array in hidden trace json"));
+    let trace_names = traces
+        .iter()
+        .filter_map(|item| item["name"].as_str())
+        .collect::<Vec<_>>();
+    let tx_counts = traces
+        .iter()
+        .map(|item| {
+            item["transactions"]
+                .as_array()
+                .map_or(0, Vec::len)
+                .to_string()
+        })
+        .collect::<Vec<_>>();
+    let summary = format!(
+        "trace_count: {}\nskipped_traces_count: {}\ntrace_names: {}\ntransaction_counts: {}\n",
+        traces.len(),
+        trace["skipped_traces_count"].as_u64().unwrap_or(0),
+        trace_names.join(","),
+        tx_counts.join(","),
+    );
+
+    assert_trace_summary_snapshot(
+        summary,
+        "integration/snapshots/test-runner/cmd_agent_h/save_test_trace_skips_traces_hidden_from_ui.txt",
+    );
+}
+
+#[test]
 fn save_test_trace_merges_step_execution_batches_into_single_named_trace() {
     let project = ProjectBuilder::new("h-save-trace-step-iter-merge")
         .file("contracts/messages", STEP_TRACE_MESSAGES)

@@ -467,6 +467,7 @@ pub struct Emulations {
     pub failed_messages: Vec<Vec<FailedSendMessageResult>>,
     pub trace_position_by_tx_lt: FxHashMap<u64, TracePosition>,
     pub trace_names: FxHashMap<u64, String>,
+    pub traces_hidden_from_ui: FxHashSet<u64>,
     pub get_methods: Vec<GetMethodResultSuccess>,
 }
 
@@ -492,6 +493,15 @@ impl Emulations {
     pub fn trace_name(&self, trace_transactions: &[SendMessageResultSuccess]) -> Option<&str> {
         let root_lt = trace_transactions.first()?.transaction.lt;
         self.trace_names.get(&root_lt).map(String::as_str)
+    }
+
+    #[must_use]
+    pub fn is_trace_hidden_from_ui(&self, trace_transactions: &[SendMessageResultSuccess]) -> bool {
+        let Some(root_lt) = trace_transactions.first().map(|tx| tx.transaction.lt) else {
+            return false;
+        };
+
+        self.traces_hidden_from_ui.contains(&root_lt)
     }
 }
 
@@ -591,6 +601,7 @@ impl EmulationsState {
                 failed_messages: vec![],
                 trace_position_by_tx_lt: FxHashMap::default(),
                 trace_names: FxHashMap::default(),
+                traces_hidden_from_ui: FxHashSet::default(),
                 get_methods: vec![],
             })
             .get_methods
@@ -602,14 +613,17 @@ impl EmulationsState {
             return;
         };
 
-        let trace_root_lt = emulations
-            .trace_position_by_tx_lt
-            .get(&lt)
-            .and_then(|position| emulations.messages.get(position.trace_index))
-            .and_then(|trace| trace.first().map(|tx| tx.transaction.lt))
-            .unwrap_or(lt);
-
+        let trace_root_lt = trace_root_lt_for(emulations, lt);
         emulations.trace_names.insert(trace_root_lt, trace_name);
+    }
+
+    pub fn hide_trace_from_ui(&mut self, env_name: &str, lt: u64) {
+        let Some(emulations) = self.results.get_mut(env_name) else {
+            return;
+        };
+
+        let trace_root_lt = trace_root_lt_for(emulations, lt);
+        emulations.traces_hidden_from_ui.insert(trace_root_lt);
     }
 
     #[must_use]
@@ -681,9 +695,19 @@ impl EmulationsState {
                 failed_messages: vec![],
                 trace_position_by_tx_lt: FxHashMap::default(),
                 trace_names: FxHashMap::default(),
+                traces_hidden_from_ui: FxHashSet::default(),
                 get_methods: vec![],
             })
     }
+}
+
+fn trace_root_lt_for(emulations: &Emulations, lt: u64) -> u64 {
+    emulations
+        .trace_position_by_tx_lt
+        .get(&lt)
+        .and_then(|position| emulations.messages.get(position.trace_index))
+        .and_then(|trace| trace.first().map(|tx| tx.transaction.lt))
+        .unwrap_or(lt)
 }
 
 fn split_send_message_results(

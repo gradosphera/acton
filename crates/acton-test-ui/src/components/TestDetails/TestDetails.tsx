@@ -85,6 +85,10 @@ const formatTraceName = (name: string | undefined, index: number): string => {
   return `Trace #${index + 1}`
 }
 
+const formatSkippedTraceCount = (count: number): string => {
+  return count === 1 ? "1 trace skipped" : `${count} traces skipped`
+}
+
 const isExternalMessageNotAcceptedError = (error: string): boolean => {
   const normalized = error.toLowerCase()
   const mentionsExternal = normalized.includes("external")
@@ -369,6 +373,12 @@ export const TestDetails: React.FC<TestDetailsProps> = ({
     : traceError
       ? "trace load failed"
       : `${transactionCount} transactions`
+  const skippedTracesCount = trace?.skipped_traces_count ?? 0
+  const skippedTraceLabel = formatSkippedTraceCount(skippedTracesCount)
+  const shouldShowTraceSelector =
+    activeTab !== "info" &&
+    trace !== undefined &&
+    (trace.traces.length > 1 || skippedTracesCount > 0)
 
   const parsedTraceResults = useMemo((): ParsedTraceResult[] => {
     if (!trace) return []
@@ -952,6 +962,10 @@ export const TestDetails: React.FC<TestDetailsProps> = ({
       )
     }
 
+    if (trace && trace.traces.length === 0 && skippedTracesCount > 0) {
+      return <div className={styles.empty}>{skippedTraceLabel}</div>
+    }
+
     if (activeTab === "logs") {
       const currentTraceList = trace?.traces[selectedTraceIndex]
       const transactionLogs =
@@ -1132,7 +1146,7 @@ export const TestDetails: React.FC<TestDetailsProps> = ({
         </div>
       </div>
 
-      {activeTab !== "info" && trace && trace.traces.length > 1 && (
+      {shouldShowTraceSelector && (
         <div className={styles.traceSelector}>
           {trace.traces.map((traceItem, index) => (
             <button
@@ -1144,6 +1158,15 @@ export const TestDetails: React.FC<TestDetailsProps> = ({
               {formatTraceName(traceItem.name, index)}
             </button>
           ))}
+          {skippedTracesCount > 0 && (
+            <button
+              type="button"
+              className={`${styles.traceTab} ${styles.skippedTraceTab}`}
+              disabled
+            >
+              {skippedTraceLabel}
+            </button>
+          )}
         </div>
       )}
 

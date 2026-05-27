@@ -307,6 +307,19 @@ fun ExternalSendResult.giveName(
     self.unwrap(location).giveName(nameForUI);
 }
 
+/// Hide a trace chain produced by [net.sendExternal] from saved traces and the Test UI.
+///
+/// Fails with external-error metadata if the message was not accepted.
+///
+/// The `location` parameter is filled automatically and is only used for
+/// diagnostics; user code should normally omit it.
+fun ExternalSendResult.hideTraceFromUi(
+    self,
+    location: string = reflect.sourceLocationAsString(),
+): void {
+    self.unwrap(location).hideTraceFromUi();
+}
+
 /// Give a custom name for a trace chain produced by [net.send].
 ///
 /// The custom name is used in the Test UI and gas/fee profiling reports instead of "trace N".
@@ -319,6 +332,13 @@ fun ExternalSendResult.giveName(
 /// ```
 fun SendResultList.giveName(self, nameForUI: string): void {
     ffi.saveTraceName(self, nameForUI);
+}
+
+/// Hide this trace chain from saved traces and the Test UI.
+///
+/// The transactions are still available to test code and console assertions.
+fun SendResultList.hideTraceFromUi(self): void {
+    ffi.hideTraceFromUi(self);
 }
 
 /// Wait for the first (root) message of the send result to be applied on the blockchain.
@@ -1601,6 +1621,9 @@ fun ffi.getConfig(): dict
 
 fun ffi.saveTraceName(txs: SendResultList, name: string): void
     asm "35 EXTCALL"
+
+fun ffi.hideTraceFromUi(txs: SendResultList): void
+    asm "58 EXTCALL"
 
 fun ffi.crc16(data: string): int
     asm "13 EXTCALL"

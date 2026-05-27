@@ -118,6 +118,7 @@ export interface TransactionList {
 export interface Trace {
   readonly name: string
   readonly traces: TransactionList[]
+  readonly skipped_traces_count?: number
   readonly contracts: string[]
   readonly wallets: Record<string, string>
 }

@@ -20,6 +20,8 @@ pub(super) struct TestTrace {
     pub name: Arc<str>,
     pub pos: Pos,
     pub traces: Vec<TransactionList>,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub skipped_traces_count: usize,
     pub contracts: Vec<String>,
     pub wallets: BTreeMap<String, String>, // Address -> Name
 }
@@ -73,6 +75,11 @@ pub struct FailedMessageInfo {
 pub(super) fn trace_file_name(test_name: &str) -> String {
     let stem = safe_file_stem(test_name, "test");
     format!("{stem}_trace.json")
+}
+
+#[allow(clippy::trivially_copy_pass_by_ref)]
+const fn is_zero(value: &usize) -> bool {
+    *value == 0
 }
 
 fn safe_file_stem(name: &str, fallback: &str) -> String {
@@ -270,11 +277,19 @@ pub(super) fn dump_test_transactions(
     output_dir: &str,
 ) -> anyhow::Result<()> {
     let mut known_contracts = BTreeMap::new();
+    let skipped_traces_count = txs
+        .messages
+        .iter()
+        .filter(|trace_transactions| txs.is_trace_hidden_from_ui(trace_transactions))
+        .count();
+
     let traces = txs
         .messages
         .iter()
         .enumerate()
-        .map(|(trace_index, trace_transactions)| {
+        .filter(|(_, trace_transactions)| !txs.is_trace_hidden_from_ui(trace_transactions))
+        .enumerate()
+        .map(|(visible_trace_index, (trace_index, trace_transactions))| {
             let transactions = trace_transactions
                 .iter()
                 .map(|tx| {
@@ -315,9 +330,10 @@ pub(super) fn dump_test_transactions(
                 },
             );
 
-            let name = txs
-                .trace_name(trace_transactions)
-                .map_or_else(|| format!("Trace {}", trace_index + 1), ToString::to_string);
+            let name = txs.trace_name(trace_transactions).map_or_else(
+                || format!("Trace {}", visible_trace_index + 1),
+                ToString::to_string,
+            );
 
             TransactionList {
                 name,
@@ -343,6 +359,7 @@ pub(super) fn dump_test_transactions(
         name: test.name.clone(),
         pos: test.pos.clone(),
         traces,
+        skipped_traces_count,
         contracts: known_contracts.keys().cloned().collect(),
         wallets,
     };

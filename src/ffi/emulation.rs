@@ -1763,6 +1763,22 @@ fn save_trace_name_impl(
     Ok(())
 }
 
+extension!(hide_trace_from_ui in (Context) with (txs: Vec<TupleItem>) using hide_trace_from_ui_impl);
+fn hide_trace_from_ui_impl(
+    ctx: &mut Context,
+    _stack: &mut Tuple,
+    txs: Vec<TupleItem>,
+) -> anyhow::Result<()> {
+    let Some(root_lt) = root_lt_from_send_results(&txs) else {
+        return Ok(());
+    };
+
+    ctx.chain
+        .emulations
+        .hide_trace_from_ui(&ctx.env.running_id, root_lt);
+    Ok(())
+}
+
 /// Call a TVM predicate continuation with a single argument. Returns the bool result.
 fn call_predicate(executor: &GetExecutor, cont: &ContData, arg: TupleItem) -> anyhow::Result<bool> {
     let mut cont_builder = CellBuilder::new();
@@ -3590,6 +3606,7 @@ pub fn register_extensions<T: BaseExecutor>(executor: &mut T, ctx: &mut Context)
         49 => wait_for_trace : 4,
         56 => send_external_message : 1,
         57 => parse_cell_from_base64 : 1,
+        58 => hide_trace_from_ui : 1,
         501 => call_tolk_function : 3,
     });
 }
