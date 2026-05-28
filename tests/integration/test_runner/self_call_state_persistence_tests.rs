@@ -32,12 +32,58 @@ fun onInternalMessage(in: InMessage) {
     storage.totalDeposits = storage.totalDeposits + 1;
     storage.save();
 
-    createMessage({
-        bounce: false,
-        value: 0,
-        dest: contract.getAddress(),
-        body: SelfCall {},
-    }).send(SEND_MODE_CARRY_ALL_REMAINING_MESSAGE_VALUE);
+    val selfCall = beginCell()
+        .storeUint(0x18, 6)
+        .storeAddress(contract.getAddress())
+        .storeCoins(0)
+        .storeUint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+        .storeUint(0x73656c66, 32)
+        .endCell();
+
+    sendRawMessage(selfCall, SEND_MODE_CARRY_ALL_REMAINING_MESSAGE_VALUE);
+}
+
+fun onBouncedMessage(_: InMessageBounced) {}
+
+get fun totalDeposits(): int {
+    return Storage.load().totalDeposits;
+}
+"#;
+
+const SUSPICIOUS_STORE_ORDER_CONTRACT: &str = r#"
+import "messages"
+
+struct Storage {
+    totalDeposits: uint32
+}
+
+fun Storage.load(): Storage {
+    return Storage.fromCell(contract.getData());
+}
+
+fun Storage.save(self) {
+    contract.setData(self.toCell());
+}
+
+fun onInternalMessage(in: InMessage) {
+    if (!in.body.isEmpty()) {
+        val _msg = lazy SelfCall.fromSlice(in.body);
+        return;
+    }
+
+    var storage = Storage.load();
+    storage.totalDeposits = storage.totalDeposits + 1;
+    storage.save();
+
+    val selfCall = beginCell()
+        .storeUint(0x18, 6)
+        .storeAddress(contract.getAddress())
+        .storeCoins(0)
+        .storeUint(0x73656c66, 32)
+        .storeUint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+        .endCell();
+
+    sendRawMessage(selfCall, SEND_MODE_CARRY_ALL_REMAINING_MESSAGE_VALUE);
 }
 
 fun onBouncedMessage(_: InMessageBounced) {}
@@ -60,9 +106,18 @@ import "../contracts/messages"
 "#;
 
 fn run_success(project_name: &str, test_body: &str, snapshot_name: &str) {
+    run_success_with_contract(project_name, CONTRACT, test_body, snapshot_name);
+}
+
+fn run_success_with_contract(
+    project_name: &str,
+    contract: &str,
+    test_body: &str,
+    snapshot_name: &str,
+) {
     ProjectBuilder::new(project_name)
         .file("contracts/messages", MESSAGES)
-        .contract("self_call_counter", CONTRACT)
+        .contract("self_call_counter", contract)
         .test_file("self_call_state", &format!("{TEST_IMPORTS}\n{test_body}\n"))
         .build()
         .acton()
@@ -139,5 +194,69 @@ get fun `test self call after set data persists storage`() {
 }
 "#,
         "self_call_after_set_data_persists_storage_for_followup_get_method",
+    );
+}
+
+#[test]
+fn raw_self_call_opcode_before_common_info_tail_rolls_back_state() {
+    run_success_with_contract(
+        "ag-self-call-opcode-before-common-info-tail",
+        SUSPICIOUS_STORE_ORDER_CONTRACT,
+        r#"
+get fun `test raw self call opcode before common info tail`() {
+    val sender = testing.treasury("sender");
+    val init = ContractState {
+        code: build("self_call_counter"),
+        data: beginCell().storeUint(0, 32).endCell(),
+    };
+    val counterAddress = AutoDeployAddress { stateInit: init }.calculateAddress();
+
+    val deployRes = net.send(
+        sender.address,
+        createMessage({
+            bounce: false,
+            value: ton("1"),
+            dest: {
+                stateInit: init,
+            },
+            body: SelfCall {},
+        }),
+    );
+    expect(deployRes).toHaveSuccessfulDeploy({ to: counterAddress });
+    val initialTotalDeposits = net.runGetMethod<int>(counterAddress, "totalDeposits");
+    expect(initialTotalDeposits).toEqual(0);
+
+    val txs = net.send(
+        sender.address,
+        createMessage({
+            bounce: false,
+            value: ton("10"),
+            dest: counterAddress,
+        }),
+    );
+
+    expect(txs).toHaveLength(1);
+    expect(txs.findTransaction({
+        from: sender.address,
+        to: counterAddress,
+        success: false,
+    })).toBeNotNull();
+
+    val rootActions = txs.at(0).allOutActions();
+    expect(rootActions.size()).toEqual(1);
+    expect(rootActions.at(0).kind()).toEqual("send-message");
+    val selfCallSend = rootActions.getSendMessageAt(0);
+    expect(selfCallSend).toBeNotNull();
+    expect(selfCallSend!.mode).toEqual(SEND_MODE_CARRY_ALL_REMAINING_MESSAGE_VALUE);
+
+    println(txs);
+    println("txCount={}", txs.size());
+
+    val totalDeposits = net.runGetMethod<int>(counterAddress, "totalDeposits");
+    println("totalDeposits={}", totalDeposits);
+    expect(totalDeposits).toEqual(initialTotalDeposits);
+}
+"#,
+        "raw_self_call_opcode_before_common_info_tail_rolls_back_state",
     );
 }
