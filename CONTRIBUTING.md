@@ -58,7 +58,17 @@ For the minimal local build/test flow, install:
    ```bash
    curl -fsSL https://bun.sh/install | bash
    ```
-5. GitHub CLI (`gh`) (used by `just sync-artifacts`)
+5. Git LFS (required for files tracked through LFS)
+   ```bash
+   # macOS
+   brew install git-lfs
+
+   # Linux (Debian/Ubuntu)
+   sudo apt install git-lfs
+
+   git lfs install
+   ```
+6. GitHub CLI (`gh`) (used by `just sync-artifacts`)
 
 - macOS:
   ```bash
