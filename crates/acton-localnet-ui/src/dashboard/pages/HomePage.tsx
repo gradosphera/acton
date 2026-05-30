@@ -14,8 +14,10 @@ import {Card, CardContent, CardDescription, CardHeader, CardTitle, useToast} fro
 import {useNavigate} from "react-router-dom"
 
 import type {TonClient} from "../../explorer/api/client"
-import type {LocalnetNodeInfo, V3TransactionListItem} from "../../explorer/api/types"
+import type {V3TransactionListItem} from "../../explorer/api/types"
 import {formatDuration, formatNano, formatTimeAgo, hashToHex} from "../../explorer/components/utils"
+import {useAddressBook} from "../../explorer/hooks/useAddressBook"
+import {useNetworkInfo} from "../../explorer/hooks/useNetworkInfo"
 import {collectRecentAccounts} from "../dashboardUtils"
 import {HomeAddressLabel} from "../HomeAddressLabel"
 
@@ -26,7 +28,6 @@ interface HomePageProps {
 }
 
 interface HomeState {
-  readonly nodeInfo?: LocalnetNodeInfo
   readonly transactions: readonly V3TransactionListItem[]
   readonly accountBalances: Readonly<Record<string, string>>
   readonly isLoading: boolean
@@ -36,6 +37,8 @@ interface HomeState {
 export const HomePage: React.FC<HomePageProps> = ({client}) => {
   const navigate = useNavigate()
   const {showToast} = useToast()
+  const {nodeInfo} = useNetworkInfo()
+  const {prefetchNames} = useAddressBook()
   const [copiedEndpoint, setCopiedEndpoint] = React.useState<string>()
   const [homeState, setHomeState] = React.useState<HomeState>({
     transactions: [],
@@ -56,6 +59,19 @@ export const HomePage: React.FC<HomePageProps> = ({client}) => {
     () => collectRecentAccounts(homeState.transactions),
     [homeState.transactions],
   )
+  const displayedAddresses = React.useMemo(() => {
+    const addresses = new Set<string>()
+    for (const transaction of homeState.transactions) {
+      addresses.add(transaction.account)
+      if (transaction.in_msg?.source) {
+        addresses.add(transaction.in_msg.source)
+      }
+    }
+    for (const account of recentAccounts) {
+      addresses.add(account)
+    }
+    return [...addresses]
+  }, [homeState.transactions, recentAccounts])
 
   React.useEffect(() => {
     let cancelled = false
@@ -68,15 +84,7 @@ export const HomePage: React.FC<HomePageProps> = ({client}) => {
       }))
 
       try {
-        const loadNodeInfo = client.getNodeInfo().catch(error => {
-          console.error("Failed to fetch localnet node info", error)
-          const unavailableNodeInfo: LocalnetNodeInfo | undefined = undefined
-          return unavailableNodeInfo
-        })
-        const [nodeInfo, transactionsResponse] = await Promise.all([
-          loadNodeInfo,
-          client.getRecentTransactions(8),
-        ])
+        const transactionsResponse = await client.getRecentTransactions(8)
         const transactions = transactionsResponse.transactions
         const accounts = collectRecentAccounts(transactions)
         let accountBalances: Record<string, string> = {}
@@ -97,7 +105,6 @@ export const HomePage: React.FC<HomePageProps> = ({client}) => {
         }
 
         setHomeState({
-          nodeInfo,
           transactions,
           accountBalances,
           isLoading: false,
@@ -120,6 +127,10 @@ export const HomePage: React.FC<HomePageProps> = ({client}) => {
       cancelled = true
     }
   }, [client])
+
+  React.useEffect(() => {
+    void prefetchNames(displayedAddresses)
+  }, [displayedAddresses, prefetchNames])
 
   React.useEffect(() => {
     if (!copiedEndpoint) {
@@ -303,11 +314,11 @@ export const HomePage: React.FC<HomePageProps> = ({client}) => {
             </CardHeader>
             <CardContent className={styles.dashboardCardContent}>
               <div className={styles.metricValue}>
-                {homeState.nodeInfo ? `#${homeState.nodeInfo.last_block_seqno}` : "—"}
+                {nodeInfo ? `#${nodeInfo.last_block_seqno}` : "—"}
               </div>
               <div className={styles.metricMeta}>
-                {homeState.nodeInfo
-                  ? `${formatDuration(homeState.nodeInfo.uptime_seconds)} uptime`
+                {nodeInfo
+                  ? `${formatDuration(nodeInfo.uptime_seconds)} uptime`
                   : "Waiting for node info"}
               </div>
             </CardContent>

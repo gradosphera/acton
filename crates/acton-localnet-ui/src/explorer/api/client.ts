@@ -36,6 +36,7 @@ export class TonClient {
   private readonly v3BaseUrl: string
   private readonly addressNameBaseUrl: string
   private readonly toncenterApiKey: string | undefined
+  private readonly pendingGetRequests = new Map<string, Promise<unknown>>()
 
   constructor({v2BaseUrl, v3BaseUrl, addressNameBaseUrl, toncenterApiKey}: TonClientOptions) {
     this.v2BaseUrl = v2BaseUrl
@@ -272,16 +273,39 @@ export class TonClient {
     return buildAndFetch()
   }
 
-  async getAddressName(address: string): Promise<string | undefined> {
+  async getAddressNames(addresses: readonly string[]): Promise<Record<string, string | undefined>> {
+    const uniqueAddresses = [...new Set(addresses.filter(Boolean))]
+    if (uniqueAddresses.length === 0) {
+      return {}
+    }
+
     const url = this.buildUrl(this.addressNameBaseUrl, "/acton_getAddressName")
-    url.searchParams.append("address", address)
-    return this.request(url, "Failed to fetch address name")
+    for (const address of uniqueAddresses) {
+      url.searchParams.append("address", address)
+    }
+    const response = await this.request<Record<string, string | null>>(
+      url,
+      "Failed to fetch address names",
+    )
+
+    return Object.fromEntries(
+      Object.entries(response).map(([address, name]) => [address, name ?? undefined]),
+    )
   }
 
-  async getCompilerAbi(codeHash: string): Promise<ContractABI | undefined> {
+  async getCompilerAbis(
+    codeHashes: readonly string[],
+  ): Promise<Record<string, ContractABI | null>> {
+    const uniqueCodeHashes = [...new Set(codeHashes.filter(Boolean))]
+    if (uniqueCodeHashes.length === 0) {
+      return {}
+    }
+
     const url = this.buildUrl(this.addressNameBaseUrl, "/acton_getCompilerAbi")
-    url.searchParams.append("code_hash", codeHash)
-    return this.request(url, "Failed to fetch compiler ABI")
+    for (const codeHash of uniqueCodeHashes) {
+      url.searchParams.append("code_hash", codeHash)
+    }
+    return this.request<Record<string, ContractABI | null>>(url, "Failed to fetch compiler ABI")
   }
 
   async getNodeInfo(): Promise<LocalnetNodeInfo> {
@@ -348,6 +372,24 @@ export class TonClient {
   }
 
   private async request<T>(url: URL, errorMessage: string, options?: RequestInit): Promise<T> {
+    const dedupeKey = this.pendingRequestKey(url, options)
+    if (dedupeKey) {
+      const pending = this.pendingGetRequests.get(dedupeKey)
+      if (pending) {
+        return pending as Promise<T>
+      }
+
+      const request = this.fetchRequest<T>(url, errorMessage, options).finally(() => {
+        this.clearPendingGetRequest(dedupeKey, request)
+      })
+      this.pendingGetRequests.set(dedupeKey, request)
+      return request
+    }
+
+    return this.fetchRequest<T>(url, errorMessage, options)
+  }
+
+  private async fetchRequest<T>(url: URL, errorMessage: string, options?: RequestInit): Promise<T> {
     const response = await fetch(url.toString(), this.withToncenterApiKey(url, options))
     const raw = await this.parseResponseJson(response, errorMessage)
 
@@ -367,6 +409,17 @@ export class TonClient {
     }
 
     return raw as T
+  }
+
+  private pendingRequestKey(url: URL, options?: RequestInit): string | undefined {
+    const method = options?.method?.toUpperCase() ?? "GET"
+    return method === "GET" ? url.toString() : undefined
+  }
+
+  private clearPendingGetRequest(key: string, request: Promise<unknown>): void {
+    if (this.pendingGetRequests.get(key) === request) {
+      this.pendingGetRequests.delete(key)
+    }
   }
 
   private dedupNftItems(items: NftItem[]): NftItem[] {

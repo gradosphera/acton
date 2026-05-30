@@ -9,7 +9,7 @@ import styles from "./ContractCode.module.css"
 
 interface ContractCodeProps {
   readonly codeBoc: string
-  readonly compilerAbi?: ContractABI | null
+  readonly compilerAbi?: ContractABI
   readonly compilerAbiLoading?: boolean
   readonly compilerAbiError?: string
 }
@@ -98,12 +98,12 @@ export const ContractCode: React.FC<ContractCodeProps> = ({
             <div className={styles.empty}>Failed to load compiler ABI: {compilerAbiError}</div>
           ) : compilerAbiLoading ? (
             <div className={styles.empty}>Loading compiler ABI...</div>
-          ) : compilerAbi === null || !abiJson ? (
-            <div className={styles.empty}>No compiler ABI registered for this contract.</div>
-          ) : (
+          ) : abiJson ? (
             <pre className={styles.code}>
               <code>{abiJson}</code>
             </pre>
+          ) : (
+            <div className={styles.empty}>No compiler ABI registered for this contract.</div>
           )
         ) : (
           <pre className={styles.code}>

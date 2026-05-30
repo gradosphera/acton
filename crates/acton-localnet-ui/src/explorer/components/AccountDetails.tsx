@@ -21,7 +21,7 @@ import {
   RefreshCw,
 } from "lucide-react"
 import type React from "react"
-import {useMemo, useState, useEffect} from "react"
+import {lazy, Suspense, useEffect, useMemo, useState} from "react"
 import {useNavigate} from "react-router-dom"
 import type {ContractABI} from "@ton/tolk-abi-to-typescript"
 
@@ -37,13 +37,16 @@ import {TonClient} from "../api/client"
 import {addressKey, buildMessageNamesByOpcodeHex} from "../api/compilerAbi"
 
 import {AddressLabel} from "./AddressLabel"
-import {ContractCode} from "./ContractCode"
 import {Nfts} from "./Nfts"
 import {Tokens} from "./Tokens"
 import styles from "./AccountDetails.module.css"
 import {formatNano, formatTimeAgo, hashToHex, isSameAddress, parseAddress} from "./utils"
 
 type Tabs = "history" | "contract" | "tokens" | "nfts" | "holders"
+const ContractCode = lazy(async () => {
+  const module = await import("./ContractCode")
+  return {default: module.ContractCode}
+})
 
 interface AccountDetailsProps {
   readonly transactions: Transaction[]
@@ -54,6 +57,10 @@ interface AccountDetailsProps {
   readonly nftItems: NftItem[]
   readonly jettonMaster?: JettonMaster
   readonly holders?: JettonWallet[]
+  readonly tokensLoading?: boolean
+  readonly nftsLoading?: boolean
+  readonly holdersLoading?: boolean
+  readonly showHoldersTab?: boolean
   readonly client: TonClient
   readonly onAddressClick?: (addr: string) => void
   readonly activeTabHash?: string
@@ -71,6 +78,10 @@ export const AccountDetails: React.FC<AccountDetailsProps> = ({
   nftItems,
   jettonMaster,
   holders,
+  tokensLoading = false,
+  nftsLoading = false,
+  holdersLoading = false,
+  showHoldersTab = false,
   client,
   onAddressClick,
   activeTabHash,
@@ -78,7 +89,8 @@ export const AccountDetails: React.FC<AccountDetailsProps> = ({
 }) => {
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState<Tabs>("history")
-  const [compilerAbi, setCompilerAbi] = useState<ContractABI | null | undefined>()
+  const [compilerAbi, setCompilerAbi] = useState<ContractABI | undefined>()
+  const [compilerAbiLoading, setCompilerAbiLoading] = useState(false)
   const [compilerAbiError, setCompilerAbiError] = useState<string | undefined>()
   const [compilerAbiByAddress, setCompilerAbiByAddress] = useState<
     Map<string, ContractABI | undefined>
@@ -101,22 +113,26 @@ export const AccountDetails: React.FC<AccountDetailsProps> = ({
     let isActive = true
 
     const loadCompilerAbi = async () => {
-      if (!accountCodeHash) {
+      if (activeTab !== "contract" || !accountCodeHash) {
         setCompilerAbi(undefined)
+        setCompilerAbiLoading(false)
         setCompilerAbiError(undefined)
         return
       }
 
       setCompilerAbi(undefined)
+      setCompilerAbiLoading(true)
       setCompilerAbiError(undefined)
 
       try {
-        const abi = await client.getCompilerAbi(accountCodeHash)
+        const abis = await client.getCompilerAbis([accountCodeHash])
         if (!isActive) return
-        setCompilerAbi(abi)
+        setCompilerAbi(abis[accountCodeHash] ?? undefined)
+        setCompilerAbiLoading(false)
       } catch (error) {
         if (!isActive) return
         setCompilerAbi(undefined)
+        setCompilerAbiLoading(false)
         setCompilerAbiError(error instanceof Error ? error.message : "Failed to load compiler ABI")
       }
     }
@@ -125,12 +141,16 @@ export const AccountDetails: React.FC<AccountDetailsProps> = ({
     return () => {
       isActive = false
     }
-  }, [accountCodeHash, client])
+  }, [accountCodeHash, activeTab, client])
 
   useEffect(() => {
     let isActive = true
 
     const loadRelatedCompilerAbis = async () => {
+      if (activeTab !== "history") {
+        return
+      }
+
       const addresses = new Set<string>()
       addresses.add(ownerAddress)
 
@@ -151,12 +171,18 @@ export const AccountDetails: React.FC<AccountDetailsProps> = ({
 
       const next = new Map<string, ContractABI | undefined>()
       const ownerKey = addressKey(ownerAddress)
-      if (compilerAbi !== undefined) {
-        next.set(ownerKey, compilerAbi ?? undefined)
-      }
+      const stateRequestAddresses = requestedAddresses.filter(
+        address => addressKey(address) !== ownerKey,
+      )
 
-      const states = await client.getAccountStates(requestedAddresses, false).catch(() => {})
+      const states =
+        stateRequestAddresses.length > 0
+          ? await client.getAccountStates(stateRequestAddresses, false).catch(() => {})
+          : undefined
       const addressToCodeHash = new Map<string, string>()
+      if (accountCodeHash) {
+        addressToCodeHash.set(ownerKey, accountCodeHash)
+      }
       for (const account of states?.accounts ?? []) {
         if (account.code_hash) {
           addressToCodeHash.set(addressKey(account.address), account.code_hash)
@@ -164,30 +190,20 @@ export const AccountDetails: React.FC<AccountDetailsProps> = ({
       }
 
       const codeHashesToFetch = new Set<string>()
-      for (const [address, codeHash] of addressToCodeHash) {
-        if (
-          address === ownerKey &&
-          accountCodeHash &&
-          compilerAbi !== undefined &&
-          codeHash === accountCodeHash
-        ) {
-          continue
-        }
+      for (const codeHash of addressToCodeHash.values()) {
         codeHashesToFetch.add(codeHash)
       }
 
-      const fetchedAbis = await Promise.all(
-        [...codeHashesToFetch].map(async codeHash => {
-          try {
-            return [codeHash, await client.getCompilerAbi(codeHash)] as const
-          } catch {
-            return [codeHash, undefined] as const
-          }
-        }),
-      )
-      const abiByCodeHash = new Map<string, ContractABI | undefined>(fetchedAbis)
-      if (accountCodeHash && compilerAbi !== undefined) {
-        abiByCodeHash.set(accountCodeHash, compilerAbi ?? undefined)
+      const codeHashes = [...codeHashesToFetch]
+      const fetchedAbis =
+        codeHashes.length > 0
+          ? await client
+              .getCompilerAbis(codeHashes)
+              .catch((): Record<string, ContractABI | null> => ({}))
+          : {}
+      const abiByCodeHash = new Map<string, ContractABI | undefined>()
+      for (const codeHash of codeHashes) {
+        abiByCodeHash.set(codeHash, fetchedAbis[codeHash] ?? undefined)
       }
 
       for (const address of requestedAddresses) {
@@ -207,7 +223,7 @@ export const AccountDetails: React.FC<AccountDetailsProps> = ({
     return () => {
       isActive = false
     }
-  }, [transactions, ownerAddress, accountCodeHash, compilerAbi, client])
+  }, [transactions, ownerAddress, accountCodeHash, activeTab, client])
 
   const handleTabClick = (tab: Tabs) => {
     setActiveTab(tab)
@@ -259,7 +275,7 @@ export const AccountDetails: React.FC<AccountDetailsProps> = ({
         >
           <Coins size={14} /> Tokens
         </button>
-        {jettonMaster && (
+        {(showHoldersTab || jettonMaster) && (
           <button
             type="button"
             className={`${styles.tab} ${activeTab === "holders" ? styles.tabActive : ""}`}
@@ -450,86 +466,100 @@ export const AccountDetails: React.FC<AccountDetailsProps> = ({
         </CardContent>
       ) : activeTab === "tokens" ? (
         <CardContent className={styles.tokensContent}>
-          <Tokens wallets={jettonWallets} client={client} onAddressClick={onAddressClick} />
+          {tokensLoading ? (
+            <div className={styles.emptyState}>Loading tokens...</div>
+          ) : (
+            <Tokens wallets={jettonWallets} client={client} onAddressClick={onAddressClick} />
+          )}
         </CardContent>
       ) : activeTab === "nfts" ? (
         <CardContent className={styles.tokensContent}>
-          <Nfts items={nftItems} onAddressClick={onAddressClick} />
+          {nftsLoading ? (
+            <div className={styles.emptyState}>Loading NFTs...</div>
+          ) : (
+            <Nfts items={nftItems} onAddressClick={onAddressClick} />
+          )}
         </CardContent>
       ) : activeTab === "holders" ? (
         <CardContent className={styles.historyContent}>
-          <Table>
-            <TableHeader className={styles.historyHeaderGroup}>
-              <TableRow className={styles.historyHeaderRow}>
-                <TableHead className={styles.tableHeader}>Owner</TableHead>
-                <TableHead className={styles.tableHeader}>Wallet</TableHead>
-                <TableHead className={`${styles.tableHeader} ${styles.valueContainer}`}>
-                  Balance
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {(holders || []).map(holder => {
-                const decimals = Number(jettonMaster?.jetton_content?.decimals || 9)
-                const balance = Number(holder.balance) / 10 ** decimals
-                const symbol = jettonMaster?.jetton_content?.symbol || ""
+          {holdersLoading ? (
+            <div className={styles.emptyState}>Loading holders...</div>
+          ) : (
+            <Table>
+              <TableHeader className={styles.historyHeaderGroup}>
+                <TableRow className={styles.historyHeaderRow}>
+                  <TableHead className={styles.tableHeader}>Owner</TableHead>
+                  <TableHead className={styles.tableHeader}>Wallet</TableHead>
+                  <TableHead className={`${styles.tableHeader} ${styles.valueContainer}`}>
+                    Balance
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(holders || []).map(holder => {
+                  const decimals = Number(jettonMaster?.jetton_content?.decimals || 9)
+                  const balance = Number(holder.balance) / 10 ** decimals
+                  const symbol = jettonMaster?.jetton_content?.symbol || ""
 
-                return (
-                  <TableRow
-                    key={holder.address}
-                    className={`${styles.row} ${styles.clickableRow}`}
-                    onClick={() => onAddressClick?.(holder.owner)}
-                  >
-                    <TableCell>
-                      <button
-                        type="button"
-                        className={styles.address}
-                        onClick={e => {
-                          e.stopPropagation()
-                          onAddressClick?.(holder.owner)
-                        }}
-                      >
-                        <AddressLabel address={holder.owner} />
-                      </button>
-                    </TableCell>
-                    <TableCell>
-                      <button
-                        type="button"
-                        className={styles.address}
-                        onClick={e => {
-                          e.stopPropagation()
-                          onAddressClick?.(holder.address)
-                        }}
-                      >
-                        <AddressLabel address={holder.address} />
-                      </button>
-                    </TableCell>
-                    <TableCell className={styles.valueContainer}>
-                      <div className={styles.valuePositive}>
-                        {balance.toLocaleString(undefined, {maximumFractionDigits: decimals})}{" "}
-                        {symbol}
-                      </div>
+                  return (
+                    <TableRow
+                      key={holder.address}
+                      className={`${styles.row} ${styles.clickableRow}`}
+                      onClick={() => onAddressClick?.(holder.owner)}
+                    >
+                      <TableCell>
+                        <button
+                          type="button"
+                          className={styles.address}
+                          onClick={e => {
+                            e.stopPropagation()
+                            onAddressClick?.(holder.owner)
+                          }}
+                        >
+                          <AddressLabel address={holder.owner} />
+                        </button>
+                      </TableCell>
+                      <TableCell>
+                        <button
+                          type="button"
+                          className={styles.address}
+                          onClick={e => {
+                            e.stopPropagation()
+                            onAddressClick?.(holder.address)
+                          }}
+                        >
+                          <AddressLabel address={holder.address} />
+                        </button>
+                      </TableCell>
+                      <TableCell className={styles.valueContainer}>
+                        <div className={styles.valuePositive}>
+                          {balance.toLocaleString(undefined, {maximumFractionDigits: decimals})}{" "}
+                          {symbol}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+                {(!holders || holders.length === 0) && (
+                  <TableRow className={styles.emptyRow}>
+                    <TableCell colSpan={3} className={styles.emptyCell}>
+                      <div className={styles.emptyState}>No holders found.</div>
                     </TableCell>
                   </TableRow>
-                )
-              })}
-              {(!holders || holders.length === 0) && (
-                <TableRow className={styles.emptyRow}>
-                  <TableCell colSpan={3} className={styles.emptyCell}>
-                    <div className={styles.emptyState}>No holders found.</div>
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+                )}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       ) : (
-        <ContractCode
-          codeBoc={accountState.code}
-          compilerAbi={compilerAbi}
-          compilerAbiLoading={compilerAbi === undefined}
-          compilerAbiError={compilerAbiError}
-        />
+        <Suspense fallback={<div className={styles.emptyState}>Loading contract code...</div>}>
+          <ContractCode
+            codeBoc={accountState.code}
+            compilerAbi={compilerAbi}
+            compilerAbiLoading={compilerAbiLoading}
+            compilerAbiError={compilerAbiError}
+          />
+        </Suspense>
       )}
     </Card>
   )

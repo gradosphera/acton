@@ -7,23 +7,59 @@ import {TonClient} from "./explorer/api/client"
 import {NetworkInfoProvider} from "./explorer/hooks/NetworkInfoProvider"
 import {AddressBookProvider} from "./explorer/hooks/useAddressBook"
 import {DashboardPage} from "./dashboard/DashboardPage"
-import {FaucetPage} from "./dashboard/pages/FaucetPage"
-import {HomePage} from "./dashboard/pages/HomePage"
-import {NftsPage} from "./dashboard/pages/NftsPage"
-import {TokensPage} from "./dashboard/pages/TokensPage"
-import {WalletsPage} from "./dashboard/pages/WalletsPage"
-import {AccountPage} from "./explorer/pages/AccountPage"
-import {ExplorerIndexPage} from "./explorer/pages/ExplorerIndexPage"
-import {TransactionPage} from "./explorer/pages/TransactionPage"
 import "@acton/shared-ui/styles/tokens.css"
 import "./index.css"
 import styles from "./App.module.css"
 
 const HOST = (import.meta.env.VITE_LOCALNET_HOST || "").replace(/\/$/, "")
 const TONCENTER_API_KEY = import.meta.env.VITE_LOCALNET_TONCENTER_API_KEY?.trim() || undefined
+let clientSingleton: TonClient | undefined
+
+function getTonClient(): TonClient {
+  clientSingleton ??= new TonClient({
+    v2BaseUrl: `${HOST}/api/v2`,
+    v3BaseUrl: `${HOST}/api/v3`,
+    addressNameBaseUrl: HOST,
+    toncenterApiKey: TONCENTER_API_KEY,
+  })
+  return clientSingleton
+}
+
 const ApiReferencePage = React.lazy(async () => {
   const module = await import("./dashboard/pages/ApiReferencePage")
   return {default: module.ApiReferencePage}
+})
+const FaucetPage = React.lazy(async () => {
+  const module = await import("./dashboard/pages/FaucetPage")
+  return {default: module.FaucetPage}
+})
+const HomePage = React.lazy(async () => {
+  const module = await import("./dashboard/pages/HomePage")
+  return {default: module.HomePage}
+})
+const NftsPage = React.lazy(async () => {
+  const module = await import("./dashboard/pages/NftsPage")
+  return {default: module.NftsPage}
+})
+const TokensPage = React.lazy(async () => {
+  const module = await import("./dashboard/pages/TokensPage")
+  return {default: module.TokensPage}
+})
+const WalletsPage = React.lazy(async () => {
+  const module = await import("./dashboard/pages/WalletsPage")
+  return {default: module.WalletsPage}
+})
+const AccountPage = React.lazy(async () => {
+  const module = await import("./explorer/pages/AccountPage")
+  return {default: module.AccountPage}
+})
+const ExplorerIndexPage = React.lazy(async () => {
+  const module = await import("./explorer/pages/ExplorerIndexPage")
+  return {default: module.ExplorerIndexPage}
+})
+const TransactionPage = React.lazy(async () => {
+  const module = await import("./explorer/pages/TransactionPage")
+  return {default: module.TransactionPage}
 })
 
 export const App: React.FC = () => {
@@ -34,16 +70,7 @@ export const App: React.FC = () => {
     )
   })
 
-  const client = useMemo(
-    () =>
-      new TonClient({
-        v2BaseUrl: `${HOST}/api/v2`,
-        v3BaseUrl: `${HOST}/api/v3`,
-        addressNameBaseUrl: HOST,
-        toncenterApiKey: TONCENTER_API_KEY,
-      }),
-    [],
-  )
+  const client = useMemo(getTonClient, [])
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark-theme", theme === "dark")
@@ -81,7 +108,9 @@ const AppContent: React.FC<AppContentProps> = ({client, theme, setTheme}) => {
             path="/dashboard"
             element={
               <DashboardPage client={client} theme={theme} setTheme={setTheme}>
-                <HomePage client={client} />
+                <RouteSuspense>
+                  <HomePage client={client} />
+                </RouteSuspense>
               </DashboardPage>
             }
           />
@@ -89,7 +118,9 @@ const AppContent: React.FC<AppContentProps> = ({client, theme, setTheme}) => {
             path="/faucet"
             element={
               <DashboardPage client={client} theme={theme} setTheme={setTheme}>
-                <FaucetPage client={client} />
+                <RouteSuspense>
+                  <FaucetPage client={client} />
+                </RouteSuspense>
               </DashboardPage>
             }
           />
@@ -97,7 +128,9 @@ const AppContent: React.FC<AppContentProps> = ({client, theme, setTheme}) => {
             path="/wallets"
             element={
               <DashboardPage client={client} theme={theme} setTheme={setTheme}>
-                <WalletsPage client={client} host={HOST} />
+                <RouteSuspense>
+                  <WalletsPage client={client} host={HOST} />
+                </RouteSuspense>
               </DashboardPage>
             }
           />
@@ -105,7 +138,9 @@ const AppContent: React.FC<AppContentProps> = ({client, theme, setTheme}) => {
             path="/tokens"
             element={
               <DashboardPage client={client} theme={theme} setTheme={setTheme}>
-                <TokensPage client={client} />
+                <RouteSuspense>
+                  <TokensPage client={client} />
+                </RouteSuspense>
               </DashboardPage>
             }
           />
@@ -113,7 +148,9 @@ const AppContent: React.FC<AppContentProps> = ({client, theme, setTheme}) => {
             path="/nfts"
             element={
               <DashboardPage client={client} theme={theme} setTheme={setTheme}>
-                <NftsPage client={client} />
+                <RouteSuspense>
+                  <NftsPage client={client} />
+                </RouteSuspense>
               </DashboardPage>
             }
           />
@@ -122,14 +159,14 @@ const AppContent: React.FC<AppContentProps> = ({client, theme, setTheme}) => {
             path="/api-reference/v2"
             element={
               <DashboardPage client={client} theme={theme} setTheme={setTheme} embedded>
-                <React.Suspense fallback={<div className={styles.routeLoading}>Loading…</div>}>
+                <RouteSuspense>
                   <ApiReferencePage
                     apiBaseUrl={`${HOST}/api/v2`}
                     theme={theme}
                     toncenterApiKey={TONCENTER_API_KEY}
                     version="v2"
                   />
-                </React.Suspense>
+                </RouteSuspense>
               </DashboardPage>
             }
           />
@@ -137,14 +174,14 @@ const AppContent: React.FC<AppContentProps> = ({client, theme, setTheme}) => {
             path="/api-reference/v3"
             element={
               <DashboardPage client={client} theme={theme} setTheme={setTheme} embedded>
-                <React.Suspense fallback={<div className={styles.routeLoading}>Loading…</div>}>
+                <RouteSuspense>
                   <ApiReferencePage
                     apiBaseUrl={`${HOST}/api/v3`}
                     theme={theme}
                     toncenterApiKey={TONCENTER_API_KEY}
                     version="v3"
                   />
-                </React.Suspense>
+                </RouteSuspense>
               </DashboardPage>
             }
           />
@@ -152,9 +189,9 @@ const AppContent: React.FC<AppContentProps> = ({client, theme, setTheme}) => {
             path="/api-reference/control"
             element={
               <DashboardPage client={client} theme={theme} setTheme={setTheme} embedded>
-                <React.Suspense fallback={<div className={styles.routeLoading}>Loading…</div>}>
+                <RouteSuspense>
                   <ApiReferencePage apiBaseUrl={HOST} theme={theme} version="control" />
-                </React.Suspense>
+                </RouteSuspense>
               </DashboardPage>
             }
           />
@@ -166,7 +203,9 @@ const AppContent: React.FC<AppContentProps> = ({client, theme, setTheme}) => {
             path="/explorer"
             element={
               <DashboardPage client={client} theme={theme} setTheme={setTheme} embedded>
-                <ExplorerIndexPage />
+                <RouteSuspense>
+                  <ExplorerIndexPage />
+                </RouteSuspense>
               </DashboardPage>
             }
           />
@@ -174,7 +213,9 @@ const AppContent: React.FC<AppContentProps> = ({client, theme, setTheme}) => {
             path="/explorer/address/:address"
             element={
               <DashboardPage client={client} theme={theme} setTheme={setTheme} embedded>
-                <AccountPage client={client} />
+                <RouteSuspense>
+                  <AccountPage client={client} />
+                </RouteSuspense>
               </DashboardPage>
             }
           />
@@ -182,7 +223,9 @@ const AppContent: React.FC<AppContentProps> = ({client, theme, setTheme}) => {
             path="/explorer/tx/:hash"
             element={
               <DashboardPage client={client} theme={theme} setTheme={setTheme} embedded>
-                <TransactionPage client={client} />
+                <RouteSuspense>
+                  <TransactionPage client={client} />
+                </RouteSuspense>
               </DashboardPage>
             }
           />
@@ -192,3 +235,9 @@ const AppContent: React.FC<AppContentProps> = ({client, theme, setTheme}) => {
     </div>
   )
 }
+
+const RouteSuspense: React.FC<{readonly children: React.ReactNode}> = ({children}) => (
+  <React.Suspense fallback={<div className={styles.routeLoading}>Loading…</div>}>
+    {children}
+  </React.Suspense>
+)

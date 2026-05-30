@@ -635,22 +635,22 @@
   gap: 18px;
 }
 
-.dashboardCard {
+.dashboardCard.dashboardCard {
   border-radius: 18px;
   border: 1px solid var(--litenode-border);
   background: var(--litenode-surface);
   box-shadow: var(--litenode-shadow-sm);
 }
 
-.homeCard {
+.homeCard.homeCard {
   border-radius: 18px;
 }
 
-.dashboardCardHeader {
+.dashboardCardHeader.dashboardCardHeader {
   padding: 24px 24px 0;
 }
 
-.dashboardCardContent {
+.dashboardCardContent.dashboardCardContent {
   padding: 0 24px 24px;
 }
 
@@ -658,14 +658,14 @@
   margin-bottom: 10px;
 }
 
-.dashboardCardTitle {
+.dashboardCardTitle.dashboardCardTitle {
   margin: 1px 0 0;
   color: var(--litenode-text);
   font-size: 1rem;
   font-weight: 600;
 }
 
-.dashboardCardDescription {
+.dashboardCardDescription.dashboardCardDescription {
   margin: 6px 0 0;
   color: var(--litenode-text-muted);
   font-size: 0.9rem;

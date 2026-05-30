@@ -26,6 +26,7 @@ interface AccountPageProps {
 }
 
 const NFT_PLACEHOLDER_IMAGE = "/token-placeholder.svg"
+type AccountTab = "history" | "contract" | "tokens" | "nfts" | "holders"
 
 export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
   const {address = ""} = useParams<{address: string}>()
@@ -44,6 +45,9 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
   const [currentNftCollectionItems, setCurrentNftCollectionItems] = useState<NftItem[]>([])
   const [nftItems, setNftItems] = useState<NftItem[]>([])
   const [holders, setHolders] = useState<JettonWallet[]>([])
+  const [jettonWalletsLoading, setJettonWalletsLoading] = useState(false)
+  const [nftItemsLoading, setNftItemsLoading] = useState(false)
+  const [holdersLoading, setHoldersLoading] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | undefined>()
 
@@ -51,6 +55,15 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
     () => normalizeAddress(address, addressFormat),
     [address, addressFormat],
   )
+  const activeTab = useMemo<AccountTab>(() => {
+    const tab = location.hash.replace("#", "")
+    return isAccountTab(tab) ? tab : "history"
+  }, [location.hash])
+  const accountInterfaces = accountStateV3?.interfaces ?? []
+  const isJettonMasterAccount = hasAccountInterface(accountInterfaces, "jetton_master")
+  const isJettonWalletAccount = hasAccountInterface(accountInterfaces, "jetton_wallet")
+  const isNftItemAccount = hasAccountInterface(accountInterfaces, "nft_item")
+  const isNftCollectionAccount = hasAccountInterface(accountInterfaces, "nft_collection")
 
   useEffect(() => {
     let isActive = true
@@ -68,47 +81,31 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
         setCurrentNftCollectionItems([])
         setNftItems([])
         setHolders([])
+        setJettonWalletsLoading(false)
+        setNftItemsLoading(false)
+        setHoldersLoading(false)
         return
       }
       setLoading(true)
       setError(undefined)
+      setJettonMaster(undefined)
+      setJettonWalletAccount(undefined)
+      setJettonWalletMaster(undefined)
+      setJettonWallets([])
+      setAccountTokenInfo([])
+      setCurrentNftItem(undefined)
+      setCurrentNftCollectionItems([])
+      setNftItems([])
+      setHolders([])
+      setJettonWalletsLoading(false)
+      setNftItemsLoading(false)
+      setHoldersLoading(false)
       try {
-        const [
-          state,
-          stateV3,
-          txs,
-          masters,
-          wallets,
-          nfts,
-          masterHolders,
-          currentWallets,
-          currentNftItems,
-          collectionNftItems,
-        ] = await Promise.all([
+        const [state, stateV3, txs] = await Promise.all([
           client.getAddressInformation(formattedAddress),
           client.getAccountStates([formattedAddress], false).catch(() => {}),
           client.getTransactions(formattedAddress),
-          client.getJettonMasters([formattedAddress]),
-          client.getJettonWallets([formattedAddress]),
-          client.getNftItems({
-            owner_address: [formattedAddress],
-            limit: 100,
-            sortByLastTransactionLt: true,
-          }),
-          client.getJettonWallets(undefined, [formattedAddress]),
-          client.getJettonWalletsByAddress([formattedAddress]),
-          client.getNftItems({address: [formattedAddress], limit: 1}),
-          client.getNftItems({
-            collection_address: [formattedAddress],
-            limit: 100,
-            sortByLastTransactionLt: true,
-          }),
         ])
-        const currentWallet = currentWallets[0]
-        const currentWalletMasters = currentWallet
-          ? await client.getJettonMasters([currentWallet.jetton])
-          : []
-        const currentWalletMaster = currentWalletMasters[0]
         const currentAccount = stateV3?.accounts[0]
         const currentTokenInfo = currentAccount
           ? (stateV3?.metadata[currentAccount.address]?.token_info ?? [])
@@ -117,15 +114,7 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
         setAccountState(state)
         setAccountStateV3(stateV3?.accounts[0])
         setTransactions(txs)
-        setJettonMaster(masters[0])
-        setJettonWalletAccount(currentWallet)
-        setJettonWalletMaster(currentWalletMaster)
-        setJettonWallets(wallets)
         setAccountTokenInfo(currentTokenInfo)
-        setCurrentNftItem(currentNftItems[0])
-        setCurrentNftCollectionItems(collectionNftItems)
-        setNftItems(nfts)
-        setHolders(masterHolders)
       } catch (error) {
         if (!isActive) return
         setError(error instanceof Error ? error.message : "An error occurred")
@@ -141,6 +130,9 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
         setCurrentNftCollectionItems([])
         setNftItems([])
         setHolders([])
+        setJettonWalletsLoading(false)
+        setNftItemsLoading(false)
+        setHoldersLoading(false)
       } finally {
         if (isActive) setLoading(false)
       }
@@ -151,6 +143,194 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
       isActive = false
     }
   }, [client, formattedAddress])
+
+  useEffect(() => {
+    let isActive = true
+
+    const loadJettonMaster = async () => {
+      if (!formattedAddress || !isJettonMasterAccount) {
+        setJettonMaster(undefined)
+        return
+      }
+
+      try {
+        const masters = await client.getJettonMasters([formattedAddress])
+        if (!isActive) return
+        setJettonMaster(masters[0])
+      } catch (error) {
+        console.error("Failed to fetch jetton master", error)
+      }
+    }
+
+    void loadJettonMaster()
+    return () => {
+      isActive = false
+    }
+  }, [client, formattedAddress, isJettonMasterAccount])
+
+  useEffect(() => {
+    let isActive = true
+
+    const loadJettonWallet = async () => {
+      if (!formattedAddress || !isJettonWalletAccount) {
+        setJettonWalletAccount(undefined)
+        setJettonWalletMaster(undefined)
+        return
+      }
+
+      try {
+        const currentWallets = await client.getJettonWalletsByAddress([formattedAddress])
+        const currentWallet = currentWallets[0]
+        const currentWalletMasters = currentWallet
+          ? await client.getJettonMasters([currentWallet.jetton])
+          : []
+        if (!isActive) return
+        setJettonWalletAccount(currentWallet)
+        setJettonWalletMaster(currentWalletMasters[0])
+      } catch (error) {
+        console.error("Failed to fetch jetton wallet", error)
+      }
+    }
+
+    void loadJettonWallet()
+    return () => {
+      isActive = false
+    }
+  }, [client, formattedAddress, isJettonWalletAccount])
+
+  useEffect(() => {
+    let isActive = true
+
+    const loadJettonWallets = async () => {
+      if (!formattedAddress) {
+        return
+      }
+
+      setJettonWalletsLoading(true)
+      try {
+        const wallets = await client.getJettonWallets([formattedAddress])
+        if (!isActive) return
+        setJettonWallets(wallets)
+      } catch (error) {
+        console.error("Failed to fetch account jetton wallets", error)
+      } finally {
+        if (isActive) setJettonWalletsLoading(false)
+      }
+    }
+
+    void loadJettonWallets()
+    return () => {
+      isActive = false
+    }
+  }, [client, formattedAddress])
+
+  useEffect(() => {
+    let isActive = true
+
+    const loadNftItem = async () => {
+      if (!formattedAddress || !isNftItemAccount) {
+        setCurrentNftItem(undefined)
+        return
+      }
+
+      try {
+        const items = await client.getNftItems({address: [formattedAddress], limit: 1})
+        if (!isActive) return
+        setCurrentNftItem(items[0])
+      } catch (error) {
+        console.error("Failed to fetch NFT item", error)
+      }
+    }
+
+    void loadNftItem()
+    return () => {
+      isActive = false
+    }
+  }, [client, formattedAddress, isNftItemAccount])
+
+  useEffect(() => {
+    let isActive = true
+
+    const loadNftCollectionItems = async () => {
+      if (!formattedAddress || !isNftCollectionAccount) {
+        setCurrentNftCollectionItems([])
+        return
+      }
+
+      try {
+        const items = await client.getNftItems({
+          collection_address: [formattedAddress],
+          limit: 100,
+          sortByLastTransactionLt: true,
+        })
+        if (!isActive) return
+        setCurrentNftCollectionItems(items)
+      } catch (error) {
+        console.error("Failed to fetch NFT collection items", error)
+      }
+    }
+
+    void loadNftCollectionItems()
+    return () => {
+      isActive = false
+    }
+  }, [client, formattedAddress, isNftCollectionAccount])
+
+  useEffect(() => {
+    let isActive = true
+
+    const loadNftItems = async () => {
+      if (!formattedAddress || activeTab !== "nfts") {
+        return
+      }
+
+      setNftItemsLoading(true)
+      try {
+        const nfts = await client.getNftItems({
+          owner_address: [formattedAddress],
+          limit: 100,
+          sortByLastTransactionLt: true,
+        })
+        if (!isActive) return
+        setNftItems(nfts)
+      } catch (error) {
+        console.error("Failed to fetch account NFTs", error)
+      } finally {
+        if (isActive) setNftItemsLoading(false)
+      }
+    }
+
+    void loadNftItems()
+    return () => {
+      isActive = false
+    }
+  }, [activeTab, client, formattedAddress])
+
+  useEffect(() => {
+    let isActive = true
+
+    const loadHolders = async () => {
+      if (!formattedAddress || activeTab !== "holders" || !isJettonMasterAccount) {
+        return
+      }
+
+      setHoldersLoading(true)
+      try {
+        const masterHolders = await client.getJettonWallets(undefined, [formattedAddress])
+        if (!isActive) return
+        setHolders(masterHolders)
+      } catch (error) {
+        console.error("Failed to fetch jetton holders", error)
+      } finally {
+        if (isActive) setHoldersLoading(false)
+      }
+    }
+
+    void loadHolders()
+    return () => {
+      isActive = false
+    }
+  }, [activeTab, client, formattedAddress, isJettonMasterAccount])
 
   const handleSearch = (addr: string) => {
     const finalAddr = addr ? normalizeAddress(addr, addressFormat) : ""
@@ -449,9 +629,13 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
             nftItems={nftItems}
             jettonMaster={jettonMaster}
             holders={holders}
+            tokensLoading={jettonWalletsLoading}
+            nftsLoading={nftItemsLoading}
+            holdersLoading={holdersLoading}
+            showHoldersTab={isJettonMasterAccount}
             client={client}
             onAddressClick={handleSearch}
-            activeTabHash={location.hash.replace("#", "")}
+            activeTabHash={activeTab}
             onTabChange={handleTabChange}
           />
         </>
@@ -482,4 +666,18 @@ function contentString(
 ): string | undefined {
   const value = content?.[key]
   return typeof value === "string" && value.length > 0 ? value : undefined
+}
+
+function isAccountTab(value: string): value is AccountTab {
+  return (
+    value === "history" ||
+    value === "contract" ||
+    value === "tokens" ||
+    value === "nfts" ||
+    value === "holders"
+  )
+}
+
+function hasAccountInterface(interfaces: readonly string[], expected: string): boolean {
+  return interfaces.some(iface => iface.trim().toLowerCase() === expected)
 }

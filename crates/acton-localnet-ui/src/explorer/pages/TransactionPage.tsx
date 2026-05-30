@@ -145,17 +145,14 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({client}) => {
 
           const abiByCodeHash = new Map<string, ContractData["abi"]>()
           const codeHashes = [...new Set(addressToCodeHash.values())]
-          const fetchedAbis = await Promise.all(
-            codeHashes.map(async codeHash => {
-              try {
-                return [codeHash, await client.getCompilerAbi(codeHash)] as const
-              } catch {
-                return [codeHash, undefined] as const
-              }
-            }),
-          )
-          for (const [codeHash, abi] of fetchedAbis) {
-            abiByCodeHash.set(codeHash, abi)
+          const fetchedAbis =
+            codeHashes.length > 0
+              ? await client
+                  .getCompilerAbis(codeHashes)
+                  .catch((): Record<string, ContractData["abi"] | null> => ({}))
+              : {}
+          for (const codeHash of codeHashes) {
+            abiByCodeHash.set(codeHash, fetchedAbis[codeHash] ?? undefined)
           }
 
           let nextLetterCode = 65
