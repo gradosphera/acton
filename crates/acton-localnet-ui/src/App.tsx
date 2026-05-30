@@ -20,6 +20,7 @@ import "./index.css"
 import styles from "./App.module.css"
 
 const HOST = (import.meta.env.VITE_LOCALNET_HOST || "").replace(/\/$/, "")
+const TONCENTER_API_KEY = import.meta.env.VITE_LOCALNET_TONCENTER_API_KEY?.trim() || undefined
 const ApiReferencePage = React.lazy(async () => {
   const module = await import("./dashboard/pages/ApiReferencePage")
   return {default: module.ApiReferencePage}
@@ -39,6 +40,7 @@ export const App: React.FC = () => {
         v2BaseUrl: `${HOST}/api/v2`,
         v3BaseUrl: `${HOST}/api/v3`,
         addressNameBaseUrl: HOST,
+        toncenterApiKey: TONCENTER_API_KEY,
       }),
     [],
   )
@@ -121,7 +123,12 @@ const AppContent: React.FC<AppContentProps> = ({client, theme, setTheme}) => {
             element={
               <DashboardPage client={client} theme={theme} setTheme={setTheme} embedded>
                 <React.Suspense fallback={<div className={styles.routeLoading}>Loading…</div>}>
-                  <ApiReferencePage apiBaseUrl={`${HOST}/api/v2`} theme={theme} version="v2" />
+                  <ApiReferencePage
+                    apiBaseUrl={`${HOST}/api/v2`}
+                    theme={theme}
+                    toncenterApiKey={TONCENTER_API_KEY}
+                    version="v2"
+                  />
                 </React.Suspense>
               </DashboardPage>
             }
@@ -131,7 +138,12 @@ const AppContent: React.FC<AppContentProps> = ({client, theme, setTheme}) => {
             element={
               <DashboardPage client={client} theme={theme} setTheme={setTheme} embedded>
                 <React.Suspense fallback={<div className={styles.routeLoading}>Loading…</div>}>
-                  <ApiReferencePage apiBaseUrl={`${HOST}/api/v3`} theme={theme} version="v3" />
+                  <ApiReferencePage
+                    apiBaseUrl={`${HOST}/api/v3`}
+                    theme={theme}
+                    toncenterApiKey={TONCENTER_API_KEY}
+                    version="v3"
+                  />
                 </React.Suspense>
               </DashboardPage>
             }

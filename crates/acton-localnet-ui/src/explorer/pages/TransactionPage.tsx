@@ -119,7 +119,7 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({client}) => {
           const transactionsMap = trace.transactions
           const transactionsByHex = buildTransactionsHexIndex(transactionsMap)
 
-          const processed = buildTraceTransactionInfos(transactionsMap)
+          const processed = buildTraceTransactionInfos(transactionsMap, trace.trace)
           if (!isActive) return
           setTraces(processed)
 

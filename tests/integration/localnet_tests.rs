@@ -701,6 +701,72 @@ fn localnet_supports_pre_start_commands_and_get_out_msg_queue_size() {
         serde_json::to_string_pretty(&tx_std_response).unwrap_or_default()
     );
 
+    let parent_transaction = transactions
+        .iter()
+        .find(|tx| {
+            tx.get("out_msgs")
+                .and_then(Value::as_array)
+                .is_some_and(|out| !out.is_empty())
+        })
+        .expect("deployer trace must include a parent transaction with out messages");
+    let parent_tx_hash = parent_transaction
+        .pointer("/transaction_id/hash")
+        .and_then(Value::as_str)
+        .expect("parent transaction hash must be present");
+    let traces = wait_for_ok_response(
+        &node,
+        &format!(
+            "/api/v3/traces?hash={}",
+            encode_query_component(parent_tx_hash)
+        ),
+        Duration::from_secs(12),
+    );
+    let trace_payload = response_payload(&traces);
+    let trace = trace_payload["traces"]
+        .as_array()
+        .and_then(|items| items.first())
+        .expect("v3 traces must contain a first trace");
+    let transactions_map = trace["transactions"]
+        .as_object()
+        .expect("v3 trace must include transactions map");
+    let parent_v3_tx = transactions_map
+        .get(parent_tx_hash)
+        .unwrap_or_else(|| panic!("v3 trace must include parent transaction {parent_tx_hash}"));
+    let legacy_child_lts = parent_v3_tx["child_transactions"]
+        .as_array()
+        .expect("v3 transaction entry must include legacy child_transactions");
+    let trace_root_children = trace["trace"]["children"].as_array();
+    let parent_trace_node = find_trace_node(&trace["trace"], parent_tx_hash);
+    let parent_trace_children = parent_trace_node
+        .and_then(|node| node.get("children"))
+        .and_then(Value::as_array);
+    let first_tree_child_lt = parent_trace_children
+        .and_then(|children| children.first())
+        .and_then(|child| child.get("tx_hash"))
+        .and_then(Value::as_str)
+        .and_then(|child_hash| transactions_map.get(child_hash))
+        .and_then(|tx| tx.get("lt"))
+        .and_then(Value::as_str);
+    let first_legacy_child_lt = legacy_child_lts.first().and_then(Value::as_str);
+
+    let trace_legacy_summary = json!({
+        "trace_root_children_count": trace_root_children.map_or(0, Vec::len),
+        "parent_trace_node_present": parent_trace_node.is_some(),
+        "parent_trace_node_children_count": parent_trace_children.map_or(0, Vec::len),
+        "parent_legacy_child_transactions_count": legacy_child_lts.len(),
+        "first_child_lt_matches_legacy_child_transaction": first_tree_child_lt.is_some()
+            && first_tree_child_lt == first_legacy_child_lt,
+    });
+    let trace_legacy_summary_json = format!(
+        "{}\n",
+        serde_json::to_string_pretty(&trace_legacy_summary)
+            .expect("Failed to serialize v3 trace compatibility summary")
+    );
+    assertion().eq(
+        trace_legacy_summary_json,
+        snapbox::file!("snapshots/localnet/test_localnet_v3_trace_children.summary.json"),
+    );
+
     let mut tx_std_response = tx_std_response;
     normalize_transactions_std_for_snapshot(&mut tx_std_response);
 
@@ -3688,6 +3754,17 @@ fn contains_tx_hash(transactions: &[Value], hash: &str) -> bool {
     transactions
         .iter()
         .any(|tx| tx["hash"].as_str() == Some(hash))
+}
+
+fn find_trace_node<'a>(node: &'a Value, tx_hash: &str) -> Option<&'a Value> {
+    if node.get("tx_hash").and_then(Value::as_str) == Some(tx_hash) {
+        return Some(node);
+    }
+
+    node.get("children")
+        .and_then(Value::as_array)?
+        .iter()
+        .find_map(|child| find_trace_node(child, tx_hash))
 }
 
 fn assert_transactions_sorted_by_lt_asc(transactions: &[Value]) {

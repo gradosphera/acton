@@ -194,7 +194,7 @@ export interface V3RunGetMethodResponse {
 
 export interface V3Trace {
   readonly trace_id: string
-  readonly external_hash: string
+  readonly external_hash?: string | null
   readonly mc_seqno_start: string
   readonly mc_seqno_end: string
   readonly start_lt: string
@@ -217,10 +217,10 @@ export interface V3Trace {
 
 export interface V3TraceNode {
   readonly tx_hash: string
-  readonly in_msg_hash: string
+  readonly in_msg_hash?: string
   readonly in_msg?: V3Message | null
-  readonly transaction: V3Transaction
-  readonly children: readonly V3TraceNode[]
+  readonly transaction?: V3Transaction
+  readonly children?: readonly V3TraceNode[]
 }
 
 export interface V3Transaction {
@@ -281,7 +281,7 @@ export interface V3Transaction {
     readonly seqno: number
   }
   readonly mc_block_seqno: number
-  readonly child_transactions: readonly string[]
+  readonly child_transactions?: readonly string[] | null
 }
 
 export interface V3Message {

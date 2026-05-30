@@ -22,6 +22,7 @@ interface TonClientOptions {
   readonly v2BaseUrl: string
   readonly v3BaseUrl: string
   readonly addressNameBaseUrl: string
+  readonly toncenterApiKey?: string
 }
 
 interface FaucetResponse {
@@ -34,11 +35,13 @@ export class TonClient {
   private readonly v2BaseUrl: string
   private readonly v3BaseUrl: string
   private readonly addressNameBaseUrl: string
+  private readonly toncenterApiKey: string | undefined
 
-  constructor({v2BaseUrl, v3BaseUrl, addressNameBaseUrl}: TonClientOptions) {
+  constructor({v2BaseUrl, v3BaseUrl, addressNameBaseUrl, toncenterApiKey}: TonClientOptions) {
     this.v2BaseUrl = v2BaseUrl
     this.v3BaseUrl = v3BaseUrl
     this.addressNameBaseUrl = addressNameBaseUrl
+    this.toncenterApiKey = toncenterApiKey?.trim() || undefined
   }
 
   async getAddressInformation(address: string, seqno?: number): Promise<FullAccountState> {
@@ -345,8 +348,8 @@ export class TonClient {
   }
 
   private async request<T>(url: URL, errorMessage: string, options?: RequestInit): Promise<T> {
-    const response = await fetch(url.toString(), options)
-    const raw = (await response.json()) as unknown
+    const response = await fetch(url.toString(), this.withToncenterApiKey(url, options))
+    const raw = await this.parseResponseJson(response, errorMessage)
 
     if (this.isApiResponse<T>(raw)) {
       if (!raw.ok) {
@@ -395,6 +398,46 @@ export class TonClient {
     }
     const error = (value as {error?: unknown}).error
     return typeof error === "string" ? error : undefined
+  }
+
+  private async parseResponseJson(response: Response, errorMessage: string): Promise<unknown> {
+    const text = await response.text()
+    if (text.length === 0) {
+      return undefined
+    }
+
+    try {
+      return JSON.parse(text) as unknown
+    } catch {
+      throw new Error(
+        `${errorMessage}: received non-JSON response from ${new URL(response.url).pathname}`,
+      )
+    }
+  }
+
+  private withToncenterApiKey(url: URL, options?: RequestInit): RequestInit | undefined {
+    if (!this.toncenterApiKey || !this.isToncenterApiUrl(url)) {
+      return options
+    }
+
+    const headers = new Headers(options?.headers)
+    headers.set("X-API-Key", this.toncenterApiKey)
+    return {...options, headers}
+  }
+
+  private isToncenterApiUrl(url: URL): boolean {
+    return (
+      this.isUrlWithinBase(url, this.buildUrl(this.v2BaseUrl, "")) ||
+      this.isUrlWithinBase(url, this.buildUrl(this.v3BaseUrl, ""))
+    )
+  }
+
+  private isUrlWithinBase(url: URL, baseUrl: URL): boolean {
+    const basePath = baseUrl.pathname.replace(/\/$/, "")
+    return (
+      url.origin === baseUrl.origin &&
+      (url.pathname === basePath || url.pathname.startsWith(`${basePath}/`))
+    )
   }
 
   private stackNumber(entry: V3RunGetMethodStackEntry | undefined): string | undefined {

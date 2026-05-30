@@ -1,4 +1,12 @@
-import {Boxes, ChartNoAxesColumn, CircleUserRound, FileJson, Image, Search, Wallet} from "lucide-react"
+import {
+  Boxes,
+  ChartNoAxesColumn,
+  CircleUserRound,
+  FileJson,
+  Image,
+  Search,
+  Wallet,
+} from "lucide-react"
 import type {LucideIcon} from "lucide-react"
 import * as React from "react"
 import {useNavigate} from "react-router-dom"
@@ -211,7 +219,13 @@ export const DashboardSearch: React.FC<DashboardSearchProps> = ({client}) => {
     }
 
     return results
-  }, [addressFormat, apiSearchState.entries, searchAssetsState.nfts, searchAssetsState.tokens, searchQuery])
+  }, [
+    addressFormat,
+    apiSearchState.entries,
+    searchAssetsState.nfts,
+    searchAssetsState.tokens,
+    searchQuery,
+  ])
 
   const measureSearchOrigin = React.useCallback(() => {
     const rect = searchButtonRef.current?.getBoundingClientRect()

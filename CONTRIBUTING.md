@@ -584,6 +584,8 @@ Rules:
 
 - `TONCENTER_MAINNET_API_KEY`: API key for TonCenter mainnet requests.
 - `TONCENTER_TESTNET_API_KEY`: API key for TonCenter testnet requests.
+- `VITE_LOCALNET_TONCENTER_API_KEY`: API key sent by the localnet UI to
+  TonCenter-compatible `/api/v2` and `/api/v3` endpoints.
 - `DISABLE_TMP_DIR_CLEANUP_IN_TESTS=1`: preserve temp test directories.
 - `ACTON_LOG_DIR`: custom directory for Acton debug logs.
 

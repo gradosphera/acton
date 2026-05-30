@@ -68,8 +68,13 @@ export const HomePage: React.FC<HomePageProps> = ({client}) => {
       }))
 
       try {
+        const loadNodeInfo = client.getNodeInfo().catch(error => {
+          console.error("Failed to fetch localnet node info", error)
+          const unavailableNodeInfo: LocalnetNodeInfo | undefined = undefined
+          return unavailableNodeInfo
+        })
         const [nodeInfo, transactionsResponse] = await Promise.all([
-          client.getNodeInfo(),
+          loadNodeInfo,
           client.getRecentTransactions(8),
         ])
         const transactions = transactionsResponse.transactions
@@ -336,7 +341,9 @@ export const HomePage: React.FC<HomePageProps> = ({client}) => {
                       <button
                         type="button"
                         className={`${styles.endpointButton} ${isCopied ? styles.endpointButtonCopied : ""}`}
-                        aria-label={isCopied ? "Endpoint copied" : `Copy ${endpoint.label} endpoint`}
+                        aria-label={
+                          isCopied ? "Endpoint copied" : `Copy ${endpoint.label} endpoint`
+                        }
                         title={isCopied ? "Copied" : "Copy endpoint"}
                         onClick={() => void copyEndpoint(endpoint.value)}
                       >

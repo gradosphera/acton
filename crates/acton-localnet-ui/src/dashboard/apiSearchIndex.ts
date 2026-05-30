@@ -44,7 +44,9 @@ let cachedApiSearchIndex: Promise<readonly ApiSearchIndexEntry[]> | undefined
 
 export function loadApiSearchIndex(): Promise<readonly ApiSearchIndexEntry[]> {
   if (!cachedApiSearchIndex) {
-    cachedApiSearchIndex = Promise.all(apiReferenceSpecs.map(reference => loadApiReferenceSpec(reference)))
+    cachedApiSearchIndex = Promise.all(
+      apiReferenceSpecs.map(reference => loadApiReferenceSpec(reference)),
+    )
       .then(entries => entries.flat())
       .catch(error => {
         cachedApiSearchIndex = undefined
@@ -55,7 +57,9 @@ export function loadApiSearchIndex(): Promise<readonly ApiSearchIndexEntry[]> {
   return cachedApiSearchIndex
 }
 
-async function loadApiReferenceSpec(reference: ApiReferenceSpec): Promise<readonly ApiSearchIndexEntry[]> {
+async function loadApiReferenceSpec(
+  reference: ApiReferenceSpec,
+): Promise<readonly ApiSearchIndexEntry[]> {
   const response = await fetch(reference.specUrl)
   if (!response.ok) {
     throw new Error(`Failed to load ${reference.label} spec: ${response.status}`)

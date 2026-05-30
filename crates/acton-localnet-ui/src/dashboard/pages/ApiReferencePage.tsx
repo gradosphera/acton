@@ -10,6 +10,7 @@ type ApiReferenceVersion = "control" | "v2" | "v3"
 interface ApiReferencePageProps {
   readonly apiBaseUrl: string
   readonly theme: string
+  readonly toncenterApiKey?: string
   readonly version: ApiReferenceVersion
 }
 
@@ -38,15 +39,34 @@ const apiReferences: Record<
   },
 }
 
-export const ApiReferencePage: React.FC<ApiReferencePageProps> = ({apiBaseUrl, theme, version}) => {
+export const ApiReferencePage: React.FC<ApiReferencePageProps> = ({
+  apiBaseUrl,
+  theme,
+  toncenterApiKey,
+  version,
+}) => {
   const reference = apiReferences[version]
   const localnetOrigin = React.useMemo(() => apiOrigin(apiBaseUrl), [apiBaseUrl])
   const syncReferenceAnchor = useApiReferenceAnchorSync(reference.slug)
+  const toncenterFetch = React.useMemo(
+    () => createToncenterApiFetch(apiBaseUrl, toncenterApiKey),
+    [apiBaseUrl, toncenterApiKey],
+  )
   const configuration = React.useMemo<AnyApiReferenceConfiguration>(
     () => ({
       title: reference.title,
       slug: reference.slug,
       url: reference.specUrl,
+      authentication: toncenterApiKey
+        ? {
+            preferredSecurityScheme: "APIKeyHeader",
+            securitySchemes: {
+              APIKeyHeader: {
+                value: toncenterApiKey,
+              },
+            },
+          }
+        : undefined,
       servers: [
         {
           url: localnetOrigin,
@@ -61,6 +81,8 @@ export const ApiReferencePage: React.FC<ApiReferencePageProps> = ({apiBaseUrl, t
         targetKey: "shell",
         clientKey: "curl",
       },
+      fetch: toncenterFetch,
+      customFetch: toncenterFetch,
       darkMode: theme === "dark",
       documentDownloadType: "json",
       forceDarkModeState: theme === "dark" ? "dark" : "light",
@@ -206,7 +228,7 @@ export const ApiReferencePage: React.FC<ApiReferencePageProps> = ({apiBaseUrl, t
         }
       `,
     }),
-    [localnetOrigin, reference, syncReferenceAnchor, theme],
+    [localnetOrigin, reference, syncReferenceAnchor, theme, toncenterApiKey, toncenterFetch],
   )
 
   return (
@@ -287,6 +309,49 @@ function decodeHashPath(hashPath: string): string {
   } catch {
     return hashPath
   }
+}
+
+function createToncenterApiFetch(
+  apiBaseUrl: string,
+  apiKey: string | undefined,
+): typeof fetch | undefined {
+  const toncenterApiKey = apiKey?.trim()
+  if (!toncenterApiKey) {
+    return undefined
+  }
+
+  const baseUrl = new URL(apiBaseUrl, globalThis.location.origin)
+  return (input, init) => {
+    const url = requestUrl(input)
+    if (!url || !isUrlWithinBase(url, baseUrl)) {
+      return fetch(input, init)
+    }
+
+    const headers = new Headers(
+      init?.headers ?? (input instanceof Request ? input.headers : undefined),
+    )
+    headers.set("X-API-Key", toncenterApiKey)
+    const requestInit = {...init, headers}
+    return input instanceof Request
+      ? fetch(new Request(input, requestInit))
+      : fetch(input, requestInit)
+  }
+}
+
+function requestUrl(input: string | URL | Request): URL | undefined {
+  try {
+    return new URL(input instanceof Request ? input.url : input, globalThis.location.origin)
+  } catch {
+    return undefined
+  }
+}
+
+function isUrlWithinBase(url: URL, baseUrl: URL): boolean {
+  const basePath = baseUrl.pathname.replace(/\/$/, "")
+  return (
+    url.origin === baseUrl.origin &&
+    (url.pathname === basePath || url.pathname.startsWith(`${basePath}/`))
+  )
 }
 
 function apiOrigin(apiBaseUrl: string): string {
