@@ -45,10 +45,13 @@ type TabType = "transactions" | "value-flow"
 
 interface ValueFlowItem {
   readonly address: string
-  readonly before: bigint
-  readonly after: bigint
   readonly change: bigint
   readonly fee: bigint
+}
+
+interface ValueFlowAccumulator extends ValueFlowItem {
+  readonly before: bigint
+  readonly after: bigint
 }
 
 const buildTransactionsHexIndex = (
@@ -64,27 +67,6 @@ const buildTransactionsHexIndex = (
   return indexed
 }
 
-const collectSeqnoBounds = (
-  processed: TransactionInfo[],
-  transactionsByHex: Record<string, V3Transaction>,
-) => {
-  let minSeqno = Number.MAX_SAFE_INTEGER
-  let maxSeqno = 0
-
-  for (const t of processed) {
-    const txHash = t.transaction.hash().toString("hex")
-    const v3Tx = transactionsByHex[txHash]
-    const seqno = v3Tx?.mc_block_seqno || 0
-
-    if (seqno > 0) {
-      minSeqno = Math.min(minSeqno, seqno)
-      maxSeqno = Math.max(maxSeqno, seqno)
-    }
-  }
-
-  return {minSeqno, maxSeqno}
-}
-
 export const TransactionPage: React.FC<TransactionPageProps> = ({client}) => {
   const {hash: routeHash = ""} = useParams<{hash: string}>()
   const hash = hashToHex(routeHash) ?? routeHash
@@ -95,7 +77,6 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({client}) => {
   const [error, setError] = useState<string | undefined>()
   const [activeTab, setActiveTab] = useState<TabType>("value-flow")
   const [valueFlow, setValueFlow] = useState<ValueFlowItem[]>([])
-  const [loadingFlow, setLoadingFlow] = useState(false)
   const {fetchName} = useAddressBook()
   const addressFormat = useAddressFormat()
 
@@ -129,7 +110,6 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({client}) => {
           for (const t of processed) {
             if (t.address) addresses.add(t.address.toString())
           }
-          const {minSeqno, maxSeqno} = collectSeqnoBounds(processed, transactionsByHex)
 
           const requestedAddresses = [...addresses].sort()
           const states =
@@ -173,45 +153,7 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({client}) => {
           if (!isActive) return
           setContracts(contractsMap)
 
-          if (addresses.size > 0 && minSeqno !== Number.MAX_SAFE_INTEGER) {
-            setLoadingFlow(true)
-            const flowItems: ValueFlowItem[] = []
-            const uniqueAddrs = [...addresses]
-
-            await Promise.all(
-              uniqueAddrs.map(async addr => {
-                try {
-                  // We fetch state before the trace (minSeqno - 1) and after (maxSeqno)
-                  const [beforeState, afterState] = await Promise.all([
-                    client.getAddressInformation(addr, minSeqno - 1),
-                    client.getAddressInformation(addr, maxSeqno),
-                  ])
-
-                  const before = BigInt(beforeState.balance)
-                  const after = BigInt(afterState.balance)
-
-                  // Calculate total fees paid by this account in this trace
-                  const accountFees = processed
-                    .filter(t => t.address?.toString() === addr)
-                    .reduce((acc, t) => acc + t.transaction.totalFees.coins, 0n)
-
-                  flowItems.push({
-                    address: addr,
-                    before,
-                    after,
-                    change: after - before,
-                    fee: accountFees,
-                  })
-                } catch (error) {
-                  console.warn(`Failed to fetch flow for ${addr}:`, error)
-                }
-              }),
-            )
-
-            if (!isActive) return
-            setValueFlow(flowItems.sort((a, b) => a.address.localeCompare(b.address)))
-            setLoadingFlow(false)
-          }
+          setValueFlow(buildValueFlowItems(transactionsByHex, processed))
         } else {
           if (isActive) setError("Transaction not found or has no trace yet.")
         }
@@ -314,44 +256,37 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({client}) => {
               <div className={styles.tabContent}>
                 {activeTab === "value-flow" && (
                   <div className={styles.valueFlowContainer}>
-                    {loadingFlow ? (
-                      <div className={styles.centered}>
-                        <Loader2 className={styles.spinner} />
-                        <p>Calculating value flow...</p>
+                    <div className={styles.flowList}>
+                      <div className={styles.flowHeader}>
+                        <div className={styles.flowCol}>Account</div>
+                        <div className={styles.flowCol}>Balance Change</div>
+                        <div className={styles.flowCol}>Network Fee</div>
                       </div>
-                    ) : (
-                      <div className={styles.flowList}>
-                        <div className={styles.flowHeader}>
-                          <div className={styles.flowCol}>Account</div>
-                          <div className={styles.flowCol}>Balance Change</div>
-                          <div className={styles.flowCol}>Network Fee</div>
-                        </div>
-                        {valueFlow.map(item => (
-                          <div key={item.address} className={styles.flowRow}>
-                            <div className={styles.flowCol}>
-                              <ContractChip
-                                address={item.address}
-                                contracts={contracts}
-                                onContractClick={handleContractClick}
-                              />
-                            </div>
-                            <div
-                              className={`${styles.flowCol} ${item.change > 0n ? styles.statusSuccess : item.change < 0n ? styles.statusError : ""}`}
-                            >
-                              <div className={styles.changeValue}>
-                                {item.change > 0n ? (
-                                  <TrendingUp size={14} />
-                                ) : item.change < 0n ? (
-                                  <TrendingDown size={14} />
-                                ) : undefined}
-                                {fmt.formatCurrency(item.change)}
-                              </div>
-                            </div>
-                            <div className={styles.flowCol}>{fmt.formatCurrency(item.fee)}</div>
+                      {valueFlow.map(item => (
+                        <div key={item.address} className={styles.flowRow}>
+                          <div className={styles.flowCol}>
+                            <ContractChip
+                              address={item.address}
+                              contracts={contracts}
+                              onContractClick={handleContractClick}
+                            />
                           </div>
-                        ))}
-                      </div>
-                    )}
+                          <div
+                            className={`${styles.flowCol} ${item.change > 0n ? styles.statusSuccess : item.change < 0n ? styles.statusError : ""}`}
+                          >
+                            <div className={styles.changeValue}>
+                              {item.change > 0n ? (
+                                <TrendingUp size={14} />
+                              ) : item.change < 0n ? (
+                                <TrendingDown size={14} />
+                              ) : undefined}
+                              {fmt.formatCurrency(item.change)}
+                            </div>
+                          </div>
+                          <div className={styles.flowCol}>{fmt.formatCurrency(item.fee)}</div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
 
@@ -387,4 +322,73 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({client}) => {
       </div>
     </div>
   )
+}
+
+function buildValueFlowItems(
+  transactionsByHex: Readonly<Record<string, V3Transaction>>,
+  processed: readonly TransactionInfo[],
+): ValueFlowItem[] {
+  const flowByAddress = new Map<string, ValueFlowAccumulator>()
+
+  for (const item of [...processed].sort(compareTransactionInfoByLt)) {
+    const address = item.address?.toString()
+    if (!address) {
+      continue
+    }
+
+    const txHash = item.transaction.hash().toString("hex")
+    const tx = transactionsByHex[txHash]
+    if (!tx) {
+      continue
+    }
+
+    const before = parseBalance(tx.account_state_before?.balance)
+    const after = parseBalance(tx.account_state_after?.balance)
+    if (before === undefined || after === undefined) {
+      continue
+    }
+
+    const initialBefore = flowByAddress.get(address)?.before ?? before
+
+    flowByAddress.set(address, {
+      address,
+      before: initialBefore,
+      after,
+      change: after - initialBefore,
+      fee: (flowByAddress.get(address)?.fee ?? 0n) + item.transaction.totalFees.coins,
+    })
+  }
+
+  return [...flowByAddress.values()]
+    .map(({address, change, fee}) => ({address, change, fee}))
+    .sort((a, b) => a.address.localeCompare(b.address))
+}
+
+function compareTransactionInfoByLt(left: TransactionInfo, right: TransactionInfo): number {
+  const leftLt = parseBigInt(left.lt)
+  const rightLt = parseBigInt(right.lt)
+  if (leftLt === rightLt) {
+    return 0
+  }
+  return leftLt < rightLt ? -1 : 1
+}
+
+function parseBalance(value: string | undefined): bigint | undefined {
+  if (!value) {
+    return undefined
+  }
+
+  try {
+    return BigInt(value)
+  } catch {
+    return undefined
+  }
+}
+
+function parseBigInt(value: string | undefined): bigint {
+  try {
+    return value === undefined ? 0n : BigInt(value)
+  } catch {
+    return 0n
+  }
 }

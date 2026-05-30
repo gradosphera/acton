@@ -282,6 +282,18 @@ export interface V3Transaction {
   }
   readonly mc_block_seqno: number
   readonly child_transactions?: readonly string[] | null
+  readonly account_state_before?: V3TransactionAccountState | null
+  readonly account_state_after?: V3TransactionAccountState | null
+}
+
+export interface V3TransactionAccountState {
+  readonly hash: string
+  readonly balance: string
+  readonly extra_currencies: Record<string, string>
+  readonly account_status: string
+  readonly frozen_hash?: string | null
+  readonly data_hash?: string | null
+  readonly code_hash?: string | null
 }
 
 export interface V3Message {
