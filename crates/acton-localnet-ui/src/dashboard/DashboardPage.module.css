@@ -759,23 +759,9 @@
   min-width: 0;
   padding: 11px 12px;
   border: 1px solid var(--litenode-border-subtle);
-  border-radius: 12px;
-  background: var(--litenode-surface-subtle);
+  border-radius: 8px;
+  background: var(--litenode-surface);
   color: inherit;
-  text-decoration: none;
-  transition:
-    background-color var(--transition-duration-fast),
-    border-color var(--transition-duration-fast);
-}
-
-.endpointRow:hover {
-  border-color: var(--litenode-border-control);
-  background: var(--litenode-control-hover);
-}
-
-.endpointRow:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px var(--litenode-focus-strong);
 }
 
 .endpointText {
@@ -793,30 +779,53 @@
 
 .endpointValue {
   color: var(--litenode-text);
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", monospace;
-  font-size: 0.78rem;
+  font-size: 0.82rem;
   line-height: 1.35;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.endpointAction {
-  width: 28px;
-  height: 28px;
-  border: 1px solid var(--litenode-border-subtle);
-  border-radius: 10px;
-  color: var(--litenode-text-muted);
-  background: var(--litenode-surface);
-  display: flex;
+.endpointActions {
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
+  gap: 6px;
   flex: 0 0 auto;
 }
 
-.endpointRow:hover .endpointAction {
+.endpointButton {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--litenode-border-subtle);
+  border-radius: 8px;
+  color: var(--litenode-text-muted);
+  background: var(--litenode-surface);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    background-color var(--transition-duration-fast),
+    border-color var(--transition-duration-fast),
+    color var(--transition-duration-fast);
+}
+
+.endpointButton:hover {
   color: var(--litenode-text);
   border-color: var(--litenode-border-control);
+  background: var(--litenode-surface-hover);
+}
+
+.endpointButton:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--litenode-focus-strong);
+}
+
+.endpointButtonCopied {
+  color: var(--litenode-text);
+  border-color: var(--litenode-border-control);
+  background: var(--litenode-surface-active);
 }
 
 .listTable {

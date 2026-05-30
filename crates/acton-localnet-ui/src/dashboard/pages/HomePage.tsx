@@ -1,13 +1,16 @@
 import {
   ArrowUpRight,
+  BookOpen,
   ChartNoAxesColumn,
+  Check,
   CircleUserRound,
+  Copy,
   Link2,
   SquareStack,
   Wallet,
 } from "lucide-react"
 import * as React from "react"
-import {Card, CardContent, CardDescription, CardHeader, CardTitle} from "@acton/shared-ui"
+import {Card, CardContent, CardDescription, CardHeader, CardTitle, useToast} from "@acton/shared-ui"
 import {useNavigate} from "react-router-dom"
 
 import type {TonClient} from "../../explorer/api/client"
@@ -32,6 +35,8 @@ interface HomeState {
 
 export const HomePage: React.FC<HomePageProps> = ({client}) => {
   const navigate = useNavigate()
+  const {showToast} = useToast()
+  const [copiedEndpoint, setCopiedEndpoint] = React.useState<string>()
   const [homeState, setHomeState] = React.useState<HomeState>({
     transactions: [],
     accountBalances: {},
@@ -41,8 +46,9 @@ export const HomePage: React.FC<HomePageProps> = ({client}) => {
   const endpointRows = React.useMemo(
     () =>
       [
-        {label: "V2 API", value: endpoints.apiV2},
-        {label: "V3 API", value: endpoints.apiV3},
+        {label: "V2 API", value: endpoints.apiV2, referencePath: "/api-reference/v2"},
+        {label: "V3 API", value: endpoints.apiV3, referencePath: "/api-reference/v3"},
+        {label: "Control API", value: endpoints.admin, referencePath: "/api-reference/control"},
       ].filter(endpoint => endpoint.value.length > 0),
     [endpoints],
   )
@@ -109,6 +115,34 @@ export const HomePage: React.FC<HomePageProps> = ({client}) => {
       cancelled = true
     }
   }, [client])
+
+  React.useEffect(() => {
+    if (!copiedEndpoint) {
+      return
+    }
+
+    const timeoutId = globalThis.setTimeout(() => setCopiedEndpoint(undefined), 2000)
+    return () => {
+      globalThis.clearTimeout(timeoutId)
+    }
+  }, [copiedEndpoint])
+
+  const copyEndpoint = React.useCallback(
+    async (endpoint: string) => {
+      try {
+        await navigator.clipboard.writeText(endpoint)
+        setCopiedEndpoint(endpoint)
+      } catch (error) {
+        console.error("Failed to copy endpoint", error)
+        showToast({
+          variant: "error",
+          title: "Copy failed",
+          description: "Failed to copy endpoint URL.",
+        })
+      }
+    },
+    [showToast],
+  )
 
   return (
     <>
@@ -289,23 +323,38 @@ export const HomePage: React.FC<HomePageProps> = ({client}) => {
               </div>
             </CardHeader>
             <CardContent className={`${styles.dashboardCardContent} ${styles.endpointList}`}>
-              {endpointRows.map(endpoint => (
-                <a
-                  key={endpoint.label}
-                  className={styles.endpointRow}
-                  href={endpoint.value}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  <span className={styles.endpointText}>
-                    <span className={styles.endpointLabel}>{endpoint.label}</span>
-                    <span className={styles.endpointValue}>{endpoint.value}</span>
-                  </span>
-                  <span className={styles.endpointAction}>
-                    <ArrowUpRight size={14} />
-                  </span>
-                </a>
-              ))}
+              {endpointRows.map(endpoint => {
+                const isCopied = copiedEndpoint === endpoint.value
+
+                return (
+                  <div key={endpoint.label} className={styles.endpointRow}>
+                    <span className={styles.endpointText}>
+                      <span className={styles.endpointLabel}>{endpoint.label}</span>
+                      <span className={styles.endpointValue}>{endpoint.value}</span>
+                    </span>
+                    <span className={styles.endpointActions}>
+                      <button
+                        type="button"
+                        className={`${styles.endpointButton} ${isCopied ? styles.endpointButtonCopied : ""}`}
+                        aria-label={isCopied ? "Endpoint copied" : `Copy ${endpoint.label} endpoint`}
+                        title={isCopied ? "Copied" : "Copy endpoint"}
+                        onClick={() => void copyEndpoint(endpoint.value)}
+                      >
+                        {isCopied ? <Check size={14} /> : <Copy size={14} />}
+                      </button>
+                      <button
+                        type="button"
+                        className={styles.endpointButton}
+                        aria-label={`Open ${endpoint.label} reference`}
+                        title="Open API reference"
+                        onClick={() => void navigate(endpoint.referencePath)}
+                      >
+                        <BookOpen size={14} />
+                      </button>
+                    </span>
+                  </div>
+                )
+              })}
             </CardContent>
           </Card>
         </aside>
