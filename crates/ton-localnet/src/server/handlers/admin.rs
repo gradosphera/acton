@@ -2,14 +2,18 @@ use super::utils::handle_result;
 use crate::api::toncenter_v2 as v2;
 use crate::localnet::Localnet;
 use crate::server::models::{
-    FaucetRequest, GetAddressNameQuery, GetCompilerAbiQuery, RegisterCompilerAbisRequest,
-    SendBocRequest, SetAddressNameRequest, SetShardAccountRequest, StatePathRequest,
+    FaucetRequest, RegisterCompilerAbisRequest, SendBocRequest, SetAddressNameRequest,
+    SetShardAccountRequest, StatePathRequest,
 };
 use crate::server::{StartupWallet, StateSourceInfo};
 use crate::types::Hash256;
-use axum::{Json, extract::State};
+use axum::{
+    Json,
+    extract::{RawQuery, State},
+};
 use serde::Serialize;
 use serde_json::Value;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 pub async fn faucet(
@@ -107,10 +111,20 @@ pub async fn set_address_name(
 
 pub async fn get_address_name(
     State(node): State<Arc<Localnet>>,
-    axum::extract::Query(payload): axum::extract::Query<GetAddressNameQuery>,
+    RawQuery(query): RawQuery,
 ) -> Json<Value> {
-    handle_result(node.get_address_name(payload.address), |res| {
-        serde_json::to_value(res).unwrap_or(Value::Null)
+    let addresses = query
+        .as_deref()
+        .map(|query| {
+            url::form_urlencoded::parse(query.as_bytes())
+                .filter_map(|(key, value)| (key == "address").then(|| value.into_owned()))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    handle_result(node.get_address_names(addresses), |entries| {
+        serde_json::to_value(entries.iter().cloned().collect::<BTreeMap<_, _>>())
+            .unwrap_or(Value::Null)
     })
     .await
 }
@@ -135,15 +149,21 @@ pub async fn register_compiler_abis(
 
 pub async fn get_compiler_abi(
     State(node): State<Arc<Localnet>>,
-    axum::extract::Query(payload): axum::extract::Query<GetCompilerAbiQuery>,
+    RawQuery(query): RawQuery,
 ) -> Json<Value> {
-    handle_result(
-        async move {
-            let code_hash = parse_hash_any(&payload.code_hash)?;
-            node.get_compiler_abi(code_hash).await
-        },
-        |res| res.clone().unwrap_or(Value::Null),
-    )
+    let code_hashes = query
+        .as_deref()
+        .map(|query| {
+            url::form_urlencoded::parse(query.as_bytes())
+                .filter_map(|(key, value)| (key == "code_hash").then(|| value.into_owned()))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    handle_result(node.get_compiler_abis(code_hashes), |entries| {
+        serde_json::to_value(entries.iter().cloned().collect::<BTreeMap<_, _>>())
+            .unwrap_or(Value::Null)
+    })
     .await
 }
 

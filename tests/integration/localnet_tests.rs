@@ -616,6 +616,41 @@ fn localnet_serves_embedded_ui_and_spa_routes() {
 }
 
 #[test]
+fn localnet_batches_address_name_lookup() {
+    let project = ProjectBuilder::new("localnet-address-name-batch").build();
+    let node = project.localnet().start();
+    let named_address = "0:2222222222222222222222222222222222222222222222222222222222222222";
+    let unnamed_address = "0:3333333333333333333333333333333333333333333333333333333333333333";
+
+    node.post_json(
+        "/acton_setAddressName",
+        &json!({
+            "address": named_address,
+            "name": "treasury"
+        }),
+    );
+
+    let mut response = node.get_json(&format!(
+        "/acton_getAddressName?address={}&address={}",
+        encode_query_component(named_address),
+        encode_query_component(unnamed_address)
+    ));
+    normalize_extra_for_snapshot(&mut response);
+    let response_json = format!(
+        "{}\n",
+        serde_json::to_string_pretty(&response)
+            .expect("Failed to serialize address name batch response")
+    );
+
+    assertion().eq(
+        response_json,
+        snapbox::file!("snapshots/localnet/test_localnet_address_name_batch.response.json"),
+    );
+
+    node.stop();
+}
+
+#[test]
 fn localnet_supports_pre_start_commands_and_get_out_msg_queue_size() {
     let project = ProjectBuilder::new("localnet-pre-start-commands")
         .contract("child", CHILD_CONTRACT)
@@ -3181,33 +3216,36 @@ fn localnet_registers_and_serves_compiler_abi_for_localnet_deploys() {
         .expect("accountStates code_hash must be valid base64")
         .to_hex();
 
+    let missing_code_hash = "1111111111111111111111111111111111111111111111111111111111111111";
     let abi_response = wait_for_ok_response(
         &node,
-        &format!("/acton_getCompilerAbi?code_hash={code_hash_hex}"),
+        &format!(
+            "/acton_getCompilerAbi?code_hash={}&code_hash={missing_code_hash}",
+            encode_query_component(&code_hash_hex)
+        ),
         Duration::from_secs(12),
     );
-    let abi = response_payload(&abi_response);
-
-    assert_eq!(abi["compiler_name"].as_str(), Some("tolk"));
-    assert_eq!(abi["contract_name"].as_str(), Some("getter"));
-    assert!(
-        abi["get_methods"].as_array().is_some_and(|methods| {
+    let abi_payload = response_payload(&abi_response);
+    let abi = &abi_payload[&code_hash_hex];
+    let abi_summary = json!({
+        "compiler_name": abi["compiler_name"],
+        "contract_name": abi["contract_name"],
+        "has_add_ten_get_method": abi["get_methods"].as_array().is_some_and(|methods| {
             methods
                 .iter()
                 .any(|method| method["name"].as_str() == Some("addTen"))
         }),
-        "compiler ABI must include addTen get method:\n{}",
-        serde_json::to_string_pretty(abi).unwrap_or_default()
+        "missing_code_hash_is_null": abi_payload[missing_code_hash].is_null(),
+    });
+    let abi_summary_json = format!(
+        "{}\n",
+        serde_json::to_string_pretty(&abi_summary)
+            .expect("Failed to serialize compiler ABI batch summary")
     );
 
-    let missing_response = node.get_json(
-        "/acton_getCompilerAbi?code_hash=1111111111111111111111111111111111111111111111111111111111111111",
-    );
-    assert_eq!(missing_response["ok"].as_bool(), Some(true));
-    assert!(
-        response_payload(&missing_response).is_null(),
-        "Unknown code hash must return null result:\n{}",
-        serde_json::to_string_pretty(&missing_response).unwrap_or_default()
+    assertion().eq(
+        abi_summary_json,
+        snapbox::file!("snapshots/localnet/test_localnet_compiler_abi_batch.summary.json"),
     );
 
     node.stop();

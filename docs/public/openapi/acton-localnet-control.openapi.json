@@ -49,8 +49,8 @@
       "get": {
         "tags": ["Localnet Control"],
         "operationId": "getAddressName",
-        "summary": "Get an address name",
-        "description": "Returns the local name for an address, or null if no name is set.",
+        "summary": "Get address names",
+        "description": "Returns local names for the requested addresses. Missing names are returned as null.",
         "parameters": [
           {
             "$ref": "#/components/parameters/AddressQuery"
@@ -58,7 +58,7 @@
         ],
         "responses": {
           "200": {
-            "$ref": "#/components/responses/StringOrNullResponse"
+            "$ref": "#/components/responses/AddressNamesResponse"
           }
         }
       }
@@ -95,7 +95,7 @@
         "tags": ["Localnet Control"],
         "operationId": "getCompilerAbi",
         "summary": "Get compiler ABI metadata",
-        "description": "Returns registered compiler ABI metadata for a code hash, or null when none is registered.",
+        "description": "Returns registered compiler ABI metadata for the requested code hashes. Missing ABI entries are returned as null.",
         "parameters": [
           {
             "$ref": "#/components/parameters/CodeHashQuery"
@@ -103,7 +103,7 @@
         ],
         "responses": {
           "200": {
-            "$ref": "#/components/responses/JsonOrNullResponse"
+            "$ref": "#/components/responses/CompilerAbisResponse"
           }
         }
       }
@@ -280,16 +280,28 @@
         "name": "address",
         "in": "query",
         "required": true,
+        "style": "form",
+        "explode": true,
         "schema": {
-          "$ref": "#/components/schemas/Address"
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/components/schemas/Address"
+          }
         }
       },
       "CodeHashQuery": {
         "name": "code_hash",
         "in": "query",
         "required": true,
+        "style": "form",
+        "explode": true,
         "schema": {
-          "$ref": "#/components/schemas/Hash"
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/components/schemas/Hash"
+          }
         }
       }
     },
@@ -339,6 +351,32 @@
           }
         }
       },
+      "AddressNamesResponse": {
+        "description": "Successful wrapped response with address names keyed by requested address.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/SuccessEnvelope"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "result": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string",
+                        "nullable": true
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      },
       "JsonOrNullResponse": {
         "description": "Successful wrapped response with JSON metadata or null result.",
         "content": {
@@ -353,6 +391,31 @@
                   "properties": {
                     "result": {
                       "nullable": true
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      },
+      "CompilerAbisResponse": {
+        "description": "Successful wrapped response with compiler ABI metadata keyed by requested code hash.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/SuccessEnvelope"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "result": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "nullable": true
+                      }
                     }
                   }
                 }

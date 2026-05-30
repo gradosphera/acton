@@ -187,11 +187,6 @@ pub struct SetAddressNameRequest {
 }
 
 #[derive(Deserialize)]
-pub struct GetAddressNameQuery {
-    pub address: String,
-}
-
-#[derive(Deserialize)]
 pub struct CompilerAbiRegistration {
     pub code_hash: String,
     pub compiler_abi: Value,
@@ -200,11 +195,6 @@ pub struct CompilerAbiRegistration {
 #[derive(Deserialize)]
 pub struct RegisterCompilerAbisRequest {
     pub entries: Vec<CompilerAbiRegistration>,
-}
-
-#[derive(Deserialize)]
-pub struct GetCompilerAbiQuery {
-    pub code_hash: String,
 }
 
 #[derive(Deserialize)]

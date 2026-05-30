@@ -29,6 +29,7 @@ use std::sync::Arc;
 use tower_governor::governor::GovernorConfigBuilder;
 use tower_governor::key_extractor::GlobalKeyExtractor;
 use tower_governor::{GovernorError, GovernorLayer};
+use tower_http::compression::CompressionLayer;
 use tower_http::cors::{AllowOrigin, Any, CorsLayer};
 #[cfg(debug_assertions)]
 use tower_http::services::{ServeDir, ServeFile};
@@ -149,7 +150,7 @@ pub fn create_router(state: ServerState, rate_limit_rps: Option<u32>) -> Router 
     #[cfg(not(debug_assertions))]
     let app = app.fallback(handle_embedded_ui);
 
-    app
+    app.layer(CompressionLayer::new())
 }
 
 fn loopback_cors() -> CorsLayer {

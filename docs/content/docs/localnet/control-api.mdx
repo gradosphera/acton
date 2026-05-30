@@ -16,8 +16,8 @@ _openapi:
       title: Fund an account
       url: '#fund-an-account'
     - depth: 2
-      title: Get an address name
-      url: '#get-an-address-name'
+      title: Get address names
+      url: '#get-address-names'
     - depth: 2
       title: Set an address name
       url: '#set-an-address-name'
@@ -49,8 +49,8 @@ _openapi:
     headings:
       - content: Fund an account
         id: fund-an-account
-      - content: Get an address name
-        id: get-an-address-name
+      - content: Get address names
+        id: get-address-names
       - content: Set an address name
         id: set-an-address-name
       - content: Get compiler ABI metadata
@@ -74,8 +74,10 @@ _openapi:
           Credits an address with local funds and mines the resulting transfer
           transaction.
         heading: fund-an-account
-      - content: Returns the local name for an address, or null if no name is set.
-        heading: get-an-address-name
+      - content: >-
+          Returns local names for the requested addresses. Missing names are
+          returned as null.
+        heading: get-address-names
       - content: Sets or updates the local name for an address.
         heading: set-an-address-name
       - content: >-

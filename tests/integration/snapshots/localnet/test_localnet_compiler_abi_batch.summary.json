@@ -1,0 +1,6 @@
+{
+  "compiler_name": "tolk",
+  "contract_name": "getter",
+  "has_add_ten_get_method": true,
+  "missing_code_hash_is_null": true
+}
