@@ -24,6 +24,8 @@ import {ExitCodeChip} from "../ExitCodeChip/ExitCodeChip"
 import {OpcodeChip} from "../OpcodeChip/OpcodeChip"
 import {ParsedValueView} from "../ParsedValueView/ParsedValueView"
 import {SendModeViewer} from "../SendModeViewer/SendModeViewer"
+import {StorageDiffView} from "../TransactionTree/StorageDiffView"
+import {buildStorageDiff} from "../TransactionTree/storageDiff"
 
 import {ActionsSummary} from "./ActionsSummary"
 import styles from "./TransactionDetails.module.css"
@@ -45,6 +47,7 @@ export function TransactionDetails({
 }: TransactionDetailsProps): React.JSX.Element {
   const [showActions, setShowActions] = useState(false)
   const [showStateInit, setShowStateInit] = useState(false)
+  const [expandedStorageLt, setExpandedStorageLt] = useState<string | undefined>()
 
   const description = tx.transaction.description
   if (description.type !== "generic" && description.type !== "tick-tock") {
@@ -123,6 +126,15 @@ export function TransactionDetails({
     0n,
   )
   const tickTockStorageFeesDue = tickTockDescription?.storagePhase.storageFeesDue
+  const hasAccountStatusChange = tx.transaction.oldStatus !== tx.transaction.endStatus
+  const storageDiff = buildStorageDiff(tx.parsedStorageBefore, tx.parsedStorageAfter)
+  const showStorageDiff = expandedStorageLt === tx.lt
+  const storageChangeLabel =
+    storageDiff === undefined
+      ? undefined
+      : storageDiff.status === "unchanged"
+        ? "Intact"
+        : "Changed"
 
   return (
     <div className={styles.transactionDetailsContainer}>
@@ -309,6 +321,55 @@ export function TransactionDetails({
       )}
 
       <div className={styles.labeledSectionRow}>
+        <div className={styles.labeledSectionTitle}>Storage</div>
+        <div className={styles.labeledSectionContent}>
+          <div className={styles.storageSummaryRow}>
+            <div className={styles.storageSummaryMain}>
+              {storageChangeLabel && (
+                <span className={styles.storageChangeBadge}>{storageChangeLabel}</span>
+              )}
+              {!storageDiff && (
+                <span className={styles.storageUnavailable}>Storage data unavailable</span>
+              )}
+              {hasAccountStatusChange && (
+                <span className={styles.storageAccountStatus}>
+                  {formatAccountStatus(tx.transaction.oldStatus)} →{" "}
+                  {formatAccountStatus(tx.transaction.endStatus)}
+                </span>
+              )}
+            </div>
+            {storageDiff && (
+              <button
+                type="button"
+                onClick={() => {
+                  setExpandedStorageLt(showStorageDiff ? undefined : tx.lt)
+                }}
+                className={`${styles.actionsToggleButton} ${styles.storageToggleButton}`}
+                aria-label={
+                  showStorageDiff ? "Hide storage state change" : "Show storage state change"
+                }
+              >
+                {showStorageDiff ? <FiChevronUp size={14} /> : <FiChevronDown size={14} />}
+                <span className={styles.actionsToggleText}>
+                  {showStorageDiff ? "Hide" : "Show"}
+                </span>
+              </button>
+            )}
+          </div>
+
+          {showStorageDiff && storageDiff && (
+            <div className={styles.storageDiffDetails}>
+              <StorageDiffView
+                diff={storageDiff}
+                contracts={contracts}
+                onContractClick={onContractClick}
+              />
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className={styles.labeledSectionRow}>
         <div className={styles.labeledSectionTitle}>Fees & Sent</div>
         <div className={styles.labeledSectionContent}>
           <div className={styles.multiColumnRow}>
@@ -486,6 +547,26 @@ export function TransactionDetails({
       </div>
     </div>
   )
+}
+
+function formatAccountStatus(status: string): string {
+  switch (status) {
+    case "non-existing": {
+      return "Non-existing"
+    }
+    case "uninitialized": {
+      return "Uninitialized"
+    }
+    case "active": {
+      return "Active"
+    }
+    case "frozen": {
+      return "Frozen"
+    }
+    default: {
+      return status
+    }
+  }
 }
 
 function formatCellBocHex(cell: Cell): string {

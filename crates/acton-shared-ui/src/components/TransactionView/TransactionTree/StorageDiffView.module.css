@@ -6,9 +6,10 @@
 }
 
 .storageTypeLabel {
-  color: var(--text-muted);
+  align-self: flex-start;
+  color: var(--text-primary);
   font-size: var(--font-size-xs);
-  line-height: 1.2;
+  line-height: 1.4;
   font-weight: var(--font-weight-medium);
 }
 
