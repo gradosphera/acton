@@ -23,6 +23,7 @@ use log::{debug, info, warn};
 use num_bigint::{BigInt, Sign};
 use num_traits::ToPrimitive;
 use path_absolutize::Absolutize;
+use rand::RngCore;
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -62,6 +63,8 @@ use tycho_types::num::{Tokens, Uint15};
 
 // Keep in sync with `impl.treasuryCode()` in `lib/emulation/testing.tolk`.
 const TREASURY_CODE_BOC64: &str = "te6cckEBBAEARQABFP8A9KQT9LzyyAsBAgEgAwIAWvLT/+1E0NP/0RK68qL0BNH4AH+OFiGAEPR4b6UgmALTB9QwAfsAkTLiAbPmWwAE0jD+omUe";
+const ZERO_RANDOM_SEED_HEX: &str =
+    "0000000000000000000000000000000000000000000000000000000000000000";
 
 static TREASURY_CODE_HASH: LazyLock<HashBytes> = LazyLock::new(|| {
     let code =
@@ -84,6 +87,33 @@ fn resolve_get_method_unixtime(world_state: &WorldState) -> anyhow::Result<i64> 
         .duration_since(UNIX_EPOCH)
         .expect("Time went backwards");
     Ok(duration_since_epoch.as_secs().try_into()?)
+}
+
+fn resolve_get_method_random_seed(world_state: &WorldState) -> String {
+    world_state
+        .get_random_seed()
+        .map_or_else(|| ZERO_RANDOM_SEED_HEX.to_owned(), hex::encode)
+}
+
+fn random_seed_from_bigint(seed: &BigInt) -> anyhow::Result<[u8; 32]> {
+    let (sign, bytes) = seed.to_bytes_be();
+    anyhow::ensure!(
+        sign != Sign::Minus,
+        "random seed must be a non-negative uint256"
+    );
+    anyhow::ensure!(
+        bytes.len() <= 32,
+        "random seed must fit into uint256, got {} bytes",
+        bytes.len()
+    );
+
+    let mut seed_bytes = [0u8; 32];
+    seed_bytes[32 - bytes.len()..].copy_from_slice(&bytes);
+    Ok(seed_bytes)
+}
+
+fn random_seed_to_bigint(seed: [u8; 32]) -> BigInt {
+    BigInt::from_bytes_be(Sign::Plus, &seed)
 }
 
 fn run_nested_executor_until_finished(
@@ -2322,7 +2352,7 @@ fn make_predicate_executor(ctx: &mut Context) -> anyhow::Result<GetExecutor> {
         address: "0:0000000000000000000000000000000000000000000000000000000000000000".to_string(),
         unixtime,
         balance: "10".to_string(),
-        rand_seed: "0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+        rand_seed: resolve_get_method_random_seed(ctx.chain.world_state),
         gas_limit: "0".to_string(),
         method_id: 0,
         debug_enabled: false,
@@ -2508,7 +2538,7 @@ fn run_get_method_impl(
         address: addr_str,
         unixtime,
         balance: "10".to_string(),
-        rand_seed: "0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+        rand_seed: resolve_get_method_random_seed(ctx.chain.world_state),
         gas_limit: "0".to_string(),
         method_id,
         debug_enabled: true,
@@ -3374,6 +3404,22 @@ fn get_now_impl(ctx: &mut Context, stack: &mut Tuple) -> anyhow::Result<()> {
     Ok(())
 }
 
+extension!(set_random_seed in (Context) with (seed: BigInt) using set_random_seed_impl);
+fn set_random_seed_impl(ctx: &mut Context, _: &mut Tuple, seed: BigInt) -> anyhow::Result<()> {
+    ctx.chain
+        .world_state
+        .set_random_seed(Some(random_seed_from_bigint(&seed)?));
+    Ok(())
+}
+
+extension!(generate_random_seed in (Context) using generate_random_seed_impl);
+fn generate_random_seed_impl(_: &mut Context, stack: &mut Tuple) -> anyhow::Result<()> {
+    let mut seed = [0u8; 32];
+    rand::thread_rng().fill_bytes(&mut seed);
+    stack.push(TupleItem::Int(random_seed_to_bigint(seed)));
+    Ok(())
+}
+
 extension!(get_shard_account in (Context) with (addr: StdAddr) using get_shard_account_impl);
 fn get_shard_account_impl(
     ctx: &mut Context,
@@ -3477,7 +3523,7 @@ fn call_tolk_function_impl(
         address: addr_str,
         unixtime,
         balance: "10".to_string(),
-        rand_seed: "0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+        rand_seed: resolve_get_method_random_seed(ctx.chain.world_state),
         gas_limit: "0".to_string(),
         method_id: 0,
         debug_enabled: true,
@@ -3607,6 +3653,8 @@ pub fn register_extensions<T: BaseExecutor>(executor: &mut T, ctx: &mut Context)
         56 => send_external_message : 1,
         57 => parse_cell_from_base64 : 1,
         58 => hide_trace_from_ui : 1,
+        59 => set_random_seed : 1,
+        60 => generate_random_seed : 0,
         501 => call_tolk_function : 3,
     });
 }

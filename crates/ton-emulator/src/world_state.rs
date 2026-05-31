@@ -34,6 +34,8 @@ pub struct WorldStateSnapshot {
     pub version: u32,
     pub current_lt: u64,
     pub current_now: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub random_seed: Option<String>,
     pub config_boc64: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub libraries_boc64: Vec<String>,
@@ -372,6 +374,8 @@ pub struct WorldState {
     current_lt: u64,
     /// The current unix time of the world state.
     current_now: u32,
+    /// Optional VM random seed used for future emulated transactions and get-methods.
+    random_seed: Option<[u8; 32]>,
     /// List of registered global library cells.
     libraries: Vec<Cell>,
     /// Blockchain configuration
@@ -387,6 +391,7 @@ impl WorldState {
                 accounts_state,
                 current_lt: 0,
                 current_now: 0,
+                random_seed: None,
                 libraries: vec![],
                 config: DEFAULT_CONFIG_DICT.clone(),
             });
@@ -405,6 +410,7 @@ impl WorldState {
             accounts_state,
             current_lt: 0,
             current_now: 0,
+            random_seed: None,
             libraries: vec![],
             config: Arc::new(config),
         })
@@ -536,6 +542,17 @@ impl WorldState {
         self.current_now
     }
 
+    /// Sets the optional random seed used for future emulated VM runs.
+    pub const fn set_random_seed(&mut self, seed: Option<[u8; 32]>) {
+        self.random_seed = seed;
+    }
+
+    /// Returns the optional random seed used for future emulated VM runs.
+    #[must_use]
+    pub const fn get_random_seed(&self) -> Option<[u8; 32]> {
+        self.random_seed
+    }
+
     pub fn snapshot(&self) -> anyhow::Result<WorldStateSnapshot> {
         let mut accounts = self
             .accounts_state
@@ -567,6 +584,7 @@ impl WorldState {
             version: WORLD_STATE_SNAPSHOT_VERSION,
             current_lt: self.current_lt,
             current_now: self.current_now,
+            random_seed: self.random_seed.map(hex::encode),
             config_boc64: self.snapshot_config_b64()?.into_owned(),
             libraries_boc64,
             accounts,
@@ -597,6 +615,19 @@ impl WorldState {
         )?;
         state.current_lt = snapshot.current_lt;
         state.current_now = snapshot.current_now;
+        state.random_seed = snapshot
+            .random_seed
+            .map(|seed| {
+                let bytes = hex::decode(&seed)
+                    .map_err(|err| anyhow!("Invalid random seed in snapshot: {err}"))?;
+                bytes.try_into().map_err(|bytes: Vec<u8>| {
+                    anyhow!(
+                        "Invalid random seed in snapshot: expected 32 bytes, got {}",
+                        bytes.len()
+                    )
+                })
+            })
+            .transpose()?;
 
         for lib_boc64 in snapshot.libraries_boc64 {
             state.register_lib(Boc::decode_base64(&lib_boc64)?);

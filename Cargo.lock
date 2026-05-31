@@ -5269,6 +5269,7 @@ dependencies = [
  "acton-config",
  "anyhow",
  "base64",
+ "hex",
  "num-traits",
  "rustc-hash 2.1.1",
  "serde",
