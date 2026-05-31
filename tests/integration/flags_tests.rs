@@ -506,6 +506,93 @@ fn test_run_specific_test_file() {
 }
 
 #[test]
+fn test_run_multiple_explicit_test_files() {
+    let project = ProjectBuilder::new("multiple-explicit-test-files")
+        .contract("simple", SIMPLE_CONTRACT)
+        .test_file(
+            "test1",
+            r#"
+            import "../../lib/testing/expect"
+            import "../../lib/io"
+
+            get fun `test in selected file 1`() {
+                expect(1).toEqual(1);
+                println("selected file 1");
+            }
+        "#,
+        )
+        .test_file(
+            "test2",
+            r#"
+            import "../../lib/testing/expect"
+            import "../../lib/io"
+
+            get fun `test in selected file 2`() {
+                expect(2).toEqual(2);
+                println("selected file 2");
+            }
+        "#,
+        )
+        .test_file(
+            "test3",
+            r#"
+            import "../../lib/testing/expect"
+            import "../../lib/io"
+
+            get fun `test in unselected file 3`() {
+                expect(3).toEqual(3);
+                println("unselected file 3");
+            }
+        "#,
+        )
+        .build();
+
+    project
+        .acton()
+        .test()
+        .paths(&["tests/test1.test.tolk", "tests/test2.test.tolk"])
+        .run()
+        .success()
+        .assert_passed(2)
+        .assert_contains("selected file 1")
+        .assert_contains("selected file 2")
+        .assert_not_contains("unselected file 3")
+        .assert_snapshot_matches(
+            "integration/snapshots/flags/test_run_multiple_explicit_test_files.stdout.txt",
+        );
+}
+
+#[test]
+fn test_run_multiple_paths_deduplicates_overlapping_test_files() {
+    let project = ProjectBuilder::new("multiple-overlapping-test-paths")
+        .contract("simple", SIMPLE_CONTRACT)
+        .raw_file(
+            "tests/selected/test1.test.tolk",
+            &passing_test_file(NESTED_TEST_IMPORT, "test overlapping file 1", 1),
+        )
+        .raw_file(
+            "tests/selected/test2.test.tolk",
+            &passing_test_file(NESTED_TEST_IMPORT, "test overlapping file 2", 2),
+        )
+        .build();
+
+    project
+        .acton()
+        .test()
+        .paths(&[
+            "tests/selected",
+            "tests/selected/test1.test.tolk",
+            "tests/selected/test2.test.tolk",
+        ])
+        .run()
+        .success()
+        .assert_passed(2)
+        .assert_snapshot_matches(
+            "integration/snapshots/flags/test_run_multiple_paths_deduplicates_overlapping_test_files.stdout.txt",
+        );
+}
+
+#[test]
 fn test_filter_by_name() {
     ProjectBuilder::new("filtered")
         .contract("simple", SIMPLE_CONTRACT)

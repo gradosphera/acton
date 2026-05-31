@@ -433,7 +433,7 @@ struct MutationRunContext<'a> {
     dependent_override_order: &'a [String],
     original_contract_bocs: &'a HashMap<String, String>,
     acton_config: &'a ActonConfig,
-    path: Option<&'a str>,
+    paths: &'a [String],
     config: &'a TestConfig,
     skip_build_for_child_tests: bool,
 }
@@ -541,7 +541,7 @@ fn run_single_mutation(
 
         let exe = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("acton"));
         let mut cmd = process::Command::new(exe);
-        append_mutation_test_command_args(&mut cmd, context.path, context.config);
+        append_mutation_test_command_args(&mut cmd, context.paths, context.config);
         cmd.arg("--mutate-overrides")
             .arg(format_mutation_overrides_arg(&mutation_overrides));
 
@@ -754,23 +754,25 @@ fn run_command_output_interruptible(
 
 fn append_mutation_test_command_args(
     cmd: &mut process::Command,
-    path: Option<&str>,
+    paths: &[String],
     config: &TestConfig,
 ) {
-    let test_path = match path {
-        Some(path) => Path::new(path),
-        None => configured_project_root(),
-    };
-
     cmd.arg("--project-root")
         .arg(configured_project_root())
         .arg("--color")
         .arg(if colors_enabled() { "always" } else { "never" })
         .arg("test")
-        .arg(test_path)
         .arg("--fail-fast")
         .arg("--reporter")
         .arg("console");
+
+    if paths.is_empty() {
+        cmd.arg(configured_project_root());
+    } else {
+        for path in paths {
+            cmd.arg(path);
+        }
+    }
 
     if let Some(filter) = &config.filter {
         cmd.arg("--filter").arg(filter);
@@ -811,10 +813,10 @@ fn command_output_details(output: &process::Output) -> String {
     }
 }
 
-fn mutation_resume_command(path: Option<&str>, config: &TestConfig, session_id: &str) -> String {
+fn mutation_resume_command(paths: &[String], config: &TestConfig, session_id: &str) -> String {
     let mut args = vec!["acton".to_owned(), "test".to_owned()];
 
-    if let Some(path) = path {
+    for path in paths {
         args.push(shell_quote(path));
     }
 
@@ -917,11 +919,7 @@ fn fork_net_cli_arg(network: &acton_config::config::Network) -> String {
     }
 }
 
-fn exit_mutation_interrupted(
-    path: Option<&str>,
-    config: &TestConfig,
-    session_id: Option<&str>,
-) -> ! {
+fn exit_mutation_interrupted(paths: &[String], config: &TestConfig, session_id: Option<&str>) -> ! {
     println!();
     println!();
     println!("{}", "Interrupted by Ctrl+C.".yellow().bold());
@@ -933,7 +931,7 @@ fn exit_mutation_interrupted(
         println!("Resume with:");
         println!(
             "  {}",
-            mutation_resume_command(path, config, session_id).bright_white()
+            mutation_resume_command(paths, config, session_id).bright_white()
         );
     } else {
         println!(
@@ -966,10 +964,10 @@ fn prepare_project_for_mutation(config: &TestConfig) -> anyhow::Result<()> {
     anyhow::bail!("Failed to prepare project for mutation testing: {details}");
 }
 
-fn run_mutation_baseline_tests(path: Option<&str>, config: &TestConfig) -> anyhow::Result<()> {
+fn run_mutation_baseline_tests(paths: &[String], config: &TestConfig) -> anyhow::Result<()> {
     let exe = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("acton"));
     let mut cmd = process::Command::new(exe);
-    append_mutation_test_command_args(&mut cmd, path, config);
+    append_mutation_test_command_args(&mut cmd, paths, config);
     cmd.env(INTERNAL_SKIP_BUILD_ENV, "1");
     cmd.env(INTERNAL_REQUIRE_TESTS_ENV, "1");
 
@@ -988,7 +986,7 @@ fn run_mutation_baseline_tests(path: Option<&str>, config: &TestConfig) -> anyho
     );
 }
 
-pub fn test_mutate_cmd(path: Option<&str>, config: &TestConfig) -> anyhow::Result<()> {
+pub fn test_mutate_cmd(paths: &[String], config: &TestConfig) -> anyhow::Result<()> {
     install_mutation_interrupt_handler()?;
 
     let Some(mutate_contract) = &config.mutate_contract else {
@@ -1023,11 +1021,11 @@ pub fn test_mutate_cmd(path: Option<&str>, config: &TestConfig) -> anyhow::Resul
 
     prepare_project_for_mutation(config)?;
     if mutation_interrupted() {
-        exit_mutation_interrupted(path, config, None);
+        exit_mutation_interrupted(paths, config, None);
     }
-    run_mutation_baseline_tests(path, config)?;
+    run_mutation_baseline_tests(paths, config)?;
     if mutation_interrupted() {
-        exit_mutation_interrupted(path, config, None);
+        exit_mutation_interrupted(paths, config, None);
     }
     let original_contract_bocs =
         load_original_contract_bocs(&acton_config, &project_root, &compilation_order)?;
@@ -1280,7 +1278,7 @@ pub fn test_mutate_cmd(path: Option<&str>, config: &TestConfig) -> anyhow::Resul
                 dependent_override_order: &dependent_override_order,
                 original_contract_bocs: &original_contract_bocs,
                 acton_config: &acton_config,
-                path,
+                paths,
                 config,
                 skip_build_for_child_tests,
             };
@@ -1340,7 +1338,7 @@ pub fn test_mutate_cmd(path: Option<&str>, config: &TestConfig) -> anyhow::Resul
     );
 
     if interrupted {
-        exit_mutation_interrupted(path, config, Some(&session.session_id));
+        exit_mutation_interrupted(paths, config, Some(&session.session_id));
     }
 
     let mut all_records = session.completed_records.clone();
@@ -1540,7 +1538,7 @@ mod tests {
         };
         let mut cmd = process::Command::new("acton");
 
-        append_mutation_test_command_args(&mut cmd, Some("tests/fork.test.tolk"), &config);
+        append_mutation_test_command_args(&mut cmd, &["tests/fork.test.tolk".to_owned()], &config);
 
         let args = cmd
             .get_args()
@@ -1566,7 +1564,8 @@ mod tests {
             ..TestConfig::default()
         };
 
-        let command = mutation_resume_command(Some("tests/fork.test.tolk"), &config, "session-1");
+        let command =
+            mutation_resume_command(&["tests/fork.test.tolk".to_owned()], &config, "session-1");
 
         assert!(
             command.contains("--fork-net custom:remote-block"),

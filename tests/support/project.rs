@@ -1141,7 +1141,7 @@ impl Project {
             project: Arc::new(ProjectRef {
                 path: self.path.clone(),
             }),
-            test_path: None,
+            test_paths: Vec::new(),
             filter: None,
             build_contract: None,
             build_clear_cache: false,
@@ -1198,7 +1198,7 @@ pub(crate) struct ProjectRef {
 pub(crate) struct ActonCommand {
     pub(crate) cmd: ProcessCommandBuilder,
     pub(crate) project: Arc<ProjectRef>,
-    pub(crate) test_path: Option<String>,
+    pub(crate) test_paths: Vec<String>,
     pub(crate) filter: Option<String>,
     pub(crate) build_contract: Option<String>,
     pub(crate) build_clear_cache: bool,
@@ -1523,7 +1523,13 @@ impl ActonCommand {
     /// .test().path("tests/")              // Specific directory
     /// ```
     pub(crate) fn path(mut self, path: &str) -> Self {
-        self.test_path = Some(path.to_string());
+        self.test_paths = vec![path.to_string()];
+        self
+    }
+
+    /// Specify several paths to test files or directories.
+    pub(crate) fn paths(mut self, paths: &[&str]) -> Self {
+        self.test_paths = paths.iter().map(ToString::to_string).collect();
         self
     }
 
@@ -1837,7 +1843,7 @@ impl ActonCommand {
     }
 
     fn into_prepared_command(mut self) -> ProcessCommandBuilder {
-        if let Some(path) = self.test_path {
+        for path in self.test_paths {
             self.cmd = self.cmd.arg(path);
         }
 

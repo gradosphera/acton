@@ -213,8 +213,8 @@ Gas snapshot is stored as JSON with this high-level structure:
 # Profile only selected tests
 acton test --filter "transfer.*" --snapshot gas-baseline.json
 
-# Profile one suite/file
-acton test tests/wallet.test.tolk --baseline-snapshot gas-baseline.json
+# Profile one or more suites/files
+acton test tests/wallet.test.tolk tests/jetton --baseline-snapshot gas-baseline.json
 ```
 
 ## Troubleshooting

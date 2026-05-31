@@ -199,12 +199,17 @@ enum Commands {
         command: RpcCommand,
     },
     #[command(
-        about = "Run tests from a file or directory",
+        about = "Run tests from files or directories",
         after_help = detailed_help_pointer("test")
     )]
     Test {
-        #[arg(help = "Test file or directory containing test files (default: project root)", add = ArgValueCompleter::new(PathCompleter::any()))]
-        path: Option<String>,
+        #[arg(
+            help = "Test files or directories containing test files (default: project root)",
+            value_name = "PATH",
+            num_args = 0..,
+            add = ArgValueCompleter::new(PathCompleter::any())
+        )]
+        paths: Vec<String>,
         // Filtering
         #[arg(
             short,
@@ -1863,7 +1868,7 @@ fn main() {
             templates,
         ),
         Commands::Test {
-            path,
+            paths,
             filter,
             reporter,
             show_bodies,
@@ -1953,9 +1958,9 @@ fn main() {
                 ) {
                     Ok(config) => {
                         if mutate {
-                            mutation::test_mutate_cmd(path.as_deref(), &config)
+                            mutation::test_mutate_cmd(&paths, &config)
                         } else {
-                            test_cmd(path, &config)
+                            test_cmd(paths, &config)
                         }
                     }
                     Err(err) => Err(err),

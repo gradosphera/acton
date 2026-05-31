@@ -42,7 +42,7 @@ use regex::Regex;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -547,7 +547,7 @@ fn evaluate_test_case(
     }
 }
 
-pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()> {
+pub fn test_cmd(paths: Vec<String>, config: &TestConfig) -> anyhow::Result<()> {
     let project_root = configured_project_root();
     let mut config = config.clone();
     resolve_test_output_paths_from_project_root(&mut config, project_root);
@@ -563,45 +563,7 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
     }
     println!("     {} tests", "Running".green().bold());
 
-    // If path is omitted, default to project root.
-    let path = path.unwrap_or_else(|| project_root.to_string_lossy().to_string());
-
-    if !fs::exists(&path).unwrap_or(false) {
-        anyhow::bail!(error_fmt::file_not_found(&path));
-    }
-
-    let metadata = match fs::metadata(&path) {
-        Ok(metadata) => metadata,
-        Err(err) => {
-            anyhow::bail!("Cannot access '{path}': {err}")
-        }
-    };
-    let test_files = if metadata.is_file() {
-        if !path.ends_with(".test.tolk") {
-            anyhow::bail!("Test file must end with {}", ".test.tolk".yellow());
-        }
-        vec![
-            dunce::canonicalize(&path)
-                .unwrap_or_else(|_| PathBuf::from(&path))
-                .to_string_lossy()
-                .to_string(),
-        ]
-    } else if metadata.is_dir() {
-        let search_root = dunce::canonicalize(&path).unwrap_or_else(|_| PathBuf::from(&path));
-        let project_root_abs =
-            dunce::canonicalize(project_root).unwrap_or_else(|_| project_root.to_path_buf());
-        find_test_files_recursively(
-            &search_root,
-            &project_root_abs,
-            &config.exclude_patterns,
-            &config.include_patterns,
-        )?
-        .into_iter()
-        .map(|p| p.to_string_lossy().to_string())
-        .collect()
-    } else {
-        anyhow::bail!("Path '{path}' is neither a file nor a directory");
-    };
+    let test_files = collect_test_files(&paths, project_root, &config)?;
 
     let acton_config = ActonConfig::load()?;
     let debug_listener = if config.debug {
@@ -852,9 +814,9 @@ fn empty_test_selection_message(
 
     if test_files.is_empty() {
         let hint = if config.include_patterns.is_empty() && config.exclude_patterns.is_empty() {
-            "Check the test path or add a *.test.tolk file."
+            "Check the test paths or add a *.test.tolk file."
         } else {
-            "Check the test path or --include/--exclude patterns."
+            "Check the test paths or --include/--exclude patterns."
         };
         return Some(format!("No test files found. {hint}"));
     }
@@ -874,6 +836,83 @@ fn empty_test_selection_message(
     }
 
     Some("No tests found in selected test files. Add tests or adjust the selection.".to_string())
+}
+
+fn collect_test_files(
+    paths: &[String],
+    project_root: &Path,
+    config: &TestConfig,
+) -> anyhow::Result<Vec<String>> {
+    let project_root_abs =
+        dunce::canonicalize(project_root).unwrap_or_else(|_| project_root.to_path_buf());
+    let mut test_files = Vec::new();
+    let mut seen = HashSet::new();
+
+    if paths.is_empty() {
+        let default_path = project_root.to_string_lossy();
+        collect_test_files_from_path(
+            default_path.as_ref(),
+            &project_root_abs,
+            config,
+            &mut test_files,
+            &mut seen,
+        )?;
+        return Ok(test_files);
+    }
+
+    for path in paths {
+        collect_test_files_from_path(path, &project_root_abs, config, &mut test_files, &mut seen)?;
+    }
+
+    Ok(test_files)
+}
+
+fn collect_test_files_from_path(
+    path: &str,
+    project_root_abs: &Path,
+    config: &TestConfig,
+    test_files: &mut Vec<String>,
+    seen: &mut HashSet<PathBuf>,
+) -> anyhow::Result<()> {
+    if !fs::exists(path).unwrap_or(false) {
+        anyhow::bail!(error_fmt::file_not_found(path));
+    }
+
+    let metadata = match fs::metadata(path) {
+        Ok(metadata) => metadata,
+        Err(err) => {
+            anyhow::bail!("Cannot access '{path}': {err}")
+        }
+    };
+
+    let mut add_test_file = |path: PathBuf| {
+        if seen.insert(path.clone()) {
+            test_files.push(path.to_string_lossy().to_string());
+        }
+    };
+
+    if metadata.is_file() {
+        if !path.ends_with(".test.tolk") {
+            anyhow::bail!("Test file must end with {}", ".test.tolk".yellow());
+        }
+        add_test_file(dunce::canonicalize(path).unwrap_or_else(|_| PathBuf::from(path)));
+        return Ok(());
+    }
+
+    if metadata.is_dir() {
+        let search_root = dunce::canonicalize(path).unwrap_or_else(|_| PathBuf::from(path));
+        for file in find_test_files_recursively(
+            &search_root,
+            project_root_abs,
+            &config.exclude_patterns,
+            &config.include_patterns,
+        )? {
+            add_test_file(file);
+        }
+        return Ok(());
+    }
+
+    anyhow::bail!("Path '{path}' is neither a file nor a directory");
 }
 
 fn resolve_test_output_paths_from_project_root(config: &mut TestConfig, project_root: &Path) {

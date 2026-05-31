@@ -6,7 +6,7 @@ acton-test --- Discover and run Tolk smart contract tests
 
 ## Synopsis
 
-`acton test` [_options_] [_path_]
+`acton test` [_options_] [_path_...]
 
 ## Description
 
@@ -22,10 +22,12 @@ browser UI for exploring results.
 
 {{#options}}
 
-{{#option "_path_" }}
-Test file or directory to run.
+{{#option "_path_..." }}
+Test files or directories to run.
 
 If omitted, Acton discovers tests from the resolved project root.
+
+May be passed multiple times.
 {{/option}}
 
 {{#option "`-f`, `--filter` _pattern_" }}
@@ -505,82 +507,88 @@ CLI flags override config values for the current invocation.
    acton test
    ```
 
-2. Filter tests by name:
+2. Run selected test files/directories:
+
+   ```bash
+   acton test tests/wallet.test.tolk tests/jetton
+   ```
+
+3. Filter tests by name:
 
    ```bash
    acton test --filter "wallet.*"
    ```
 
-3. Show executor debug logs from `debug.*` helpers:
+4. Show executor debug logs from `debug.*` helpers:
 
    ```bash
    acton test --verbose --filter "debug.*"
    ```
 
-4. Generate coverage and JUnit output:
+5. Generate coverage and JUnit output:
 
    ```bash
    acton test --coverage --coverage-format lcov --reporter junit \
                                                 --junit-path test-results
    ```
 
-5. Fail the run when line coverage drops below 85%:
+6. Fail the run when line coverage drops below 85%:
 
    ```bash
    acton test --coverage --coverage-minimum-percent 85
    ```
 
-6. Compare gas usage against a baseline:
+7. Compare gas usage against a baseline:
 
    ```bash
    acton test --baseline-snapshot build/gas-baseline.json --fail-on-diff
    ```
 
-7. Run mutation testing for one contract:
+8. Run mutation testing for one contract:
 
    ```bash
    acton test --mutate --mutate-contract Wallet
    ```
 
-8. Run mutation testing only for changed lines in the current worktree:
+9. Run mutation testing only for changed lines in the current worktree:
 
    ```bash
    acton test --mutate --mutate-contract Wallet --mutation-diff worktree
    ```
 
-9. Run mutation testing for selected levels on the current branch:
+10. Run mutation testing for selected levels on the current branch:
 
    ```bash
    acton test --mutate --mutate-contract Wallet --mutation-diff branch \
                                                 --mutation-levels critical,major
    ```
 
-10. Re-run one specific mutant from a previous report:
+11. Re-run one specific mutant from a previous report:
 
    ```bash
    acton test --mutate --mutate-contract Wallet --mutation-id 2
    ```
 
-11. Resume an unfinished mutation session:
+12. Resume an unfinished mutation session:
 
    ```bash
    acton test --mutate --mutate-contract Wallet --mutation-session-id wallet-pr-42 \
                                                 --mutation-diff worktree
    ```
 
-12. Fail the run when mutation score drops below 85%:
+13. Fail the run when mutation score drops below 85%:
 
    ```bash
    acton test --mutate --mutate-contract Wallet --mutation-minimum-percent 85
    ```
 
-13. Limit mutation testing to four workers:
+14. Limit mutation testing to four workers:
 
    ```bash
    acton test --mutate --mutate-contract Wallet --mutation-workers 4
    ```
 
-14. Debug a forked-state failure with traces and the UI:
+15. Debug a forked-state failure with traces and the UI:
 
    ```bash
    acton test tests/wallet.test.tolk --fork-net testnet \
@@ -588,7 +596,7 @@ CLI flags override config values for the current invocation.
                                      --save-test-trace --ui
    ```
 
-15. Enforce a gas baseline in CI:
+16. Enforce a gas baseline in CI:
 
    ```bash
    acton test --baseline-snapshot build/gas-baseline.json --fail-on-diff \

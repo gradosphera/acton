@@ -4,7 +4,7 @@ NAME
        acton-test — Discover and run Tolk smart contract tests
 
 SYNOPSIS
-       acton test [options] [path]
+       acton test [options] [path…]
 
 DESCRIPTION
        Discover and execute tests from .test.tolk files.
@@ -15,10 +15,12 @@ DESCRIPTION
 
 OPTIONS
    Discovery Options
-       path
-           Test file or directory to run.
+       path…
+           Test files or directories to run.
 
            If omitted, Acton discovers tests from the resolved project root.
+
+           May be passed multiple times.
 
        -f, --filter pattern
            Filter tests by regular expression.
@@ -466,64 +468,68 @@ EXAMPLES
 
               acton test
 
-       2. Filter tests by name:
+       2. Run selected test files/directories:
+
+              acton test tests/wallet.test.tolk tests/jetton
+
+       3. Filter tests by name:
 
               acton test --filter "wallet.*"
 
-       3. Show executor debug logs from debug.* helpers:
+       4. Show executor debug logs from debug.* helpers:
 
               acton test --verbose --filter "debug.*"
 
-       4. Generate coverage and JUnit output:
+       5. Generate coverage and JUnit output:
 
               acton test --coverage --coverage-format lcov --reporter junit \
                                                            --junit-path test-results
 
-       5. Fail the run when line coverage drops below 85%:
+       6. Fail the run when line coverage drops below 85%:
 
               acton test --coverage --coverage-minimum-percent 85
 
-       6. Compare gas usage against a baseline:
+       7. Compare gas usage against a baseline:
 
               acton test --baseline-snapshot build/gas-baseline.json --fail-on-diff
 
-       7. Run mutation testing for one contract:
+       8. Run mutation testing for one contract:
 
               acton test --mutate --mutate-contract Wallet
 
-       8. Run mutation testing only for changed lines in the current worktree:
+       9. Run mutation testing only for changed lines in the current worktree:
 
               acton test --mutate --mutate-contract Wallet --mutation-diff worktree
 
-       9. Run mutation testing for selected levels on the current branch:
+       10. Run mutation testing for selected levels on the current branch:
 
-              acton test --mutate --mutate-contract Wallet --mutation-diff branch \
-                                                           --mutation-levels critical,major
+           acton test --mutate --mutate-contract Wallet --mutation-diff branch \
+                                                        --mutation-levels critical,major
 
-       10. Re-run one specific mutant from a previous report:
+       11. Re-run one specific mutant from a previous report:
 
            acton test --mutate --mutate-contract Wallet --mutation-id 2
 
-       11. Resume an unfinished mutation session:
+       12. Resume an unfinished mutation session:
 
            acton test --mutate --mutate-contract Wallet --mutation-session-id wallet-pr-42 \
                                                         --mutation-diff worktree
 
-       12. Fail the run when mutation score drops below 85%:
+       13. Fail the run when mutation score drops below 85%:
 
            acton test --mutate --mutate-contract Wallet --mutation-minimum-percent 85
 
-       13. Limit mutation testing to four workers:
+       14. Limit mutation testing to four workers:
 
            acton test --mutate --mutate-contract Wallet --mutation-workers 4
 
-       14. Debug a forked-state failure with traces and the UI:
+       15. Debug a forked-state failure with traces and the UI:
 
            acton test tests/wallet.test.tolk --fork-net testnet \
                                              --fork-block-number 55000000 \
                                              --save-test-trace --ui
 
-       15. Enforce a gas baseline in CI:
+       16. Enforce a gas baseline in CI:
 
            acton test --baseline-snapshot build/gas-baseline.json --fail-on-diff \
                                                                   --reporter console,junit

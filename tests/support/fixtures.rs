@@ -115,7 +115,7 @@ impl FixtureProject {
             project: Arc::new(crate::support::project::ProjectRef {
                 path: self.project_path.clone(),
             }),
-            test_path: None,
+            test_paths: Vec::new(),
             filter: None,
             build_clear_cache: false,
             build_contract: None,
