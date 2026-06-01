@@ -2,6 +2,7 @@ import type React from "react"
 import {useEffect, useMemo, useRef, useState} from "react"
 import flamegraph, {tooltip as flamegraphTooltip, type FlameGraphDatum} from "d3-flame-graph"
 import {select} from "d3-selection"
+import {FiChevronDown, FiChevronUp} from "react-icons/fi"
 
 import styles from "./GasProfile.module.css"
 
@@ -26,6 +27,7 @@ interface GasProfileContract {
 }
 
 interface GasProfileSample {
+  readonly instruction_name: string
   readonly weight: number
   readonly frames: readonly GasProfileFrame[]
 }
@@ -65,6 +67,20 @@ type FrameConnector = {
   readonly right: ConnectorLine
 }
 
+type InstructionStat = {
+  readonly name: string
+  readonly totalGas: number
+  readonly samples: number
+}
+
+type InstructionStatsScope = "all" | "self"
+
+type InstructionStatsScopeOption = {
+  readonly value: InstructionStatsScope
+  readonly label: string
+  readonly title: string
+}
+
 class MutableFlameNode {
   selfGas = 0
   totalGas = 0
@@ -96,6 +112,74 @@ const FLAME_COLORS = [
   "#3f85e6",
   "#214ccb",
   "#53acd4",
+]
+
+// data/stack.json plus stack aliases from data/fift/fift-instructions.json.
+const STACK_INSTRUCTION_NAMES = new Set([
+  "-ROLL",
+  "-ROLLX",
+  "-ROT",
+  "2DROP",
+  "2DUP",
+  "2OVER",
+  "2ROT",
+  "2SWAP",
+  "BLKDROP",
+  "BLKDROP2",
+  "BLKPUSH",
+  "BLKSWAP",
+  "BLKSWX",
+  "CHKDEPTH",
+  "DEPTH",
+  "DROP",
+  "DROP2",
+  "DROPX",
+  "DUP",
+  "DUP2",
+  "NIP",
+  "ONLYTOPX",
+  "ONLYX",
+  "OVER",
+  "OVER2",
+  "PICK",
+  "POP",
+  "POP_LONG",
+  "PU2XC",
+  "PUSH",
+  "PUSH2",
+  "PUSH3",
+  "PUSHX",
+  "PUSH_LONG",
+  "PUXC",
+  "PUXC2",
+  "PUXCPU",
+  "REVERSE",
+  "REVX",
+  "ROLL",
+  "ROLLREV",
+  "ROT",
+  "ROT2",
+  "ROTREV",
+  "SWAP",
+  "SWAP2",
+  "TUCK",
+  "XC2PU",
+  "XCHG2",
+  "XCHG3",
+  "XCHG3_ALT",
+  "XCHGX",
+  "XCHG",
+  "XCHG_0I",
+  "XCHG_0I_LONG",
+  "XCHG_1I",
+  "XCHG_IJ",
+  "XCPU",
+  "XCPU2",
+  "XCPUXC",
+])
+const INSTRUCTION_STATS_SCOPES: readonly InstructionStatsScopeOption[] = [
+  {value: "all", label: "All", title: "Show all instructions in the selected frame"},
+  {value: "self", label: "Self", title: "Show only instructions executed in this frame"},
 ]
 
 const numberFormatter = new Intl.NumberFormat("en-US")
@@ -347,6 +431,73 @@ const buildFrameConnector = (
   }
 }
 
+const sampleIncludesFrame = (contractName: string, sample: GasProfileSample, frameId: string) => {
+  const pathParts = [`contract:${contractName}`]
+
+  if (pathParts[0] === frameId) {
+    return true
+  }
+
+  for (const frame of sample.frames) {
+    pathParts.push(frameKey(frame))
+    if (pathParts.join("/") === frameId) {
+      return true
+    }
+  }
+
+  return false
+}
+
+const sampleEndsAtFrame = (contractName: string, sample: GasProfileSample, frameId: string) => {
+  const pathParts = [`contract:${contractName}`, ...sample.frames.map(frame => frameKey(frame))]
+  return pathParts.join("/") === frameId
+}
+
+const isStackInstruction = (instructionName: string) => {
+  const mnemonic = instructionName.startsWith("implicit ")
+    ? instructionName.slice("implicit ".length)
+    : instructionName
+
+  return STACK_INSTRUCTION_NAMES.has(mnemonic.toUpperCase())
+}
+
+const buildInstructionStats = (
+  contract: GasProfileContract,
+  selectedFrameId: string,
+  scope: InstructionStatsScope,
+  stackOnly = false,
+): readonly InstructionStat[] => {
+  if (selectedFrameId === "") {
+    return []
+  }
+
+  const statsByInstruction = new Map<string, {totalGas: number; samples: number}>()
+
+  for (const sample of contract.samples) {
+    if (
+      scope === "self"
+        ? !sampleEndsAtFrame(contract.name, sample, selectedFrameId)
+        : !sampleIncludesFrame(contract.name, sample, selectedFrameId)
+    ) {
+      continue
+    }
+
+    const instructionName = sample.instruction_name || "unknown"
+    if (stackOnly && !isStackInstruction(instructionName)) {
+      continue
+    }
+
+    const stats = statsByInstruction.get(instructionName) ?? {totalGas: 0, samples: 0}
+    stats.totalGas += sample.weight
+    stats.samples += 1
+    statsByInstruction.set(instructionName, stats)
+  }
+
+  return [...statsByInstruction.entries()]
+    .map(([name, stats]) => ({name, totalGas: stats.totalGas, samples: stats.samples}))
+    .sort((a, b) => b.totalGas - a.totalGas || a.name.localeCompare(b.name))
+}
+
 export const GasProfile: React.FC<GasProfileProps> = ({profile, projectRoot}) => {
   const [selectedContractName, setSelectedContractName] = useState<string | undefined>(
     () => profile.contracts[0]?.name,
@@ -359,6 +510,9 @@ export const GasProfile: React.FC<GasProfileProps> = ({profile, projectRoot}) =>
   const [selectedFrame, setSelectedFrame] = useState<FlameGraphDatum | undefined>()
   const [selectedStack, setSelectedStack] = useState<readonly string[]>([])
   const [frameConnector, setFrameConnector] = useState<FrameConnector | undefined>()
+  const [showInstructionStats, setShowInstructionStats] = useState(false)
+  const [instructionStatsScope, setInstructionStatsScope] = useState<InstructionStatsScope>("all")
+  const [showOnlyStackInstructions, setShowOnlyStackInstructions] = useState(false)
 
   const selectedContract = useMemo(() => {
     if (selectedContractName === undefined) {
@@ -409,6 +563,7 @@ export const GasProfile: React.FC<GasProfileProps> = ({profile, projectRoot}) =>
   useEffect(() => {
     setSelectedFrame(undefined)
     setSelectedStack([])
+    setShowInstructionStats(false)
   }, [selectedTree])
 
   useEffect(() => {
@@ -508,6 +663,47 @@ export const GasProfile: React.FC<GasProfileProps> = ({profile, projectRoot}) =>
   const selectedNodeShare = selectedContract
     ? formatPercent(selectedNodeValue, selectedContract.total_gas)
     : "0.0%"
+  const allInstructionStats = useMemo(
+    () =>
+      selectedContract === undefined
+        ? []
+        : buildInstructionStats(selectedContract, selectedNodeId, "all"),
+    [selectedContract, selectedNodeId],
+  )
+  const scopeInstructionStats = useMemo(() => {
+    if (selectedContract === undefined || instructionStatsScope === "all") {
+      return allInstructionStats
+    }
+
+    return buildInstructionStats(selectedContract, selectedNodeId, instructionStatsScope)
+  }, [allInstructionStats, instructionStatsScope, selectedContract, selectedNodeId])
+  const stackInstructionStats = useMemo(
+    () =>
+      selectedContract === undefined
+        ? []
+        : buildInstructionStats(selectedContract, selectedNodeId, instructionStatsScope, true),
+    [instructionStatsScope, selectedContract, selectedNodeId],
+  )
+  const selectedInstructionStats = showOnlyStackInstructions
+    ? stackInstructionStats
+    : scopeInstructionStats
+  const instructionStatsShareTotal = scopeInstructionStats.reduce(
+    (total, stat) => total + stat.totalGas,
+    0,
+  )
+  const selectedInstructionGas = selectedInstructionStats.reduce(
+    (total, stat) => total + stat.totalGas,
+    0,
+  )
+  const selectedInstructionSamples = selectedInstructionStats.reduce(
+    (total, stat) => total + stat.samples,
+    0,
+  )
+  const instructionStatsScopeLabel = instructionStatsScope === "self" ? "Self" : "Total"
+
+  useEffect(() => {
+    setShowInstructionStats(false)
+  }, [selectedNodeId])
 
   useEffect(() => {
     const viewer = viewerRef.current
@@ -649,6 +845,116 @@ export const GasProfile: React.FC<GasProfileProps> = ({profile, projectRoot}) =>
                         <strong>{selectedNodeShare}</strong>
                       </div>
                     </div>
+                    {allInstructionStats.length > 0 && (
+                      <div className={styles.instructionStats}>
+                        <div className={styles.instructionStatsHeader}>
+                          <button
+                            type="button"
+                            onClick={() => setShowInstructionStats(!showInstructionStats)}
+                            className={styles.actionsToggleButton}
+                            aria-label={
+                              showInstructionStats
+                                ? "Hide instruction statistics"
+                                : "Show instruction statistics"
+                            }
+                          >
+                            {showInstructionStats ? (
+                              <FiChevronUp size={14} />
+                            ) : (
+                              <FiChevronDown size={14} />
+                            )}
+                            <span className={styles.actionsToggleText}>
+                              {showInstructionStats ? "Hide" : "Show"} Instructions
+                            </span>
+                          </button>
+                          {showInstructionStats && (
+                            <div className={styles.instructionFilters}>
+                              <div
+                                className={styles.instructionFilterGroup}
+                                role="group"
+                                aria-label="Instruction statistics scope"
+                              >
+                                {INSTRUCTION_STATS_SCOPES.map(scope => {
+                                  const isSelected = instructionStatsScope === scope.value
+
+                                  return (
+                                    <button
+                                      key={scope.value}
+                                      type="button"
+                                      className={`${styles.instructionFilterButton} ${isSelected ? styles.instructionFilterButtonActive : ""}`}
+                                      title={scope.title}
+                                      aria-pressed={isSelected}
+                                      onClick={() => setInstructionStatsScope(scope.value)}
+                                    >
+                                      {scope.label}
+                                    </button>
+                                  )
+                                })}
+                              </div>
+                              <label className={styles.instructionStackToggle}>
+                                <input
+                                  type="checkbox"
+                                  checked={showOnlyStackInstructions}
+                                  onChange={event =>
+                                    setShowOnlyStackInstructions(event.currentTarget.checked)
+                                  }
+                                />
+                                <span>Stack only</span>
+                              </label>
+                            </div>
+                          )}
+                        </div>
+                        {showInstructionStats && (
+                          <>
+                            {selectedInstructionStats.length === 0 ? (
+                              <div className={styles.instructionStatsEmpty}>
+                                No instructions for this filter.
+                              </div>
+                            ) : (
+                              <table className={styles.instructionStatsTable}>
+                                <thead>
+                                  <tr>
+                                    <th scope="col">Instruction</th>
+                                    <th scope="col">Gas</th>
+                                    <th scope="col">Samples</th>
+                                    <th scope="col">Share of {instructionStatsScopeLabel}</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {selectedInstructionStats.map(stat => (
+                                    <tr key={stat.name}>
+                                      <td>
+                                        <span className={styles.instructionName} title={stat.name}>
+                                          {stat.name}
+                                        </span>
+                                      </td>
+                                      <td>{formatGas(stat.totalGas)}</td>
+                                      <td>{stat.samples}</td>
+                                      <td>
+                                        {formatPercent(stat.totalGas, instructionStatsShareTotal)}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                                <tfoot>
+                                  <tr className={styles.instructionStatsSummaryRow}>
+                                    <td>Total</td>
+                                    <td>{formatGas(selectedInstructionGas)}</td>
+                                    <td>{selectedInstructionSamples}</td>
+                                    <td>
+                                      {formatPercent(
+                                        selectedInstructionGas,
+                                        instructionStatsShareTotal,
+                                      )}
+                                    </td>
+                                  </tr>
+                                </tfoot>
+                              </table>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </>
               )}

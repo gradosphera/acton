@@ -1014,6 +1014,7 @@ fn build_ui_gas_profile_contracts<'a>(
             contract.total_gas += sample.weight;
             contract.sample_count += 1;
             contract.samples.push(UiGasProfileSample {
+                instruction_name: sample.instruction_name.clone(),
                 weight: sample.weight,
                 frames,
             });
@@ -1276,9 +1277,22 @@ fn record_execution_sample(
 
     Some(ProfileSample {
         thread_name: "acton".to_string(),
+        instruction_name: profile_instruction_name(&step.instr_name),
         frames,
         weight: step.gas,
     })
+}
+
+fn profile_instruction_name(instr_name: &str) -> String {
+    if instr_name.starts_with("implicit ") {
+        return instr_name.to_string();
+    }
+
+    instr_name
+        .split_whitespace()
+        .next()
+        .unwrap_or(instr_name)
+        .to_string()
 }
 
 fn build_profile_frames(
@@ -1317,6 +1331,7 @@ struct InstructionGasStep {
 #[derive(Debug, Clone)]
 struct ProfileSample {
     thread_name: String,
+    instruction_name: String,
     frames: Vec<ProfileFrameSpec>,
     weight: u64,
 }
@@ -1354,6 +1369,7 @@ pub(crate) struct UiGasProfileContract {
 
 #[derive(Debug, Clone, Serialize)]
 pub(crate) struct UiGasProfileSample {
+    pub instruction_name: String,
     pub weight: u64,
     pub frames: Vec<UiGasProfileFrame>,
 }

@@ -507,6 +507,16 @@ fn ui_api_serves_gas_profile_when_enabled() {
         .flat_map(|sample| sample["frames"].as_array().into_iter().flatten())
         .filter_map(|frame| frame["function_name"].as_str())
         .collect::<Vec<_>>();
+    let instruction_names = samples
+        .iter()
+        .filter_map(|sample| sample["instruction_name"].as_str())
+        .collect::<Vec<_>>();
+    let instruction_names_are_normalized = instruction_names
+        .iter()
+        .all(|name| !name.contains(char::is_whitespace) || name.starts_with("implicit "));
+    let instruction_names_preserve_implicit = instruction_names
+        .iter()
+        .any(|name| name.starts_with("implicit "));
     let test_profiles = profile["tests"]
         .as_array()
         .expect("gas profile should include per-test profiles");
@@ -529,7 +539,7 @@ fn ui_api_serves_gas_profile_when_enabled() {
 
     assert_ui_api_snapshot(
         format!(
-            "status: {status}\ntotal_gas_positive: {}\ncontracts: {}\nfirst_contract_name: {}\nfirst_contract_gas_positive: {}\nfirst_contract_sample_count_positive: {}\nframes_include_entrypoint: {}\nframes_include_prefixed_entrypoint: {}\nframes_include_level_one: {}\nframes_include_leaf: {}\ntest_profiles: {}\nfirst_test_name: {}\nfirst_test_gas_positive: {}\nfirst_test_contracts: {}\nfirst_test_contract_name: {}\ntest_frames_include_entrypoint: {}\ntest_frames_include_level_one: {}\ntest_frames_include_leaf: {}\nprofile_file_exists: {}\n",
+            "status: {status}\ntotal_gas_positive: {}\ncontracts: {}\nfirst_contract_name: {}\nfirst_contract_gas_positive: {}\nfirst_contract_sample_count_positive: {}\nsample_instructions_non_empty: {}\nsample_instruction_names_are_normalized: {}\nsample_instruction_names_preserve_implicit: {}\nframes_include_entrypoint: {}\nframes_include_prefixed_entrypoint: {}\nframes_include_level_one: {}\nframes_include_leaf: {}\ntest_profiles: {}\nfirst_test_name: {}\nfirst_test_gas_positive: {}\nfirst_test_contracts: {}\nfirst_test_contract_name: {}\ntest_frames_include_entrypoint: {}\ntest_frames_include_level_one: {}\ntest_frames_include_leaf: {}\nprofile_file_exists: {}\n",
             profile["total_gas"].as_u64().is_some_and(|gas| gas > 0),
             contracts.len(),
             first_contract["name"].as_str().unwrap_or("<missing>"),
@@ -539,6 +549,9 @@ fn ui_api_serves_gas_profile_when_enabled() {
             first_contract["sample_count"]
                 .as_u64()
                 .is_some_and(|samples| samples > 0),
+            !instruction_names.is_empty() && instruction_names.iter().all(|name| !name.is_empty()),
+            instruction_names_are_normalized,
+            instruction_names_preserve_implicit,
             frame_names.contains(&"onInternalMessage"),
             frame_names.contains(&"deep:onInternalMessage"),
             frame_names.contains(&"profileLevelOne"),
@@ -610,6 +623,18 @@ fn ui_api_serves_unit_profile_when_include_tests_enabled() {
         .flat_map(|sample| sample["frames"].as_array().into_iter().flatten())
         .filter_map(|frame| frame["function_name"].as_str())
         .collect::<Vec<_>>();
+    let instruction_names = tests_contract["samples"]
+        .as_array()
+        .expect("Tests contract should include samples")
+        .iter()
+        .filter_map(|sample| sample["instruction_name"].as_str())
+        .collect::<Vec<_>>();
+    let instruction_names_are_normalized = instruction_names
+        .iter()
+        .all(|name| !name.contains(char::is_whitespace) || name.starts_with("implicit "));
+    let instruction_names_preserve_implicit = instruction_names
+        .iter()
+        .any(|name| name.starts_with("implicit "));
     let frame_urls = tests_contract["samples"]
         .as_array()
         .expect("Tests contract should include samples")
@@ -636,7 +661,7 @@ fn ui_api_serves_unit_profile_when_include_tests_enabled() {
 
     assert_ui_api_snapshot(
         format!(
-            "status: {status}\ntotal_gas_positive: {}\ntest_profiles: {}\nunit_test_name: {}\nunit_test_gas_positive: {}\nunit_test_contracts: {}\ntests_contract_gas_positive: {}\nframes_include_test_method: {}\nframes_include_create: {}\nframes_include_heavy_job: {}\nframes_include_mix: {}\nframes_include_acton_runtime_source: {}\nprofile_file_exists: {}\n",
+            "status: {status}\ntotal_gas_positive: {}\ntest_profiles: {}\nunit_test_name: {}\nunit_test_gas_positive: {}\nunit_test_contracts: {}\ntests_contract_gas_positive: {}\nsample_instructions_non_empty: {}\nsample_instruction_names_are_normalized: {}\nsample_instruction_names_preserve_implicit: {}\nframes_include_test_method: {}\nframes_include_create: {}\nframes_include_heavy_job: {}\nframes_include_mix: {}\nframes_include_acton_runtime_source: {}\nprofile_file_exists: {}\n",
             profile["total_gas"].as_u64().is_some_and(|gas| gas > 0),
             test_profiles.len(),
             unit_test_profile["name"].as_str().unwrap_or("<missing>"),
@@ -647,6 +672,9 @@ fn ui_api_serves_unit_profile_when_include_tests_enabled() {
             tests_contract["total_gas"]
                 .as_u64()
                 .is_some_and(|gas| gas > 0),
+            !instruction_names.is_empty() && instruction_names.iter().all(|name| !name.is_empty()),
+            instruction_names_are_normalized,
+            instruction_names_preserve_implicit,
             frame_names.contains(&"test ui gas profile heavy unit helper"),
             frame_names.contains(&"X.create"),
             frame_names.contains(&"X.heavyJob"),

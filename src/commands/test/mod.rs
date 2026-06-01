@@ -492,12 +492,6 @@ fn dump_trace_if_available(
     };
 
     let Some(emulations) = ctx.chain.emulations.results_of(&test.name) else {
-        eprintln!(
-            "Warning: trace export is enabled for test '{}', but no emulated transactions were recorded; {} will not be written to {}",
-            test.name,
-            trace::trace_file_name(&test.name),
-            trace_dir,
-        );
         return Ok(());
     };
 

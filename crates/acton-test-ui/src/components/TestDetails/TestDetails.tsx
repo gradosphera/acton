@@ -49,6 +49,7 @@ interface TestDetailsProps {
   readonly isTraceLoading?: boolean
   readonly projectRoot?: string
   readonly gasProfile?: GasProfileData
+  readonly gasProfileLoaded?: boolean
 }
 
 interface IDEConfig {
@@ -137,6 +138,7 @@ export const TestDetails: React.FC<TestDetailsProps> = ({
   isTraceLoading = false,
   projectRoot,
   gasProfile,
+  gasProfileLoaded = true,
 }) => {
   const [activeTab, setActiveTab] = useState<TestDetailsTab>(() => {
     const saved = localStorage.getItem("activeTab")
@@ -606,11 +608,11 @@ export const TestDetails: React.FC<TestDetailsProps> = ({
   }
 
   useEffect(() => {
-    if (activeTab === "profile" && !hasGasProfile) {
+    if (gasProfileLoaded && activeTab === "profile" && !hasGasProfile) {
       setActiveTab("info")
       localStorage.setItem("activeTab", "info")
     }
-  }, [activeTab, hasGasProfile])
+  }, [activeTab, gasProfileLoaded, hasGasProfile])
 
   const handleTabChange = (tab: TestDetailsTab) => {
     setActiveTab(tab)
@@ -979,13 +981,21 @@ export const TestDetails: React.FC<TestDetailsProps> = ({
     }
 
     if (activeTab === "profile") {
-      return hasGasProfile ? (
-        <div className={styles.profileTab}>
-          <GasProfile profile={gasProfile} projectRoot={projectRoot} />
-        </div>
-      ) : (
-        <div className={styles.empty}>No gas profile samples were recorded for this test</div>
-      )
+      if (hasGasProfile) {
+        return (
+          <div className={styles.profileTab}>
+            <GasProfile profile={gasProfile} projectRoot={projectRoot} />
+          </div>
+        )
+      }
+
+      if (gasProfileLoaded) {
+        return (
+          <div className={styles.empty}>No gas profile samples were recorded for this test</div>
+        )
+      }
+
+      return <div className={styles.empty}>Loading gas profile...</div>
     }
 
     if (trace && trace.traces.length === 0 && skippedTracesCount > 0) {

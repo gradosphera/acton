@@ -10,10 +10,12 @@
 .workspace {
   min-height: 0;
   flex: 1;
+  overflow: hidden;
 }
 
 .viewer {
   min-height: 0;
+  height: 100%;
   border: 0;
   border-radius: 0;
   background-color: var(--bg-color);
@@ -141,15 +143,19 @@
 .details {
   position: relative;
   z-index: 1;
+  display: flex;
+  flex: 0 1 auto;
+  flex-direction: column;
   width: fit-content;
   max-width: calc(100% - var(--spacing-md));
+  max-height: calc(100% - 220px - var(--spacing-md));
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
   margin-top: var(--spacing-md);
   margin-left: var(--spacing-md);
   border: 1px solid var(--border-color);
   border-radius: 0 0 var(--border-radius-md) var(--border-radius-md);
-  padding: 12px var(--spacing-md);
+  padding: 12px var(--spacing-md) var(--spacing-xs);
 }
 
 .detailsHeader {
@@ -214,6 +220,216 @@
   white-space: nowrap;
 }
 
+.instructionStats {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  margin-top: var(--spacing-sm);
+  padding-top: var(--spacing-xs);
+  border-top: 1px solid var(--border-color);
+}
+
+.instructionStatsHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.actionsToggleButton {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 0;
+  transition: all 0.2s ease;
+}
+
+.actionsToggleButton:hover {
+  color: var(--text-primary);
+}
+
+.actionsToggleText {
+  margin-left: var(--spacing-xs);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+}
+
+.instructionFilters {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.instructionFilterGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xss);
+  width: fit-content;
+  padding: var(--spacing-xss);
+  border-radius: var(--border-radius-sm);
+  background-color: var(--bg-secondary-color);
+}
+
+.instructionStackToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  min-height: 28px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+}
+
+.instructionStackToggle:hover {
+  color: var(--text-primary);
+}
+
+.instructionStackToggle input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--text-primary);
+}
+
+.instructionFilterButton {
+  border: none;
+  border-radius: var(--border-radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  line-height: 20px;
+  padding: 0 var(--spacing-sm);
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.instructionFilterButton:hover {
+  color: var(--text-primary);
+}
+
+.instructionFilterButtonActive,
+.instructionFilterButtonActive:hover {
+  background-color: var(--bg-color);
+  color: var(--text-primary);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.instructionStatsTable {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  width: 100%;
+  margin-top: var(--spacing-xs);
+  margin-bottom: 0;
+  border-collapse: collapse;
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+.instructionStatsTable thead,
+.instructionStatsTable tbody,
+.instructionStatsTable tfoot {
+  display: block;
+}
+
+.instructionStatsTable thead,
+.instructionStatsTable tfoot {
+  flex: 0 0 auto;
+}
+
+.instructionStatsTable tbody {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: min(300px, 34vh);
+  overflow-y: auto;
+}
+
+.instructionStatsTable tr {
+  display: grid;
+  grid-template-columns:
+    minmax(120px, 1fr)
+    minmax(8ch, 10ch)
+    minmax(6ch, 7ch)
+    minmax(10ch, 13ch);
+  column-gap: var(--spacing-md);
+  align-items: baseline;
+}
+
+.instructionStatsTable th,
+.instructionStatsTable td {
+  display: block;
+  padding: 1px 0;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.instructionStatsTable td:not(:first-child) {
+  color: var(--text-primary);
+}
+
+.instructionStatsTable th {
+  color: var(--text-muted);
+  font-size: 0.6875rem;
+  font-weight: var(--font-weight-medium);
+}
+
+.instructionStatsTable th:first-child,
+.instructionStatsTable td:first-child {
+  text-align: left;
+}
+
+.instructionStatsTable th + th,
+.instructionStatsTable td + td {
+  padding-left: 0;
+}
+
+.instructionStatsTable tfoot td {
+  padding-top: var(--spacing-xs);
+  border-top: 1px solid var(--border-color);
+}
+
+.instructionStatsSummaryRow td {
+  color: var(--text-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+.instructionStatsSummaryRow td:first-child {
+  color: var(--text-secondary);
+}
+
+.instructionName {
+  display: block;
+  min-width: 0;
+  max-width: 32ch;
+  overflow: hidden;
+  color: var(--text-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.instructionStatsEmpty {
+  margin-top: var(--spacing-xs);
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+}
+
 .stackPath {
   display: flex;
   flex-wrap: wrap;
@@ -258,6 +474,17 @@
     margin-right: 0;
     padding-right: 0;
     border-right: 0;
+  }
+
+  .instructionStatsTable th:nth-child(3),
+  .instructionStatsTable td:nth-child(3),
+  .instructionStatsTable th:nth-child(4),
+  .instructionStatsTable td:nth-child(4) {
+    display: none;
+  }
+
+  .instructionStatsTable tr {
+    grid-template-columns: minmax(120px, 1fr) minmax(8ch, 10ch);
   }
 
   .details {

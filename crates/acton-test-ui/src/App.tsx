@@ -491,6 +491,7 @@ export const App: React.FC = () => {
               isTraceLoading={isCurrentTraceLoading}
               projectRoot={projectRoot}
               gasProfile={selectedTestGasProfile}
+              gasProfileLoaded={gasProfileLoaded}
             />
           ) : (
             <div className={styles.noSelection}>Select a test to see details</div>
