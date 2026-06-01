@@ -247,8 +247,8 @@ impl<'a> TestRunner<'a> {
                 max_executor_verbosity(verbosity, ExecutorVerbosity::FullLocationStackVerbose);
         }
 
-        if self.config.coverage {
-            // for coverage, we need at least locations to map to actual source code
+        if self.config.coverage || self.config.gas_profile.is_some() {
+            // coverage and gas profiling need source locations and stack data
             verbosity = max_executor_verbosity(verbosity, ExecutorVerbosity::FullLocationStack);
         }
 
@@ -367,7 +367,8 @@ impl<'a> TestRunner<'a> {
                 known_code_cells: &mut self.known_code_cells,
                 need_debug_info: self.config.debug
                     || self.config.backtrace == Some(BacktraceMode::Full)
-                    || self.config.coverage,
+                    || self.config.coverage
+                    || self.config.gas_profile.is_some(),
                 backtrace: self.config.backtrace,
             },
             debug: DebugCtx::Disabled,
@@ -424,8 +425,10 @@ impl<'a> TestRunner<'a> {
         let mut captured_stdout = captured_stdout;
         Self::append_debug_output(&mut captured_stdout, &result, verbosity);
 
-        let executed_get_methods = if self.config.coverage {
-            // save results for coverage only in coverage mode since cloning is expensive due to logs
+        let executed_get_methods = if self.config.coverage
+            || (self.config.gas_profile.is_some() && self.config.gas_profile_include_tests)
+        {
+            // save results only when coverage or gas profiling needs unit-test execution metadata
             match &result {
                 GetMethodResult::Success(success) => vec![success.clone()],
                 GetMethodResult::Error(_) => Vec::new(),
@@ -669,6 +672,7 @@ pub fn test_cmd(paths: Vec<String>, config: &TestConfig) -> anyhow::Result<()> {
 
     let mut coverage_lcov = None;
     let mut coverage_threshold_failed = false;
+    let mut gas_profile_report = None;
 
     if config.coverage {
         let project_root = configured_project_root().to_path_buf();
@@ -752,14 +756,29 @@ pub fn test_cmd(paths: Vec<String>, config: &TestConfig) -> anyhow::Result<()> {
 
     runner.reporter_manager.finalize()?;
 
-    if config.snapshot.is_some() || config.baseline_snapshot.is_some() {
+    if config.snapshot.is_some()
+        || config.baseline_snapshot.is_some()
+        || config.gas_profile.is_some()
+    {
         if total_failed == 0 {
-            profiling::collect_profile(&runner)?;
+            if config.gas_profile.is_some() {
+                let project_root = configured_project_root().to_path_buf();
+                compile_project_contracts(
+                    &mut runner.build_cache,
+                    runner.file_build_cache,
+                    &runner.acton_config,
+                    &project_root,
+                    true,
+                )?;
+            }
+            gas_profile_report = profiling::collect_profile(&runner)?;
         } else {
-            println!(
-                "\n{} Gas profiling snapshot and comparison tables were skipped because tests failed.",
-                "Note:".yellow()
-            );
+            let skipped_outputs = if config.gas_profile.is_some() {
+                "Gas profiling outputs were skipped because tests failed."
+            } else {
+                "Gas profiling snapshot and comparison tables were skipped because tests failed."
+            };
+            println!("\n{} {skipped_outputs}", "Note:".yellow(),);
         }
     }
 
@@ -783,7 +802,15 @@ pub fn test_cmd(paths: Vec<String>, config: &TestConfig) -> anyhow::Result<()> {
             .enable_all()
             .build()?;
         rt.block_on(async {
-            start_ui_server(reports, trace_dir, project_root, coverage_lcov, listener).await
+            start_ui_server(
+                reports,
+                trace_dir,
+                project_root,
+                coverage_lcov,
+                gas_profile_report,
+                listener,
+            )
+            .await
         })?;
     }
 
@@ -1108,8 +1135,10 @@ fn run_tests_for_file(runner: &mut TestRunner, filepath: &str) -> anyhow::Result
     let tests = find_all_test(filepath, &file, &content);
 
     let config = &runner.config;
-    let need_debug_info =
-        config.debug || config.backtrace == Some(BacktraceMode::Full) || config.coverage;
+    let need_debug_info = config.debug
+        || config.backtrace == Some(BacktraceMode::Full)
+        || config.coverage
+        || config.gas_profile.is_some();
 
     let now = Instant::now();
     let compilation_result = compile_test_file(
@@ -1134,6 +1163,19 @@ fn run_tests_for_file(runner: &mut TestRunner, filepath: &str) -> anyhow::Result
     let code_cell = Boc::decode_base64(&result.code_boc64)?;
     let source_map = Arc::new(result.source_map.unwrap_or_default());
     let abi = result.abi.map(Arc::new);
+    if config.coverage || (config.gas_profile.is_some() && config.gas_profile_include_tests) {
+        let build_path = Path::new(filepath).absolutize()?.to_path_buf();
+        let display_name = extract_suite_name(&build_path);
+        runner.build_cache.memoize(
+            display_name.as_ref(),
+            display_name.as_ref(),
+            &build_path,
+            &result.code_boc64,
+            *code_cell.repr_hash(),
+            source_map.clone(),
+            abi.clone(),
+        );
+    }
     let tests = attach_test_parameter_metadata(tests, abi.as_deref());
     let stats = run_file_tests(runner, filepath, tests, &code_cell, abi, source_map)?;
     Ok(stats)
@@ -1404,25 +1446,14 @@ fn run_file_tests(
 
         runner.reporter_manager.on_test_finished(&test_report)?;
 
-        if runner.config.coverage {
-            // For coverage, we need to process test logs as well for unit tests coverage,
-            // so register it here manually
+        if runner.config.coverage
+            || (runner.config.gas_profile.is_some() && runner.config.gas_profile_include_tests)
+        {
+            // Coverage and opt-in gas profiling both need unit-test execution metadata.
             if !executed_get_methods.is_empty() {
                 for get_result in executed_get_methods {
                     runner.emulations.save_get_method(&test.name, get_result);
                 }
-
-                // TODO: remove this memoize somehow
-                let code_boc64 = Boc::encode_base64(code);
-                runner.build_cache.memoize(
-                    &test.name,
-                    &test.name,
-                    &file_path,
-                    &code_boc64,
-                    *code.repr_hash(),
-                    source_map.clone(),
-                    abi.clone(),
-                );
             }
         }
 
