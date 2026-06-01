@@ -10,8 +10,8 @@ use super::handlers::{
     get_transactions, get_transactions_by_message_v3, get_transactions_std, get_transactions_v3,
     json_rpc, load_state, lookup_block, pack_address, register_compiler_abis, run_get_method,
     run_get_method_std, run_get_method_v3, send_boc, send_boc_return_hash, send_internal_message,
-    send_message_v3, set_address_name, set_shard_account, try_locate_result_tx,
-    try_locate_source_tx, try_locate_tx, unpack_address,
+    send_message_v3, set_address_name, set_shard_account, streaming_sse, streaming_ws,
+    try_locate_result_tx, try_locate_source_tx, try_locate_tx, unpack_address,
 };
 use crate::server::ServerState;
 use axum::{
@@ -97,11 +97,15 @@ pub fn create_router(state: ServerState, rate_limit_rps: Option<u32>) -> Router 
         .route("/v3/nft/items", get(get_nft_items));
 
     let emulate_router = Router::new().route("/emulate/v1/emulateTrace", post(emulate_trace_v1));
+    let streaming_router = Router::new()
+        .route("/streaming/v2/sse", post(streaming_sse))
+        .route("/streaming/v2/ws", get(streaming_ws));
 
     let mut api_router = Router::new()
         .merge(api_v2_router)
         .merge(api_v3_router)
-        .merge(emulate_router);
+        .merge(emulate_router)
+        .merge(streaming_router);
     let acton_router = Router::new()
         .route("/acton_fundAccount", post(faucet))
         .route("/acton_getAddressName", get(get_address_name))

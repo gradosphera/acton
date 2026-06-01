@@ -2,6 +2,7 @@ use crate::executor::TvmEmulatorAdapter;
 use crate::node::{Node, StateSource};
 use crate::storage;
 use crate::storage::{AccountStatus, BlockMeta, EMPTY_CELL_BASE64, MsgMeta, TransactionInfo};
+use crate::streaming::StreamingCommitEvent;
 use crate::types::{Addr, BocBytes, Hash256, Lt, Seqno};
 use anyhow::Context;
 use base64::Engine;
@@ -11,7 +12,7 @@ use serde_json::Value;
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{broadcast, mpsc, oneshot};
 use ton_executor::DEFAULT_CONFIG;
 use ton_executor::ExecutorVerbosity;
 use ton_executor::get::{GetExecutor, GetMethodResult, RunGetMethodArgs};
@@ -350,6 +351,7 @@ pub(crate) enum Request {
 
 pub struct Localnet {
     tx: mpsc::Sender<Request>,
+    events_tx: broadcast::Sender<StreamingCommitEvent>,
     started_at: SystemTime,
 }
 
@@ -363,15 +365,21 @@ impl Localnet {
     #[must_use]
     pub fn new(state_source: StateSource, db_path: Option<String>) -> Self {
         let (tx, rx) = mpsc::channel(100);
+        let (events_tx, _) = broadcast::channel(1024);
         let started_at = SystemTime::now();
+        let node_events_tx = events_tx.clone();
 
         std::thread::spawn(move || {
-            if let Err(e) = run_node_loop(rx, state_source, db_path) {
+            if let Err(e) = run_node_loop(rx, node_events_tx, state_source, db_path) {
                 tracing::error!("Node loop failed: {:?}", e);
             }
         });
 
-        Self { tx, started_at }
+        Self {
+            tx,
+            events_tx,
+            started_at,
+        }
     }
 
     #[must_use]
@@ -379,6 +387,11 @@ impl Localnet {
         self.started_at
             .elapsed()
             .map_or(0, |duration| duration.as_secs())
+    }
+
+    #[must_use]
+    pub fn subscribe_streaming_events(&self) -> broadcast::Receiver<StreamingCommitEvent> {
+        self.events_tx.subscribe()
     }
 
     pub async fn send_boc(&self, boc_str: String) -> anyhow::Result<LocalnetBlockTransactions> {
@@ -912,7 +925,7 @@ impl Localnet {
         rx.await?
     }
 
-    fn parse_addr(s: &str) -> anyhow::Result<Addr> {
+    pub(crate) fn parse_addr(s: &str) -> anyhow::Result<Addr> {
         let (int_addr, _) = StdAddr::from_str_ext(s, StdAddrFormat::any()).map_err(|_| {
             anyhow::anyhow!("Invalid address, only standard internal address is allowed")
         })?;
@@ -925,12 +938,14 @@ impl Localnet {
 
 fn run_node_loop(
     mut rx: mpsc::Receiver<Request>,
+    events_tx: broadcast::Sender<StreamingCommitEvent>,
     state_source: StateSource,
     db_path: Option<String>,
 ) -> anyhow::Result<()> {
     let executor = Box::new(TvmEmulatorAdapter::new()?);
     let config_bytes = base64::engine::general_purpose::STANDARD.decode(DEFAULT_CONFIG)?;
     let mut node = Node::with_db_path(executor, config_bytes.into(), state_source, db_path)?;
+    node.streaming_events = Some(events_tx);
 
     tracing::info!("TON localnet started");
 

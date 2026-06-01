@@ -9,6 +9,7 @@ use crate::storage::{
     History, Indexes, LatestState, MessageInfo, MessagePool, MsgMeta, PendingCommit, ReverseLtKey,
     TraceNode, TransactionInfo, TxMeta,
 };
+use crate::streaming::StreamingCommitEvent;
 use crate::types::{Addr, BocBytes, Hash256, Lt, Seqno};
 use anyhow::Context;
 use base64::Engine;
@@ -19,6 +20,7 @@ use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use tokio::sync::broadcast;
 use tycho_types::boc::Boc;
 use tycho_types::boc::BocRepr;
 use tycho_types::cell::{CellBuilder, CellFamily, Store};
@@ -47,6 +49,7 @@ pub struct Node {
     pub global_libraries: HashMap<Hash256, GlobalLibraryEntry>,
     pub vm_global_libs_boc: Option<BocBytes>,
     pub vm_global_libs_dirty: bool,
+    pub streaming_events: Option<broadcast::Sender<StreamingCommitEvent>>,
 }
 
 pub const GIVER_ADDR: Addr = Addr {
@@ -262,6 +265,7 @@ impl Node {
             global_libraries: HashMap::new(),
             vm_global_libs_boc: None,
             vm_global_libs_dirty: true,
+            streaming_events: None,
         };
         node.rebuild_global_libraries_from_accounts()?;
         Ok(node)
@@ -1192,6 +1196,12 @@ impl Node {
         self.indexes
             .tx_by_block
             .insert(seqno, pending.tx_meta.tx_hash);
+
+        if let Some(events) = &self.streaming_events {
+            let _ = events.send(StreamingCommitEvent {
+                tx_hash: pending.tx_meta.tx_hash,
+            });
+        }
 
         // Enqueue out msgs
         for h in pending.out_msg_hashes {
