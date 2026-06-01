@@ -106,7 +106,11 @@ export const ContractCode: React.FC<ContractCodeProps> = ({
             <div className={styles.empty}>No compiler ABI registered for this contract.</div>
           )
         ) : (
-          <pre className={styles.code}>
+          <pre
+            className={`${styles.code} ${
+              activeTab === "base64" || activeTab === "hex" ? styles.codeWrap : ""
+            }`}
+          >
             <code>{codeData[activeTab]}</code>
           </pre>
         )}

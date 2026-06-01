@@ -50,8 +50,10 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
   const [jettonWalletsLoading, setJettonWalletsLoading] = useState(false)
   const [nftItemsLoading, setNftItemsLoading] = useState(false)
   const [holdersLoading, setHoldersLoading] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | undefined>()
+  const [transactionsLoading, setTransactionsLoading] = useState(true)
+  const [transactionsError, setTransactionsError] = useState<string | undefined>()
+  const [accountLoading, setAccountLoading] = useState(true)
+  const [accountError, setAccountError] = useState<string | undefined>()
 
   const formattedAddress = useMemo(
     () => normalizeAddress(address, addressFormat),
@@ -69,7 +71,7 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
 
   useEffect(() => {
     let isActive = true
-    const load = async () => {
+    const load = () => {
       if (!formattedAddress) {
         setAccountState(undefined)
         setAccountStateV3(undefined)
@@ -86,10 +88,19 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
         setJettonWalletsLoading(false)
         setNftItemsLoading(false)
         setHoldersLoading(false)
+        setTransactionsLoading(false)
+        setTransactionsError(undefined)
+        setAccountLoading(false)
+        setAccountError(undefined)
         return
       }
-      setLoading(true)
-      setError(undefined)
+      setAccountLoading(true)
+      setAccountError(undefined)
+      setTransactionsLoading(true)
+      setTransactionsError(undefined)
+      setAccountState(undefined)
+      setAccountStateV3(undefined)
+      setTransactions([])
       setJettonMaster(undefined)
       setJettonWalletAccount(undefined)
       setJettonWalletMaster(undefined)
@@ -102,42 +113,68 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
       setJettonWalletsLoading(false)
       setNftItemsLoading(false)
       setHoldersLoading(false)
-      try {
-        const [state, stateV3, txs] = await Promise.all([
-          client.getAddressInformation(formattedAddress),
-          client.getAccountStates([formattedAddress], false).catch(() => {}),
-          client.getTransactions(formattedAddress, ACCOUNT_TRANSACTION_HISTORY_LIMIT),
-        ])
-        const currentTokenInfo = getAccountTokenInfo(stateV3)
-        if (!isActive) return
-        setAccountState(state)
-        setAccountStateV3(stateV3 ? stateV3.accounts[0] : undefined)
-        setTransactions(txs)
-        setAccountTokenInfo(currentTokenInfo)
-      } catch (error) {
-        if (!isActive) return
-        setError(error instanceof Error ? error.message : "An error occurred")
-        setAccountState(undefined)
-        setAccountStateV3(undefined)
-        setTransactions([])
-        setJettonMaster(undefined)
-        setJettonWalletAccount(undefined)
-        setJettonWalletMaster(undefined)
-        setJettonWallets([])
-        setAccountTokenInfo([])
-        setCurrentNftItem(undefined)
-        setCurrentNftCollectionItems([])
-        setNftItems([])
-        setHolders([])
-        setJettonWalletsLoading(false)
-        setNftItemsLoading(false)
-        setHoldersLoading(false)
-      } finally {
-        if (isActive) setLoading(false)
+
+      const loadAccountState = async () => {
+        try {
+          const [state, stateV3] = await Promise.all([
+            client.getAddressInformation(formattedAddress),
+            client.getAccountStates([formattedAddress], false).catch(() => {}),
+          ])
+          const currentTokenInfo = getAccountTokenInfo(stateV3)
+          if (!isActive) return
+          setAccountState(state)
+          setAccountStateV3(stateV3 ? stateV3.accounts[0] : undefined)
+          setAccountTokenInfo(currentTokenInfo)
+        } catch (error) {
+          if (!isActive) return
+          setAccountError(error instanceof Error ? error.message : "An error occurred")
+          setAccountState(undefined)
+          setAccountStateV3(undefined)
+          setTransactions([])
+          setJettonMaster(undefined)
+          setJettonWalletAccount(undefined)
+          setJettonWalletMaster(undefined)
+          setJettonWallets([])
+          setAccountTokenInfo([])
+          setCurrentNftItem(undefined)
+          setCurrentNftCollectionItems([])
+          setNftItems([])
+          setHolders([])
+          setJettonWalletsLoading(false)
+          setNftItemsLoading(false)
+          setHoldersLoading(false)
+          setTransactionsLoading(false)
+        } finally {
+          if (isActive) setAccountLoading(false)
+        }
       }
+
+      const loadTransactions = async () => {
+        try {
+          const txs = await client.getTransactions(
+            formattedAddress,
+            ACCOUNT_TRANSACTION_HISTORY_LIMIT,
+          )
+          if (!isActive) return
+          setTransactions(txs)
+          setTransactionsError(undefined)
+        } catch (error) {
+          if (!isActive) return
+          console.error("Failed to fetch account transactions", error)
+          setTransactions([])
+          setTransactionsError(
+            error instanceof Error ? error.message : "Failed to load transactions",
+          )
+        } finally {
+          if (isActive) setTransactionsLoading(false)
+        }
+      }
+
+      void loadAccountState()
+      void loadTransactions()
     }
 
-    void load()
+    load()
     return () => {
       isActive = false
     }
@@ -173,6 +210,8 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
           setAccountStateV3(nextStateV3 ? nextStateV3.accounts[0] : undefined)
           setAccountTokenInfo(getAccountTokenInfo(nextStateV3))
           setTransactions(nextTransactions)
+          setTransactionsError(undefined)
+          setTransactionsLoading(false)
         } while (refreshQueued && isActive)
       } catch (error) {
         if (isActive) {
@@ -445,11 +484,9 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
 
   return (
     <div className={styles.container}>
-      {loading && <div className={styles.loading}>Loading...</div>}
+      {accountError && <div className={styles.error}>{accountError}</div>}
 
-      {error && <div className={styles.error}>{error}</div>}
-
-      {accountState && !loading && (
+      {formattedAddress && (
         <>
           <Breadcrumbs
             items={[
@@ -465,10 +502,12 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
               state={accountState}
               contractInterfaces={accountStateV3?.interfaces}
               jettonWallets={jettonWallets}
+              accountLoading={accountLoading}
+              assetsLoading={accountLoading || jettonWalletsLoading}
               client={client}
               onMoreAssetsClick={() => handleTabChange("tokens")}
             />
-            {tokenInfo && (
+            {accountState && tokenInfo && (
               <div className={styles.jettonInfo}>
                 <div className={styles.jettonHeader}>
                   {tokenInfo.jetton_content.image && (
@@ -574,7 +613,7 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
                 </div>
               </div>
             )}
-            {currentNftItem && (
+            {accountState && currentNftItem && (
               <div className={styles.jettonInfo}>
                 <div className={styles.jettonHeader}>
                   <img src={nftItemImage} alt={nftItemName} className={styles.jettonImage} />
@@ -643,7 +682,7 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
                 </div>
               </div>
             )}
-            {nftCollectionName && !currentNftItem && (
+            {accountState && nftCollectionName && !currentNftItem && (
               <div className={styles.jettonInfo}>
                 <div className={styles.jettonHeader}>
                   <img
@@ -700,6 +739,9 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
             tokensLoading={jettonWalletsLoading}
             nftsLoading={nftItemsLoading}
             holdersLoading={holdersLoading}
+            transactionsLoading={transactionsLoading}
+            transactionsError={transactionsError}
+            accountLoading={accountLoading}
             showHoldersTab={isJettonMasterAccount}
             client={client}
             onAddressClick={handleSearch}
@@ -709,7 +751,7 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
         </>
       )}
 
-      {!accountState && !loading && !error && formattedAddress && (
+      {!accountState && !accountLoading && !accountError && formattedAddress && (
         <div className={styles.empty}>No data found for this address.</div>
       )}
     </div>

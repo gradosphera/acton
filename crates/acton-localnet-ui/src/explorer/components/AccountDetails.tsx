@@ -51,7 +51,7 @@ const ContractCode = lazy(async () => {
 
 interface AccountDetailsProps {
   readonly transactions: Transaction[]
-  readonly accountState: FullAccountState
+  readonly accountState?: FullAccountState
   readonly accountCodeHash?: string
   readonly ownerAddress: string
   readonly jettonWallets: JettonWallet[]
@@ -61,6 +61,9 @@ interface AccountDetailsProps {
   readonly tokensLoading?: boolean
   readonly nftsLoading?: boolean
   readonly holdersLoading?: boolean
+  readonly transactionsLoading?: boolean
+  readonly transactionsError?: string
+  readonly accountLoading?: boolean
   readonly showHoldersTab?: boolean
   readonly client: TonClient
   readonly onAddressClick?: (addr: string) => void
@@ -83,6 +86,9 @@ export const AccountDetails: React.FC<AccountDetailsProps> = ({
   tokensLoading = false,
   nftsLoading = false,
   holdersLoading = false,
+  transactionsLoading = false,
+  transactionsError,
+  accountLoading = false,
   showHoldersTab = false,
   client,
   onAddressClick,
@@ -344,150 +350,211 @@ export const AccountDetails: React.FC<AccountDetailsProps> = ({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {paginatedTransactions.map(tx => {
-                const inMsg = tx.in_msg
-                const inMsgSrc = parseAddress(inMsg.source || "")
-                const inMsgDest = parseAddress(inMsg.destination || "")
-                const isInboundToAccount =
-                  inMsgDest && browsedAddr ? inMsgDest.equals(browsedAddr) : false
-                const isIncoming =
-                  isInboundToAccount &&
-                  browsedAddr !== undefined &&
-                  inMsgSrc !== undefined &&
-                  (!inMsgSrc.equals(browsedAddr) || tx.out_msgs.length === 0)
-
-                const inValue = BigInt(tx.in_msg.value || "0")
-                const outValue = tx.out_msgs.reduce(
-                  (acc, msg) => acc + BigInt(msg.value || "0"),
-                  BigInt(0),
-                )
-
-                const displayValue = isIncoming ? inValue : outValue
-                const valueStr = formatNano(displayValue.toString())
-
-                const address = isIncoming
-                  ? tx.in_msg.source || ""
-                  : tx.out_msgs.find(m => m.destination)?.destination || ""
-
-                const displayAddressFallback = isIncoming ? "External" : "Contract"
-
-                const displayMessage = isIncoming
-                  ? tx.in_msg
-                  : tx.out_msgs.find(m => m.destination) ||
-                    tx.out_msgs.find(m => m.opcode) ||
-                    tx.out_msgs[0]
-                const displayOpcode =
-                  resolveMessageName(displayMessage, messageNamesByAddress) ||
-                  displayMessage?.opcode ||
-                  undefined
-
-                const isAddressHovered =
-                  hoveredAddress && address ? isSameAddress(address, hoveredAddress) : false
-
-                return (
-                  <TableRow
-                    key={tx.hash}
-                    className={`${styles.row} ${styles.clickableRow}`}
-                    onClick={() => {
-                      const txHash = hashToHex(tx.hash)
-                      if (!txHash) return
-                      void navigate(`/explorer/tx/${txHash}`)
-                    }}
-                  >
+              {transactionsLoading ? (
+                Array.from({length: ITEMS_PER_PAGE}, (_, index) => (
+                  <TableRow key={`transaction-skeleton-${index}`} className={styles.skeletonRow}>
                     <TableCell className={`${styles.time} ${styles.timeColumn}`}>
-                      {formatTimeAgo(tx.utime, nowSeconds)}
+                      <div className={`${styles.skeleton} ${styles.historySkeletonTime}`} />
                     </TableCell>
                     <TableCell className={styles.actionColumn}>
                       <div className={styles.action}>
-                        {isIncoming ? (
-                          <ArrowDownLeft
-                            className={`${styles.actionIcon} ${styles.statusSuccess}`}
-                          />
-                        ) : (
-                          <ArrowUpRight className={`${styles.actionIcon} ${styles.statusFailed}`} />
-                        )}
-                        {displayOpcode ? (
-                          <span className={`${styles.actionText} ${styles.opcode}`}>
-                            {displayOpcode}
-                          </span>
-                        ) : (
-                          <span className={styles.actionText}>
-                            {isIncoming ? "Received TON" : "Sent TON"}
-                          </span>
-                        )}
+                        <div className={`${styles.skeleton} ${styles.historySkeletonIcon}`} />
+                        <div className={`${styles.skeleton} ${styles.historySkeletonAction}`} />
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className={styles.addressWrapper}>
-                        <button
-                          type="button"
-                          className={`${styles.address} ${isAddressHovered ? styles.addressHighlighted : ""}`}
-                          onClick={e => {
-                            e.stopPropagation()
-                            if (address) onAddressClick?.(address)
-                          }}
-                          onMouseEnter={() => address && setHoveredAddress(address)}
-                          onMouseLeave={() => setHoveredAddress(undefined)}
-                        >
-                          <AddressLabel address={address} fallback={displayAddressFallback} />
-                        </button>
-                      </div>
+                      <div className={`${styles.skeleton} ${styles.historySkeletonAddress}`} />
                     </TableCell>
                     <TableCell className={styles.valueContainer}>
-                      <div className={isIncoming ? styles.valuePositive : styles.valueNegative}>
-                        {isIncoming ? "+" : "-"} {Number.parseFloat(valueStr).toLocaleString()} TON
-                      </div>
+                      <div className={`${styles.skeleton} ${styles.historySkeletonValue}`} />
                     </TableCell>
                   </TableRow>
-                )
-              })}
+                ))
+              ) : transactionsError ? (
+                <TableRow className={styles.emptyRow}>
+                  <TableCell colSpan={4} className={styles.emptyCell}>
+                    <div className={`${styles.tableState} ${styles.tableStateError}`}>
+                      Failed to load transactions: {transactionsError}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : paginatedTransactions.length === 0 ? (
+                <TableRow className={styles.emptyRow}>
+                  <TableCell colSpan={4} className={styles.emptyCell}>
+                    <div className={styles.tableState}>No transactions found.</div>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                paginatedTransactions.map(tx => {
+                  const inMsg = tx.in_msg
+                  const inMsgSrc = parseAddress(inMsg.source || "")
+                  const inMsgDest = parseAddress(inMsg.destination || "")
+                  const isInboundToAccount =
+                    inMsgDest && browsedAddr ? inMsgDest.equals(browsedAddr) : false
+                  const isIncoming =
+                    isInboundToAccount &&
+                    browsedAddr !== undefined &&
+                    inMsgSrc !== undefined &&
+                    (!inMsgSrc.equals(browsedAddr) || tx.out_msgs.length === 0)
+
+                  const inValue = BigInt(tx.in_msg.value || "0")
+                  const outValue = tx.out_msgs.reduce(
+                    (acc, msg) => acc + BigInt(msg.value || "0"),
+                    BigInt(0),
+                  )
+
+                  const displayValue = isIncoming ? inValue : outValue
+                  const valueStr = formatNano(displayValue.toString())
+
+                  const address = isIncoming
+                    ? tx.in_msg.source || ""
+                    : tx.out_msgs.find(m => m.destination)?.destination || ""
+
+                  const displayAddressFallback = isIncoming ? "External" : "Contract"
+
+                  const displayMessage = isIncoming
+                    ? tx.in_msg
+                    : tx.out_msgs.find(m => m.destination) ||
+                      tx.out_msgs.find(m => m.opcode) ||
+                      tx.out_msgs[0]
+                  const displayOpcode =
+                    resolveMessageName(displayMessage, messageNamesByAddress) ||
+                    displayMessage?.opcode ||
+                    undefined
+
+                  const isAddressHovered =
+                    hoveredAddress && address ? isSameAddress(address, hoveredAddress) : false
+
+                  return (
+                    <TableRow
+                      key={tx.hash}
+                      className={`${styles.row} ${styles.clickableRow}`}
+                      onClick={() => {
+                        const txHash = hashToHex(tx.hash)
+                        if (!txHash) return
+                        void navigate(`/explorer/tx/${txHash}`)
+                      }}
+                    >
+                      <TableCell className={`${styles.time} ${styles.timeColumn}`}>
+                        {formatTimeAgo(tx.utime, nowSeconds)}
+                      </TableCell>
+                      <TableCell className={styles.actionColumn}>
+                        <div className={styles.action}>
+                          {isIncoming ? (
+                            <ArrowDownLeft
+                              className={`${styles.actionIcon} ${styles.statusSuccess}`}
+                            />
+                          ) : (
+                            <ArrowUpRight
+                              className={`${styles.actionIcon} ${styles.statusFailed}`}
+                            />
+                          )}
+                          {displayOpcode ? (
+                            <span className={`${styles.actionText} ${styles.opcode}`}>
+                              {displayOpcode}
+                            </span>
+                          ) : (
+                            <span className={styles.actionText}>
+                              {isIncoming ? "Received TON" : "Sent TON"}
+                            </span>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className={styles.addressWrapper}>
+                          <button
+                            type="button"
+                            className={`${styles.address} ${isAddressHovered ? styles.addressHighlighted : ""}`}
+                            onClick={e => {
+                              e.stopPropagation()
+                              if (address) onAddressClick?.(address)
+                            }}
+                            onMouseEnter={() => address && setHoveredAddress(address)}
+                            onMouseLeave={() => setHoveredAddress(undefined)}
+                          >
+                            <AddressLabel address={address} fallback={displayAddressFallback} />
+                          </button>
+                        </div>
+                      </TableCell>
+                      <TableCell className={styles.valueContainer}>
+                        <div
+                          className={`${isIncoming ? styles.valuePositive : styles.valueNegative} ${styles.historyValue}`}
+                        >
+                          {isIncoming ? "+" : "-"} {Number.parseFloat(valueStr).toLocaleString()}{" "}
+                          TON
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })
+              )}
             </TableBody>
           </Table>
 
-          {totalPages > 1 && (
+          {transactionsLoading ? (
             <div className={styles.pagination}>
-              <div className={styles.paginationControls}>
-                <button
-                  type="button"
-                  className={styles.paginationButton}
-                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                  disabled={safeCurrentPage === 1}
-                  aria-label="Previous page"
-                >
-                  <ChevronLeft size={16} />
-                  Previous
-                </button>
-                {paginationItems.map(item =>
-                  typeof item === "number" ? (
-                    <button
-                      key={item}
-                      type="button"
-                      className={`${styles.paginationPage} ${
-                        item === safeCurrentPage ? styles.paginationPageActive : ""
-                      }`}
-                      onClick={() => setCurrentPage(item)}
-                      aria-current={item === safeCurrentPage ? "page" : undefined}
-                    >
-                      {item}
-                    </button>
-                  ) : (
-                    <span key={item} className={styles.paginationEllipsis} aria-hidden="true">
-                      <MoreHorizontal size={16} />
-                    </span>
-                  )
-                )}
-                <button
-                  type="button"
-                  className={styles.paginationButton}
-                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                  disabled={safeCurrentPage === totalPages}
-                  aria-label="Next page"
-                >
-                  Next
-                  <ChevronRight size={16} />
-                </button>
+              <div className={styles.paginationControls} aria-hidden="true">
+                <div
+                  className={`${styles.paginationButton} ${styles.paginationSkeletonButton} ${styles.skeleton}`}
+                />
+                {Array.from({length: 5}, (_, index) => (
+                  <div
+                    key={`pagination-skeleton-${index}`}
+                    className={`${styles.paginationPage} ${styles.paginationSkeletonPage} ${styles.skeleton}`}
+                  />
+                ))}
+                <div
+                  className={`${styles.paginationButton} ${styles.paginationSkeletonButton} ${styles.skeleton}`}
+                />
               </div>
             </div>
+          ) : (
+            !transactionsError &&
+            totalPages > 1 && (
+              <div className={styles.pagination}>
+                <div className={styles.paginationControls}>
+                  <button
+                    type="button"
+                    className={styles.paginationButton}
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={safeCurrentPage === 1}
+                    aria-label="Previous page"
+                  >
+                    <ChevronLeft size={16} />
+                    Previous
+                  </button>
+                  {paginationItems.map(item =>
+                    typeof item === "number" ? (
+                      <button
+                        key={item}
+                        type="button"
+                        className={`${styles.paginationPage} ${
+                          item === safeCurrentPage ? styles.paginationPageActive : ""
+                        }`}
+                        onClick={() => setCurrentPage(item)}
+                        aria-current={item === safeCurrentPage ? "page" : undefined}
+                      >
+                        {item}
+                      </button>
+                    ) : (
+                      <span key={item} className={styles.paginationEllipsis} aria-hidden="true">
+                        <MoreHorizontal size={16} />
+                      </span>
+                    ),
+                  )}
+                  <button
+                    type="button"
+                    className={styles.paginationButton}
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={safeCurrentPage === totalPages}
+                    aria-label="Next page"
+                  >
+                    Next
+                    <ChevronRight size={16} />
+                  </button>
+                </div>
+              </div>
+            )
           )}
         </CardContent>
       ) : activeTab === "tokens" ? (
@@ -578,14 +645,23 @@ export const AccountDetails: React.FC<AccountDetailsProps> = ({
           )}
         </CardContent>
       ) : (
-        <Suspense fallback={<div className={styles.emptyState}>Loading contract code...</div>}>
-          <ContractCode
-            codeBoc={accountState.code}
-            compilerAbi={compilerAbi}
-            compilerAbiLoading={compilerAbiLoading}
-            compilerAbiError={compilerAbiError}
-          />
-        </Suspense>
+        <CardContent className={styles.tokensContent}>
+          {accountLoading && !accountState ? (
+            <div className={styles.contractSkeleton}>
+              <div className={`${styles.skeleton} ${styles.contractSkeletonTabs}`} />
+              <div className={`${styles.skeleton} ${styles.contractSkeletonBlock}`} />
+            </div>
+          ) : (
+            <Suspense fallback={<div className={styles.emptyState}>Loading contract code...</div>}>
+              <ContractCode
+                codeBoc={accountState?.code ?? ""}
+                compilerAbi={compilerAbi}
+                compilerAbiLoading={compilerAbiLoading}
+                compilerAbiError={compilerAbiError}
+              />
+            </Suspense>
+          )}
+        </CardContent>
       )}
     </Card>
   )

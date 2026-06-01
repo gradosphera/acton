@@ -13,9 +13,11 @@ import {formatAddress, formatNano, normalizeAddress} from "./utils"
 
 interface AccountInfoProps {
   readonly address: string
-  readonly state: FullAccountState
+  readonly state?: FullAccountState
   readonly contractInterfaces?: readonly string[]
   readonly jettonWallets: JettonWallet[]
+  readonly accountLoading?: boolean
+  readonly assetsLoading?: boolean
   readonly client: TonClient
   readonly onMoreAssetsClick?: () => void
 }
@@ -25,13 +27,15 @@ export const AccountInfo: React.FC<AccountInfoProps> = ({
   state,
   contractInterfaces,
   jettonWallets,
+  accountLoading = false,
+  assetsLoading = false,
   client,
   onMoreAssetsClick,
 }) => {
   const [isEditing, setIsEditing] = useState(false)
   const [customName, setCustomName] = useState<string | undefined>()
   const [editValue, setEditValue] = useState("")
-  const [loading, setLoading] = useState(false)
+  const [renameSaving, setRenameSaving] = useState(false)
   const editInputRef = useRef<HTMLInputElement>(null)
   const {setAddressName} = useAddressBook()
   const resolvedName = useAddressName(address)
@@ -39,16 +43,37 @@ export const AccountInfo: React.FC<AccountInfoProps> = ({
   const displayAddress = normalizeAddress(address, addressFormat)
 
   const [firstMaster, setFirstMaster] = useState<JettonMaster | undefined>()
+  const [firstMasterLoading, setFirstMasterLoading] = useState(false)
 
   const [copied, setCopied] = useState(false)
 
   useEffect(() => {
+    let isActive = true
+
     if (jettonWallets.length > 0) {
-      void client.getJettonMasters([jettonWallets[0].jetton]).then(masters => {
-        setFirstMaster(masters[0])
-      })
+      setFirstMaster(undefined)
+      setFirstMasterLoading(true)
+      void client
+        .getJettonMasters([jettonWallets[0].jetton])
+        .then(masters => {
+          if (!isActive) return
+          setFirstMaster(masters[0])
+        })
+        .catch(error => {
+          if (isActive) {
+            console.error("Failed to fetch first jetton master", error)
+          }
+        })
+        .finally(() => {
+          if (isActive) setFirstMasterLoading(false)
+        })
     } else {
       setFirstMaster(undefined)
+      setFirstMasterLoading(false)
+    }
+
+    return () => {
+      isActive = false
     }
   }, [jettonWallets, client])
 
@@ -76,7 +101,7 @@ export const AccountInfo: React.FC<AccountInfoProps> = ({
 
   const handleSave = async () => {
     const nextName = editValue.trim()
-    setLoading(true)
+    setRenameSaving(true)
     try {
       await setAddressName(address, nextName)
       setCustomName(nextName || undefined)
@@ -84,11 +109,11 @@ export const AccountInfo: React.FC<AccountInfoProps> = ({
     } catch (error) {
       console.error("Failed to save name:", error)
     } finally {
-      setLoading(false)
+      setRenameSaving(false)
     }
   }
 
-  const tonBalance = formatNano(state.balance)
+  const tonBalance = state ? formatNano(state.balance) : undefined
 
   const copyToClipboard = () => {
     void navigator.clipboard.writeText(displayAddress)
@@ -97,6 +122,10 @@ export const AccountInfo: React.FC<AccountInfoProps> = ({
 
   const contractTypeLabel = getContractTypeLabel(contractInterfaces)
   const isNameUnchanged = editValue.trim() === (customName || "")
+  const statePending = !state
+  const stateLoading = accountLoading || statePending
+  const assetMetadataLoading = jettonWallets.length > 0 && firstMasterLoading
+  const showAssetsSkeleton = assetsLoading || stateLoading || assetMetadataLoading
 
   return (
     <Card className={styles.card}>
@@ -130,9 +159,9 @@ export const AccountInfo: React.FC<AccountInfoProps> = ({
                   onClick={() => {
                     void handleSave()
                   }}
-                  disabled={loading || isNameUnchanged}
+                  disabled={renameSaving || isNameUnchanged}
                 >
-                  {loading ? "Saving..." : "Save"}
+                  {renameSaving ? "Saving..." : "Save"}
                 </button>
                 <button
                   type="button"
@@ -160,24 +189,26 @@ export const AccountInfo: React.FC<AccountInfoProps> = ({
                   formatAddress(displayAddress, false, addressFormat)
                 )}
               </div>
-              <button
-                type="button"
-                className={styles.iconButton}
-                onClick={handleStartEdit}
-                title="Rename address"
-                aria-label="Rename address"
-              >
-                <Edit2 size={16} />
-              </button>
-              <button
-                type="button"
-                className={styles.iconButton}
-                onClick={copyToClipboard}
-                title={copied ? "Copied" : "Copy address"}
-                aria-label={copied ? "Copied" : "Copy address"}
-              >
-                {copied ? <Check size={16} className={styles.saveIcon} /> : <Copy size={16} />}
-              </button>
+              <div className={styles.addressActions}>
+                <button
+                  type="button"
+                  className={styles.iconButton}
+                  onClick={handleStartEdit}
+                  title="Rename address"
+                  aria-label="Rename address"
+                >
+                  <Edit2 size={16} />
+                </button>
+                <button
+                  type="button"
+                  className={styles.iconButton}
+                  onClick={copyToClipboard}
+                  title={copied ? "Copied" : "Copy address"}
+                  aria-label={copied ? "Copied" : "Copy address"}
+                >
+                  {copied ? <Check size={16} className={styles.saveIcon} /> : <Copy size={16} />}
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -185,11 +216,20 @@ export const AccountInfo: React.FC<AccountInfoProps> = ({
       <CardContent className={styles.grid}>
         <div className={styles.section}>
           <div className={styles.label}>Balance</div>
-          <div className={styles.value}>{tonBalance} TON</div>
+          {stateLoading ? (
+            <div className={`${styles.skeleton} ${styles.skeletonValue}`} />
+          ) : (
+            <div className={styles.value}>{tonBalance} TON</div>
+          )}
         </div>
         <div className={styles.section}>
           <div className={styles.label}>Assets</div>
-          {jettonWallets.length > 0 ? (
+          {showAssetsSkeleton ? (
+            <div className={styles.assetRow}>
+              <div className={`${styles.skeleton} ${styles.skeletonIcon}`} />
+              <div className={`${styles.skeleton} ${styles.skeletonValue}`} />
+            </div>
+          ) : jettonWallets.length > 0 ? (
             <div className={styles.assetRow}>
               {firstMaster?.jetton_content?.image ? (
                 <img
@@ -233,14 +273,21 @@ export const AccountInfo: React.FC<AccountInfoProps> = ({
         </div>
         <div className={styles.section}>
           <div className={styles.label}>Details</div>
-          <div className={styles.detailsGrid}>
-            <span
-              className={`${styles.status} ${state.state === "active" ? "" : styles.statusUninitialized}`}
-            >
-              {state.state}
-            </span>
-            <span className={styles.tag}>{contractTypeLabel}</span>
-          </div>
+          {stateLoading ? (
+            <div className={styles.detailsGrid}>
+              <div className={`${styles.skeleton} ${styles.skeletonTag}`} />
+              <div className={`${styles.skeleton} ${styles.skeletonTagWide}`} />
+            </div>
+          ) : state ? (
+            <div className={styles.detailsGrid}>
+              <span
+                className={`${styles.status} ${state.state === "active" ? "" : styles.statusUninitialized}`}
+              >
+                {state.state}
+              </span>
+              <span className={styles.tag}>{contractTypeLabel}</span>
+            </div>
+          ) : undefined}
         </div>
       </CardContent>
     </Card>

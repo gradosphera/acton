@@ -61,6 +61,13 @@
   max-height: 600px;
 }
 
+.codeWrap {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+  overflow-x: hidden;
+}
+
 .empty {
   text-align: center;
   padding: var(--spacing-xl);
