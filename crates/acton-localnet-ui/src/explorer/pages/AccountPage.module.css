@@ -150,3 +150,29 @@
     flex-direction: column;
   }
 }
+
+@media (max-width: 520px) {
+  .container {
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .jettonInfo {
+    padding: 16px;
+    border-radius: 14px;
+  }
+
+  .jettonRow {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+    min-height: 0;
+    padding: 10px 12px;
+  }
+
+  .jettonValue {
+    max-width: 100%;
+    text-align: left;
+    overflow-wrap: anywhere;
+  }
+}

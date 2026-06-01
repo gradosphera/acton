@@ -33,3 +33,10 @@
 .current:hover {
   text-decoration: none;
 }
+
+@media (max-width: 520px) {
+  .breadcrumbs {
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+}

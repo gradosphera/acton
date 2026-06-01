@@ -30,14 +30,24 @@ export const DashboardSearch: React.FC<DashboardSearchProps> = ({client}) => {
   const searchAnimationRef = React.useRef<number | undefined>(undefined)
 
   const measureSearchOrigin = React.useCallback(() => {
-    const rect = searchButtonRef.current?.getBoundingClientRect()
+    const searchButton = searchButtonRef.current
+    const rect = searchButton?.getBoundingClientRect()
     if (!rect) {
       return
     }
 
+    let originLeft = rect.left
+    let originTop = rect.top
+    const sidebar = searchButton?.closest<HTMLElement>(`.${styles.sidebar}`)
+    if (sidebar && globalThis.matchMedia("(max-width: 920px)").matches) {
+      const sidebarRect = sidebar.getBoundingClientRect()
+      originLeft = rect.left - sidebarRect.left
+      originTop = rect.top - sidebarRect.top
+    }
+
     setSearchOriginStyle({
-      "--search-origin-left": `${rect.left}px`,
-      "--search-origin-top": `${rect.top}px`,
+      "--search-origin-left": `${originLeft}px`,
+      "--search-origin-top": `${originTop}px`,
       "--search-origin-width": `${rect.width}px`,
       "--search-origin-height": `${rect.height}px`,
     })
@@ -101,9 +111,9 @@ export const DashboardSearch: React.FC<DashboardSearchProps> = ({client}) => {
     }
 
     const handleResize = () => measureSearchOrigin()
-    window.addEventListener("resize", handleResize)
+    globalThis.addEventListener("resize", handleResize)
     return () => {
-      window.removeEventListener("resize", handleResize)
+      globalThis.removeEventListener("resize", handleResize)
     }
   }, [isSearchMounted, measureSearchOrigin])
 

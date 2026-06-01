@@ -23,3 +23,19 @@
   height: 100%;
   min-height: 0;
 }
+
+@media (max-width: 920px) {
+  .apiReferencePage {
+    height: calc(100dvh - 56px);
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .apiReferencePage > div,
+  .apiReferencePage :global(.scalar-app),
+  .apiReferencePage :global(.scalar-api-reference) {
+    height: auto;
+    min-height: 100%;
+  }
+}

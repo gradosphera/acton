@@ -328,3 +328,18 @@
     height: 500px;
   }
 }
+
+@media (max-width: 520px) {
+  .container {
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .content {
+    gap: 12px;
+  }
+
+  .overviewCard {
+    margin-top: 4px;
+  }
+}

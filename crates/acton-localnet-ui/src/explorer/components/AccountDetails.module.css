@@ -463,3 +463,57 @@ th.valueContainer {
   border-color: transparent;
   cursor: default;
 }
+
+@media (max-width: 720px) {
+  .tabs {
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tab {
+    flex: 0 0 auto;
+  }
+
+  .historyContent,
+  .tokensContent {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .historyContent table,
+  .tokensContent table {
+    min-width: 620px;
+  }
+
+  .pagination {
+    justify-content: flex-start;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+@media (max-width: 520px) {
+  .tableCard {
+    border-radius: 14px !important;
+  }
+
+  .tabs {
+    padding: 6px;
+  }
+
+  .tab {
+    min-height: 32px;
+    padding: 0 9px;
+    gap: 6px;
+  }
+
+  .historyContent table,
+  .tokensContent table {
+    min-width: 580px;
+  }
+}
