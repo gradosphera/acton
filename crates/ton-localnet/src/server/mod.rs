@@ -8,6 +8,7 @@ use axum::extract::FromRef;
 use serde::Serialize;
 use std::collections::HashSet;
 use std::sync::Arc;
+use tokio::sync::broadcast;
 
 #[derive(Clone, Debug, Serialize)]
 pub struct StartupWallet {
@@ -25,6 +26,7 @@ pub struct ServerState {
     pub node: Arc<Localnet>,
     pub startup_wallets: Arc<Vec<StartupWallet>>,
     pub state_source: Arc<StateSourceInfo>,
+    pub shutdown: ShutdownSignal,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -32,6 +34,28 @@ pub struct StateSourceInfo {
     pub state_source: &'static str,
     pub fork_network: Option<String>,
     pub fork_block_number: Option<u64>,
+}
+
+#[derive(Clone)]
+pub struct ShutdownSignal {
+    tx: broadcast::Sender<()>,
+}
+
+impl ShutdownSignal {
+    fn new() -> Self {
+        // Streaming handlers are long-lived; graceful shutdown waits until they exit.
+        let (tx, _) = broadcast::channel(1);
+        Self { tx }
+    }
+
+    #[must_use]
+    pub fn subscribe(&self) -> broadcast::Receiver<()> {
+        self.tx.subscribe()
+    }
+
+    fn notify(&self) {
+        let _ = self.tx.send(());
+    }
 }
 
 impl FromRef<ServerState> for Arc<Localnet> {
@@ -49,6 +73,12 @@ impl FromRef<ServerState> for Arc<Vec<StartupWallet>> {
 impl FromRef<ServerState> for Arc<StateSourceInfo> {
     fn from_ref(state: &ServerState) -> Self {
         state.state_source.clone()
+    }
+}
+
+impl FromRef<ServerState> for ShutdownSignal {
+    fn from_ref(state: &ServerState) -> Self {
+        state.shutdown.clone()
     }
 }
 
@@ -82,11 +112,13 @@ pub async fn run_server(node: Arc<Localnet>, args: ServerArgs) -> anyhow::Result
         fork_network: fork_network.clone(),
         fork_block_number,
     };
+    let shutdown = ShutdownSignal::new();
     let app = router::create_router(
         ServerState {
             node,
             startup_wallets: Arc::new(startup_wallets),
             state_source: Arc::new(state_source),
+            shutdown: shutdown.clone(),
         },
         rate_limit_rps,
     );
@@ -111,9 +143,10 @@ pub async fn run_server(node: Arc<Localnet>, args: ServerArgs) -> anyhow::Result
         );
     }
     axum::serve(listener, app)
-        .with_graceful_shutdown(async {
+        .with_graceful_shutdown(async move {
             if tokio::signal::ctrl_c().await.is_ok() {
                 println!("  {} Localnet server", "Stopping".yellow().bold());
+                shutdown.notify();
             }
         })
         .await?;

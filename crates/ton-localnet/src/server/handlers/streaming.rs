@@ -1,4 +1,5 @@
 use crate::localnet::Localnet;
+use crate::server::ShutdownSignal;
 use crate::streaming::{
     StreamingEnvelope, StreamingErrorResponse, StreamingOperation, StreamingStatusResponse,
     StreamingSubscribeRequest, StreamingSubscription, StreamingUnsubscribeRequest,
@@ -19,10 +20,14 @@ use axum::{
 };
 use serde::de::DeserializeOwned;
 use std::{convert::Infallible, sync::Arc, time::Duration};
-use tokio::sync::mpsc;
+use tokio::sync::{broadcast, mpsc};
 use tokio_stream::wrappers::ReceiverStream;
 
-pub async fn streaming_sse(State(node): State<Arc<Localnet>>, body: Bytes) -> Response {
+pub async fn streaming_sse(
+    State(node): State<Arc<Localnet>>,
+    State(shutdown): State<ShutdownSignal>,
+    body: Bytes,
+) -> Response {
     let payload = match serde_json::from_slice::<StreamingSubscribeRequest>(&body) {
         Ok(payload) => payload,
         Err(e) => return streaming_bad_request(None, format!("invalid subscription request: {e}")),
@@ -43,7 +48,12 @@ pub async fn streaming_sse(State(node): State<Arc<Localnet>>, body: Bytes) -> Re
         )))
         .await;
 
-    tokio::spawn(stream_sse_notifications(node, subscription, tx));
+    tokio::spawn(stream_sse_notifications(
+        node,
+        subscription,
+        tx,
+        shutdown.subscribe(),
+    ));
 
     Sse::new(ReceiverStream::new(rx))
         .keep_alive(
@@ -56,23 +66,28 @@ pub async fn streaming_sse(State(node): State<Arc<Localnet>>, body: Bytes) -> Re
 
 pub async fn streaming_ws(
     State(node): State<Arc<Localnet>>,
+    State(shutdown): State<ShutdownSignal>,
     ws: WebSocketUpgrade,
 ) -> impl IntoResponse {
-    ws.on_upgrade(move |socket| handle_ws(socket, node))
+    ws.on_upgrade(move |socket| handle_ws(socket, node, shutdown.subscribe()))
 }
 
 async fn stream_sse_notifications(
     node: Arc<Localnet>,
     subscription: StreamingSubscription,
     tx: mpsc::Sender<Result<Event, Infallible>>,
+    mut shutdown: broadcast::Receiver<()>,
 ) {
     let mut commits = node.subscribe_streaming_events();
 
     loop {
-        let commit = match commits.recv().await {
-            Ok(commit) => commit,
-            Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
-            Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+        let commit = tokio::select! {
+            _ = shutdown.recv() => break,
+            commit = commits.recv() => match commit {
+                Ok(commit) => commit,
+                Err(broadcast::error::RecvError::Lagged(_)) => continue,
+                Err(broadcast::error::RecvError::Closed) => break,
+            },
         };
 
         let notifications = match notifications_for_commit(&node, &subscription, commit).await {
@@ -95,12 +110,19 @@ async fn stream_sse_notifications(
     }
 }
 
-async fn handle_ws(mut socket: WebSocket, node: Arc<Localnet>) {
+async fn handle_ws(
+    mut socket: WebSocket,
+    node: Arc<Localnet>,
+    mut shutdown: broadcast::Receiver<()>,
+) {
     let mut subscription = StreamingSubscription::default();
     let mut commits = node.subscribe_streaming_events();
 
     loop {
         tokio::select! {
+            _ = shutdown.recv() => {
+                break;
+            }
             message = socket.recv() => {
                 let Some(message) = message else {
                     break;
@@ -120,8 +142,8 @@ async fn handle_ws(mut socket: WebSocket, node: Arc<Localnet>) {
             commit = commits.recv(), if !subscription.event_types.is_empty() => {
                 let commit = match commit {
                     Ok(commit) => commit,
-                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
-                    Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                    Err(broadcast::error::RecvError::Lagged(_)) => continue,
+                    Err(broadcast::error::RecvError::Closed) => break,
                 };
 
                 let notifications = match notifications_for_commit(&node, &subscription, commit).await {
