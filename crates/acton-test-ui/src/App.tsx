@@ -480,7 +480,9 @@ export const App: React.FC = () => {
 
         <div className={styles.mainPanel}>
           {activeView === "profile" && gasProfile !== undefined ? (
-            <GasProfile profile={gasProfile} projectRoot={projectRoot} />
+            <div className={styles.profileView}>
+              <GasProfile profile={gasProfile} projectRoot={projectRoot} />
+            </div>
           ) : activeView === "coverage" && coverageLcov !== undefined ? (
             <Coverage lcov={coverageLcov} projectRoot={projectRoot} />
           ) : selectedTest ? (

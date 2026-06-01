@@ -1,5 +1,5 @@
 .gasProfile {
-  height: 100%;
+  min-height: 100%;
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -10,12 +10,11 @@
 .workspace {
   min-height: 0;
   flex: 1;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .viewer {
   min-height: 0;
-  height: 100%;
   border: 0;
   border-radius: 0;
   background-color: var(--bg-color);
@@ -69,14 +68,15 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .flameWrap {
   position: relative;
   z-index: 1;
-  min-height: 220px;
-  max-height: 58%;
+  flex: 0 0 auto;
+  min-height: 120px;
+  max-height: min(280px, 42vh);
   overflow: auto;
   background-color: transparent;
 }
@@ -148,9 +148,8 @@
   flex-direction: column;
   width: fit-content;
   max-width: calc(100% - var(--spacing-md));
-  max-height: calc(100% - 220px - var(--spacing-md));
   min-height: 0;
-  overflow: hidden;
+  overflow: visible;
   margin-top: var(--spacing-md);
   margin-left: var(--spacing-md);
   border: 1px solid var(--border-color);
@@ -221,10 +220,6 @@
 }
 
 .instructionStats {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  min-height: 0;
   margin-top: var(--spacing-sm);
   padding-top: var(--spacing-xs);
   border-top: 1px solid var(--border-color);
@@ -329,10 +324,6 @@
 }
 
 .instructionStatsTable {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  min-height: 0;
   width: 100%;
   margin-top: var(--spacing-xs);
   margin-bottom: 0;
@@ -343,38 +334,8 @@
   font-feature-settings: "tnum";
 }
 
-.instructionStatsTable thead,
-.instructionStatsTable tbody,
-.instructionStatsTable tfoot {
-  display: block;
-}
-
-.instructionStatsTable thead,
-.instructionStatsTable tfoot {
-  flex: 0 0 auto;
-}
-
-.instructionStatsTable tbody {
-  flex: 1 1 auto;
-  min-height: 0;
-  max-height: min(300px, 34vh);
-  overflow-y: auto;
-}
-
-.instructionStatsTable tr {
-  display: grid;
-  grid-template-columns:
-    minmax(120px, 1fr)
-    minmax(8ch, 10ch)
-    minmax(6ch, 7ch)
-    minmax(10ch, 13ch);
-  column-gap: var(--spacing-md);
-  align-items: baseline;
-}
-
 .instructionStatsTable th,
 .instructionStatsTable td {
-  display: block;
   padding: 1px 0;
   text-align: right;
   white-space: nowrap;
@@ -397,7 +358,7 @@
 
 .instructionStatsTable th + th,
 .instructionStatsTable td + td {
-  padding-left: 0;
+  padding-left: var(--spacing-md);
 }
 
 .instructionStatsTable tfoot td {
@@ -481,10 +442,6 @@
   .instructionStatsTable th:nth-child(4),
   .instructionStatsTable td:nth-child(4) {
     display: none;
-  }
-
-  .instructionStatsTable tr {
-    grid-template-columns: minmax(120px, 1fr) minmax(8ch, 10ch);
   }
 
   .details {
