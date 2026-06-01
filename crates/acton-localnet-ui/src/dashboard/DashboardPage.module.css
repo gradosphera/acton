@@ -1093,6 +1093,47 @@
   line-height: 1.5;
 }
 
+.modeToggle {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  margin: 0 0 22px;
+  border: 1px solid var(--litenode-border-subtle);
+  border-radius: 12px;
+  background: var(--litenode-surface-subtle);
+}
+
+.modeToggleButton {
+  height: 34px;
+  min-width: 96px;
+  padding: 0 13px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--litenode-text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color 0.16s ease,
+    color 0.16s ease;
+}
+
+.modeToggleButton:hover {
+  color: var(--litenode-text);
+}
+
+.modeToggleButtonActive {
+  background: var(--litenode-surface);
+  color: var(--litenode-text-strong);
+  box-shadow: inset 0 0 0 1px var(--litenode-border);
+}
+
 .fieldBlock {
   display: flex;
   flex-direction: column;
