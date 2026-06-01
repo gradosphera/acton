@@ -88,6 +88,7 @@ pub struct ServerArgs {
     pub fork_network: Option<String>,
     pub fork_block_number: Option<u64>,
     pub rate_limit_rps: Option<u32>,
+    pub response_delay_ms: Option<u64>,
     pub startup_wallets: Vec<StartupWallet>,
 }
 
@@ -98,6 +99,7 @@ pub async fn run_server(node: Arc<Localnet>, args: ServerArgs) -> anyhow::Result
         fork_network,
         fork_block_number,
         rate_limit_rps,
+        response_delay_ms,
         startup_wallets,
     } = args;
 
@@ -121,6 +123,7 @@ pub async fn run_server(node: Arc<Localnet>, args: ServerArgs) -> anyhow::Result
             shutdown: shutdown.clone(),
         },
         rate_limit_rps,
+        response_delay_ms,
     );
 
     let address = format!("127.0.0.1:{port}");
@@ -140,6 +143,13 @@ pub async fn run_server(node: Arc<Localnet>, args: ServerArgs) -> anyhow::Result
             "    {} API requests to {} req/s",
             "Limiting".yellow().bold(),
             limit
+        );
+    }
+    if let Some(delay_ms) = response_delay_ms.filter(|delay_ms| *delay_ms > 0) {
+        println!(
+            "    {} API v2/v3/emulate responses by {}ms",
+            "Delaying".yellow().bold(),
+            delay_ms
         );
     }
     axum::serve(listener, app)

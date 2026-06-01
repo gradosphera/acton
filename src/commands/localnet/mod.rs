@@ -36,6 +36,7 @@ pub async fn localnet_start_cmd(
     fork_block_number: Option<u64>,
     accounts: Vec<String>,
     rate_limit: Option<u32>,
+    response_delay_ms: Option<u64>,
     load_state: Option<String>,
     dump_state: Option<String>,
 ) -> anyhow::Result<()> {
@@ -78,6 +79,7 @@ pub async fn localnet_start_cmd(
             fork_network,
             fork_block_number,
             rate_limit_rps: rate_limit,
+            response_delay_ms,
             startup_wallets,
         },
     )

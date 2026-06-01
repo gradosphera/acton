@@ -476,6 +476,12 @@
           "type": "integer",
           "format": "uint32",
           "minimum": 0.0
+        },
+        "response-delay-ms": {
+          "description": "Response delay in milliseconds for `Localnet` `/api/v2`, `/api/v3`, and `/api/emulate/v1` endpoints",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
         }
       }
     },

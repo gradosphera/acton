@@ -16,7 +16,9 @@ use super::handlers::{
 use crate::server::ServerState;
 use axum::{
     Json, Router,
+    extract::Request,
     http::{HeaderValue, Method, StatusCode, request::Parts},
+    middleware::{self, Next},
     response::{IntoResponse, Response},
     routing::{get, post},
 };
@@ -26,6 +28,8 @@ use serde_json::json;
 #[cfg(debug_assertions)]
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
+use tokio::time::sleep;
 use tower_governor::governor::GovernorConfigBuilder;
 use tower_governor::key_extractor::GlobalKeyExtractor;
 use tower_governor::{GovernorError, GovernorLayer};
@@ -38,8 +42,12 @@ use tower_http::trace::TraceLayer;
 #[cfg(not(debug_assertions))]
 static UI_DIR: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/../acton-localnet-ui/dist");
 
-pub fn create_router(state: ServerState, rate_limit_rps: Option<u32>) -> Router {
-    let api_v2_router = Router::new()
+pub fn create_router(
+    state: ServerState,
+    rate_limit_rps: Option<u32>,
+    response_delay_ms: Option<u64>,
+) -> Router {
+    let mut api_v2_router = Router::new()
         .route("/v2", post(json_rpc))
         .route("/v2/jsonRPC", post(json_rpc))
         .route("/v2/v2/jsonRPC", post(json_rpc))
@@ -80,7 +88,7 @@ pub fn create_router(state: ServerState, rate_limit_rps: Option<u32>) -> Router 
         .route("/v2/shards", get(get_shards))
         .route("/v2/lookupBlock", get(lookup_block));
 
-    let api_v3_router = Router::new()
+    let mut api_v3_router = Router::new()
         .route("/v3/traces", get(get_traces))
         .route("/v3/accountStates", get(get_account_states_v3))
         .route("/v3/addressInformation", get(get_address_information_v3))
@@ -96,10 +104,26 @@ pub fn create_router(state: ServerState, rate_limit_rps: Option<u32>) -> Router 
         .route("/v3/jetton/wallets", get(get_jetton_wallets))
         .route("/v3/nft/items", get(get_nft_items));
 
-    let emulate_router = Router::new().route("/emulate/v1/emulateTrace", post(emulate_trace_v1));
+    let mut emulate_router =
+        Router::new().route("/emulate/v1/emulateTrace", post(emulate_trace_v1));
     let streaming_router = Router::new()
         .route("/streaming/v2/sse", post(streaming_sse))
         .route("/streaming/v2/ws", get(streaming_ws));
+
+    if let Some(response_delay) = response_delay_ms
+        .filter(|delay_ms| *delay_ms > 0)
+        .map(Duration::from_millis)
+    {
+        api_v2_router = api_v2_router.layer(middleware::from_fn(move |request, next| {
+            delay_response(request, next, response_delay)
+        }));
+        api_v3_router = api_v3_router.layer(middleware::from_fn(move |request, next| {
+            delay_response(request, next, response_delay)
+        }));
+        emulate_router = emulate_router.layer(middleware::from_fn(move |request, next| {
+            delay_response(request, next, response_delay)
+        }));
+    }
 
     let mut api_router = Router::new()
         .merge(api_v2_router)
@@ -155,6 +179,12 @@ pub fn create_router(state: ServerState, rate_limit_rps: Option<u32>) -> Router 
     let app = app.fallback(handle_embedded_ui);
 
     app.layer(CompressionLayer::new())
+}
+
+async fn delay_response(request: Request, next: Next, delay: Duration) -> Response {
+    let response = next.run(request).await;
+    sleep(delay).await;
+    response
 }
 
 fn loopback_cors() -> CorsLayer {

@@ -493,6 +493,8 @@ pub struct LocalnetSettings {
     pub accounts: Option<Vec<String>>,
     /// Maximum number of API requests per second served by `Localnet` `/api` endpoints
     pub rate_limit: Option<u32>,
+    /// Response delay in milliseconds for `Localnet` `/api/v2`, `/api/v3`, and `/api/emulate/v1` endpoints
+    pub response_delay_ms: Option<u64>,
 }
 
 const fn default_localnet_port() -> Option<u16> {
@@ -2176,6 +2178,7 @@ fork-net = "testnet"
 fork-block-number = 1234567
 accounts = ["deployer", "user"]
 rate-limit = 3
+response-delay-ms = 300
 "#;
 
         let config: ActonConfig = toml::from_str(toml_content).unwrap();
@@ -2188,5 +2191,6 @@ rate-limit = 3
             Some(vec!["deployer".to_string(), "user".to_string()])
         );
         assert_eq!(localnet.rate_limit, Some(3));
+        assert_eq!(localnet.response_delay_ms, Some(300));
     }
 }
