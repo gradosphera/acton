@@ -6,6 +6,7 @@ use crate::localnet::Localnet;
 use acton_config::color::OwoColorize;
 use axum::extract::FromRef;
 use serde::Serialize;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 #[derive(Clone, Debug, Serialize)]
@@ -61,38 +62,48 @@ pub struct ServerArgs {
 }
 
 pub async fn run_server(node: Arc<Localnet>, args: ServerArgs) -> anyhow::Result<()> {
+    let ServerArgs {
+        port,
+        db_path: _,
+        fork_network,
+        fork_block_number,
+        rate_limit_rps,
+        startup_wallets,
+    } = args;
+
+    seed_startup_wallet_names(&node, &startup_wallets).await?;
+
     let state_source = StateSourceInfo {
-        state_source: if args.fork_network.is_some() {
+        state_source: if fork_network.is_some() {
             "remote"
         } else {
             "local"
         },
-        fork_network: args.fork_network.clone(),
-        fork_block_number: args.fork_block_number,
+        fork_network: fork_network.clone(),
+        fork_block_number,
     };
     let app = router::create_router(
         ServerState {
             node,
-            startup_wallets: Arc::new(args.startup_wallets),
+            startup_wallets: Arc::new(startup_wallets),
             state_source: Arc::new(state_source),
         },
-        args.rate_limit_rps,
+        rate_limit_rps,
     );
 
-    let address = format!("127.0.0.1:{}", args.port);
+    let address = format!("127.0.0.1:{port}");
     let listener = tokio::net::TcpListener::bind(&address).await?;
     println!(
         "    {} Localnet server and UI on http://{address}",
         "Starting".green().bold(),
     );
-    if let Some(fork_network) = args.fork_network {
-        let fork_source = args
-            .fork_block_number
+    if let Some(fork_network) = fork_network {
+        let fork_source = fork_block_number
             .map(|seqno| format!("{fork_network} at seqno {seqno}"))
             .unwrap_or(fork_network);
-        println!("    {} from {}", "Forking".green().bold(), fork_source);
+        println!("     {} from {}", "Forking".green().bold(), fork_source);
     }
-    if let Some(limit) = args.rate_limit_rps {
+    if let Some(limit) = rate_limit_rps {
         println!(
             "    {} API requests to {} req/s",
             "Limiting".yellow().bold(),
@@ -106,5 +117,43 @@ pub async fn run_server(node: Arc<Localnet>, args: ServerArgs) -> anyhow::Result
             }
         })
         .await?;
+    Ok(())
+}
+
+async fn seed_startup_wallet_names(
+    node: &Localnet,
+    startup_wallets: &[StartupWallet],
+) -> anyhow::Result<()> {
+    let mut seen_addresses = HashSet::new();
+    let mut named_wallets = Vec::new();
+
+    for wallet in startup_wallets {
+        let address = wallet.address.trim();
+        let name = wallet.name.trim();
+        if address.is_empty() || name.is_empty() || !seen_addresses.insert(address.to_string()) {
+            continue;
+        }
+        named_wallets.push((address.to_string(), name.to_string()));
+    }
+
+    if named_wallets.is_empty() {
+        return Ok(());
+    }
+
+    let existing_names = node
+        .get_address_names(
+            named_wallets
+                .iter()
+                .map(|(address, _)| address.clone())
+                .collect(),
+        )
+        .await?;
+
+    for ((address, name), (_, existing_name)) in named_wallets.into_iter().zip(existing_names) {
+        if existing_name.is_none() {
+            node.set_address_name(address, name).await?;
+        }
+    }
+
     Ok(())
 }
