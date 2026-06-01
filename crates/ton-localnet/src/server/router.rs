@@ -10,10 +10,10 @@ use super::handlers::{
     get_transactions, get_transactions_by_message_v3, get_transactions_std, get_transactions_v3,
     json_rpc, load_state, lookup_block, pack_address, register_compiler_abis, run_get_method,
     run_get_method_std, run_get_method_v3, send_boc, send_boc_return_hash, send_internal_message,
-    send_message_v3, set_address_name, set_shard_account, streaming_sse, streaming_ws,
-    try_locate_result_tx, try_locate_source_tx, try_locate_tx, unpack_address,
+    send_message_v3, set_address_name, set_network_conditions, set_shard_account, streaming_sse,
+    streaming_ws, try_locate_result_tx, try_locate_source_tx, try_locate_tx, unpack_address,
 };
-use crate::server::ServerState;
+use crate::server::{NetworkConditions, ServerState};
 use axum::{
     Json, Router,
     extract::Request,
@@ -42,11 +42,7 @@ use tower_http::trace::TraceLayer;
 #[cfg(not(debug_assertions))]
 static UI_DIR: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/../acton-localnet-ui/dist");
 
-pub fn create_router(
-    state: ServerState,
-    rate_limit_rps: Option<u32>,
-    response_delay_ms: Option<u64>,
-) -> Router {
+pub fn create_router(state: ServerState, rate_limit_rps: Option<u32>) -> Router {
     let mut api_v2_router = Router::new()
         .route("/v2", post(json_rpc))
         .route("/v2/jsonRPC", post(json_rpc))
@@ -110,20 +106,18 @@ pub fn create_router(
         .route("/streaming/v2/sse", post(streaming_sse))
         .route("/streaming/v2/ws", get(streaming_ws));
 
-    if let Some(response_delay) = response_delay_ms
-        .filter(|delay_ms| *delay_ms > 0)
-        .map(Duration::from_millis)
-    {
-        api_v2_router = api_v2_router.layer(middleware::from_fn(move |request, next| {
-            delay_response(request, next, response_delay)
-        }));
-        api_v3_router = api_v3_router.layer(middleware::from_fn(move |request, next| {
-            delay_response(request, next, response_delay)
-        }));
-        emulate_router = emulate_router.layer(middleware::from_fn(move |request, next| {
-            delay_response(request, next, response_delay)
-        }));
-    }
+    let api_v2_conditions = state.network_conditions.clone();
+    api_v2_router = api_v2_router.layer(middleware::from_fn(move |request, next| {
+        delay_response(request, next, api_v2_conditions.clone())
+    }));
+    let api_v3_conditions = state.network_conditions.clone();
+    api_v3_router = api_v3_router.layer(middleware::from_fn(move |request, next| {
+        delay_response(request, next, api_v3_conditions.clone())
+    }));
+    let emulate_conditions = state.network_conditions.clone();
+    emulate_router = emulate_router.layer(middleware::from_fn(move |request, next| {
+        delay_response(request, next, emulate_conditions.clone())
+    }));
 
     let mut api_router = Router::new()
         .merge(api_v2_router)
@@ -141,6 +135,7 @@ pub fn create_router(
         .route("/acton_setShardAccount", post(set_shard_account))
         .route("/acton_sendInternalMessage", post(send_internal_message))
         .route("/acton_getStartupWallets", get(get_startup_wallets))
+        .route("/acton_setNetworkConditions", post(set_network_conditions))
         .route("/acton_nodeInfo", get(get_status));
 
     if let Some(limit) = rate_limit_rps {
@@ -181,9 +176,12 @@ pub fn create_router(
     app.layer(CompressionLayer::new())
 }
 
-async fn delay_response(request: Request, next: Next, delay: Duration) -> Response {
+async fn delay_response(request: Request, next: Next, conditions: NetworkConditions) -> Response {
     let response = next.run(request).await;
-    sleep(delay).await;
+    let delay_ms = conditions.response_delay_ms();
+    if delay_ms > 0 {
+        sleep(Duration::from_millis(delay_ms)).await;
+    }
     response
 }
 

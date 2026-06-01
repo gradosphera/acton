@@ -177,6 +177,9 @@ export interface LocalnetNodeInfo {
   readonly state_source: string
   readonly fork_network?: string | null
   readonly fork_block_number?: number | null
+  readonly network_conditions?: {
+    readonly response_delay_ms: number
+  }
 }
 
 export interface StartupWallet {

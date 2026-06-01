@@ -14,7 +14,7 @@
   "tags": [
     {
       "name": "Localnet Control",
-      "description": "Acton-only control routes for local state, wallets, address names, compiler ABI metadata, and raw local message injection.\n\nThese routes are intended for local development tooling, are not authenticated, and should not be exposed publicly. Rate limiting applies only to /api routes; control routes remain available when --rate-limit is enabled."
+      "description": "Acton-only control routes for local state, wallets, address names, compiler ABI metadata, simulated network conditions, and raw local message injection.\n\nThese routes are intended for local development tooling, are not authenticated, and should not be exposed publicly. Rate limiting applies only to /api routes, and response delay applies only to TonCenter-compatible API routes; control routes remain available when --rate-limit or --response-delay-ms is enabled."
     }
   ],
   "paths": {
@@ -260,12 +260,35 @@
         }
       }
     },
+    "/acton_setNetworkConditions": {
+      "post": {
+        "tags": ["Localnet Control"],
+        "operationId": "setNetworkConditions",
+        "summary": "Set simulated network conditions",
+        "description": "Updates simulated network conditions while the localnet server is running and returns the updated values. Set response_delay_ms to 0 to disable response delay. Current values are also available from /acton_nodeInfo.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetNetworkConditionsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/NetworkConditionsResponse"
+          }
+        }
+      }
+    },
     "/acton_nodeInfo": {
       "get": {
         "tags": ["Localnet Control"],
         "operationId": "nodeInfo",
         "summary": "Get node status",
-        "description": "Returns uptime, latest block seqno, and local or remote state-source information.",
+        "description": "Returns uptime, latest block seqno, local or remote state-source information, and current simulated network conditions.",
         "responses": {
           "200": {
             "$ref": "#/components/responses/NodeInfoResponse"
@@ -493,6 +516,28 @@
           }
         }
       },
+      "NetworkConditionsResponse": {
+        "description": "Successful simulated network conditions response.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/SuccessEnvelope"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "result": {
+                      "$ref": "#/components/schemas/NetworkConditions"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      },
       "NodeInfoResponse": {
         "description": "Successful node status response.",
         "content": {
@@ -666,6 +711,28 @@
           }
         }
       },
+      "SetNetworkConditionsRequest": {
+        "type": "object",
+        "required": ["response_delay_ms"],
+        "properties": {
+          "response_delay_ms": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Response delay in milliseconds for /api/v2, /api/v3, and /api/emulate/v1 responses. Use 0 to disable."
+          }
+        }
+      },
+      "NetworkConditions": {
+        "type": "object",
+        "required": ["response_delay_ms"],
+        "properties": {
+          "response_delay_ms": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Response delay in milliseconds for TonCenter-compatible API responses."
+          }
+        }
+      },
       "SendMessageResult": {
         "type": "object",
         "required": ["@type", "hash"],
@@ -727,7 +794,8 @@
           "last_block_seqno",
           "state_source",
           "fork_network",
-          "fork_block_number"
+          "fork_block_number",
+          "network_conditions"
         ],
         "properties": {
           "uptime_seconds": {
@@ -749,6 +817,9 @@
           "fork_block_number": {
             "type": "integer",
             "nullable": true
+          },
+          "network_conditions": {
+            "$ref": "#/components/schemas/NetworkConditions"
           }
         }
       }

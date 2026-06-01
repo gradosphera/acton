@@ -8,6 +8,7 @@ use axum::extract::FromRef;
 use serde::Serialize;
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::sync::broadcast;
 
 #[derive(Clone, Debug, Serialize)]
@@ -27,6 +28,7 @@ pub struct ServerState {
     pub startup_wallets: Arc<Vec<StartupWallet>>,
     pub state_source: Arc<StateSourceInfo>,
     pub shutdown: ShutdownSignal,
+    pub network_conditions: NetworkConditions,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -34,6 +36,41 @@ pub struct StateSourceInfo {
     pub state_source: &'static str,
     pub fork_network: Option<String>,
     pub fork_block_number: Option<u64>,
+}
+
+#[derive(Clone)]
+pub struct NetworkConditions {
+    response_delay_ms: Arc<AtomicU64>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct NetworkConditionsInfo {
+    pub response_delay_ms: u64,
+}
+
+impl NetworkConditions {
+    fn new(response_delay_ms: Option<u64>) -> Self {
+        Self {
+            response_delay_ms: Arc::new(AtomicU64::new(response_delay_ms.unwrap_or_default())),
+        }
+    }
+
+    #[must_use]
+    pub fn response_delay_ms(&self) -> u64 {
+        self.response_delay_ms.load(Ordering::Relaxed)
+    }
+
+    pub fn set_response_delay_ms(&self, response_delay_ms: u64) {
+        self.response_delay_ms
+            .store(response_delay_ms, Ordering::Relaxed);
+    }
+
+    #[must_use]
+    pub fn info(&self) -> NetworkConditionsInfo {
+        NetworkConditionsInfo {
+            response_delay_ms: self.response_delay_ms(),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -82,6 +119,12 @@ impl FromRef<ServerState> for ShutdownSignal {
     }
 }
 
+impl FromRef<ServerState> for NetworkConditions {
+    fn from_ref(state: &ServerState) -> Self {
+        state.network_conditions.clone()
+    }
+}
+
 pub struct ServerArgs {
     pub port: u16,
     pub db_path: Option<String>,
@@ -104,6 +147,7 @@ pub async fn run_server(node: Arc<Localnet>, args: ServerArgs) -> anyhow::Result
     } = args;
 
     seed_startup_wallet_names(&node, &startup_wallets).await?;
+    let network_conditions = NetworkConditions::new(response_delay_ms);
 
     let state_source = StateSourceInfo {
         state_source: if fork_network.is_some() {
@@ -121,9 +165,9 @@ pub async fn run_server(node: Arc<Localnet>, args: ServerArgs) -> anyhow::Result
             startup_wallets: Arc::new(startup_wallets),
             state_source: Arc::new(state_source),
             shutdown: shutdown.clone(),
+            network_conditions: network_conditions.clone(),
         },
         rate_limit_rps,
-        response_delay_ms,
     );
 
     let address = format!("127.0.0.1:{port}");
@@ -145,7 +189,8 @@ pub async fn run_server(node: Arc<Localnet>, args: ServerArgs) -> anyhow::Result
             limit
         );
     }
-    if let Some(delay_ms) = response_delay_ms.filter(|delay_ms| *delay_ms > 0) {
+    let delay_ms = network_conditions.response_delay_ms();
+    if delay_ms > 0 {
         println!(
             "    {} API v2/v3/emulate responses by {}ms",
             "Delaying".yellow().bold(),

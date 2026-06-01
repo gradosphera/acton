@@ -187,6 +187,11 @@ pub struct SetAddressNameRequest {
 }
 
 #[derive(Deserialize)]
+pub struct SetNetworkConditionsRequest {
+    pub response_delay_ms: u64,
+}
+
+#[derive(Deserialize)]
 pub struct CompilerAbiRegistration {
     pub code_hash: String,
     pub compiler_abi: Value,

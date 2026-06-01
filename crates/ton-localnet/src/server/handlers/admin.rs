@@ -3,9 +3,9 @@ use crate::api::toncenter_v2 as v2;
 use crate::localnet::Localnet;
 use crate::server::models::{
     FaucetRequest, RegisterCompilerAbisRequest, SendBocRequest, SetAddressNameRequest,
-    SetShardAccountRequest, StatePathRequest,
+    SetNetworkConditionsRequest, SetShardAccountRequest, StatePathRequest,
 };
-use crate::server::{StartupWallet, StateSourceInfo};
+use crate::server::{NetworkConditions, NetworkConditionsInfo, StartupWallet, StateSourceInfo};
 use crate::types::Hash256;
 use axum::{
     Json,
@@ -32,11 +32,13 @@ struct LocalnetAdminStatus {
     last_block_seqno: u64,
     #[serde(flatten)]
     state_source: StateSourceInfo,
+    network_conditions: NetworkConditionsInfo,
 }
 
 pub async fn get_status(
     State(node): State<Arc<Localnet>>,
     State(state_source): State<Arc<StateSourceInfo>>,
+    State(network_conditions): State<NetworkConditions>,
 ) -> Json<Value> {
     handle_result(
         async move {
@@ -46,6 +48,7 @@ pub async fn get_status(
                 uptime_seconds: node.uptime_seconds(),
                 last_block_seqno: u64::from(masterchain_info.last.seqno),
                 state_source: state_source.as_ref().clone(),
+                network_conditions: network_conditions.info(),
             })
         },
         |res| serde_json::to_value(res).unwrap_or(Value::Null),
@@ -58,6 +61,18 @@ pub async fn get_startup_wallets(
 ) -> Json<Value> {
     handle_result(
         async move { Ok::<_, anyhow::Error>(startup_wallets.as_ref().clone()) },
+        |res| serde_json::to_value(res).unwrap_or(Value::Null),
+    )
+    .await
+}
+
+pub async fn set_network_conditions(
+    State(network_conditions): State<NetworkConditions>,
+    Json(payload): Json<SetNetworkConditionsRequest>,
+) -> Json<Value> {
+    network_conditions.set_response_delay_ms(payload.response_delay_ms);
+    handle_result(
+        async move { Ok::<_, anyhow::Error>(network_conditions.info()) },
         |res| serde_json::to_value(res).unwrap_or(Value::Null),
     )
     .await

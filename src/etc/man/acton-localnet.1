@@ -180,6 +180,11 @@ delayed
 .RE
 .sp
 .RS 4
+\h'-04'\(bu\h'+03'\fBPOST /acton_setNetworkConditions\fR can change the response delay while the
+server is running, and \fBGET /acton_nodeInfo\fR reports the current value
+.RE
+.sp
+.RS 4
 \h'-04'\(bu\h'+03'\fB\-\-dump\-state\fR writes a snapshot during graceful shutdown
 .RE
 .SH "CONTROL ENDPOINTS"
@@ -210,6 +215,11 @@ account state with a base64\-encoded \fBShardAccount\fR BOC
 .RS 4
 \h'-04'\(bu\h'+03'\fBPOST /acton_sendInternalMessage\fR with \fB{"boc":"<BASE64_BOC>"}\fR sends a
 base64\-encoded internal message BOC through the local internal queue
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fBPOST /acton_setNetworkConditions\fR with \fB{"response_delay_ms":300}\fR updates
+simulated network latency; use \fB0\fR to disable response delay
 .RE
 .sp
 TonCenter\-compatible message endpoints such as \fB/api/v2/sendBoc\fR and

@@ -136,6 +136,10 @@ RUNTIME MODEL
           /api/emulate/v1 endpoints; streaming, control, and UI routes are not
           delayed
 
+       o  POST /acton_setNetworkConditions can change the response delay while
+          the server is running, and GET /acton_nodeInfo reports the current
+          value
+
        o  --dump-state writes a snapshot during graceful shutdown
 
 CONTROL ENDPOINTS
@@ -157,6 +161,9 @@ CONTROL ENDPOINTS
 
        o  POST /acton_sendInternalMessage with {"boc":"<BASE64_BOC>"} sends a
           base64-encoded internal message BOC through the local internal queue
+
+       o  POST /acton_setNetworkConditions with {"response_delay_ms":300}
+          updates simulated network latency; use 0 to disable response delay
 
        TonCenter-compatible message endpoints such as /api/v2/sendBoc and
        /api/v3/message accept external-in messages only. Use

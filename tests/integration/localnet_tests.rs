@@ -867,6 +867,61 @@ fn localnet_can_rate_limit_api_endpoints_to_simulate_provider_limits() {
 }
 
 #[test]
+fn localnet_can_update_response_delay_while_running() {
+    let project = ProjectBuilder::new("localnet-response-delay-runtime").build();
+    let node = project.localnet().start();
+
+    let initial_info_response = node.get_json("/acton_nodeInfo");
+    let initial_info = response_payload(&initial_info_response);
+    let initial_response_delay_ms = initial_info["network_conditions"]["response_delay_ms"].clone();
+
+    let set_conditions_response = node.post_json(
+        "/acton_setNetworkConditions",
+        &json!({ "response_delay_ms": 250 }),
+    );
+    let set_conditions = response_payload(&set_conditions_response);
+    let set_response_delay_ms = set_conditions["response_delay_ms"].clone();
+
+    let info_after_set_response = node.get_json("/acton_nodeInfo");
+    let info_after_set = response_payload(&info_after_set_response);
+    let node_info_response_delay_ms =
+        info_after_set["network_conditions"]["response_delay_ms"].clone();
+
+    let started_at = Instant::now();
+    let delayed_api_response = node.get_json("/api/v2/getMasterchainInfo");
+    let delayed_api_elapsed = started_at.elapsed();
+
+    let reset_conditions_response = node.post_json(
+        "/acton_setNetworkConditions",
+        &json!({ "response_delay_ms": 0 }),
+    );
+    let reset_conditions = response_payload(&reset_conditions_response);
+    let reset_response_delay_ms = reset_conditions["response_delay_ms"].clone();
+
+    let info_after_reset_response = node.get_json("/acton_nodeInfo");
+    let info_after_reset = response_payload(&info_after_reset_response);
+    let node_info_after_reset_response_delay_ms =
+        info_after_reset["network_conditions"]["response_delay_ms"].clone();
+
+    let summary = json!({
+        "initial_response_delay_ms": initial_response_delay_ms,
+        "set_response_delay_ms": set_response_delay_ms,
+        "node_info_response_delay_ms": node_info_response_delay_ms,
+        "api_delay_observed": delayed_api_elapsed >= Duration::from_millis(220),
+        "api_request_ok": delayed_api_response["ok"].as_bool(),
+        "reset_response_delay_ms": reset_response_delay_ms,
+        "node_info_after_reset_response_delay_ms": node_info_after_reset_response_delay_ms,
+    });
+
+    assertion().eq(
+        pretty_json_for_snapshot(&summary, project.path()),
+        snapbox::file!("snapshots/localnet/test_localnet_response_delay_runtime.summary.json"),
+    );
+
+    node.stop();
+}
+
+#[test]
 fn localnet_status_json_reports_running_node_details() {
     let project = ProjectBuilder::new("localnet-status-running").build();
     let node = project.localnet().start();
