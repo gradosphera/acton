@@ -21,6 +21,9 @@ const HTTP_RETRY_BACKOFF_MS: [u64; 3] = [1000, 2000, 3000];
 const HTTP_CONNECT_TIMEOUT_SECS: u64 = 10;
 const HTTP_REQUEST_TIMEOUT_SECS: u64 = 30;
 const USE_PROXY_ENV: &str = "ACTON_USE_PROXY";
+const TEST_TONCENTER_RETRY_BACKOFF_MS_ENV: &str = "ACTON_TEST_TONCENTER_RETRY_BACKOFF_MS";
+const TEST_TONCENTER_MIN_REQUEST_INTERVAL_MS_ENV: &str =
+    "ACTON_TEST_TONCENTER_MIN_REQUEST_INTERVAL_MS";
 const TONCENTER_MIN_REQUEST_INTERVAL: Duration = Duration::from_millis(1100);
 static TONCENTER_REQUEST_GATE: LazyLock<Mutex<Option<Instant>>> =
     LazyLock::new(|| Mutex::new(None));
@@ -200,8 +203,9 @@ impl TonApiClient {
 
         if let Some(last) = *last_request {
             let elapsed = last.elapsed();
-            if elapsed < TONCENTER_MIN_REQUEST_INTERVAL {
-                let wait_for = TONCENTER_MIN_REQUEST_INTERVAL - elapsed;
+            let min_interval = toncenter_min_request_interval();
+            if elapsed < min_interval {
+                let wait_for = min_interval - elapsed;
                 log::debug!("throttle for {wait_for:?}");
                 std::thread::sleep(wait_for);
             }
@@ -221,6 +225,10 @@ impl TonApiClient {
     }
 
     fn http_retry_backoff(attempt: usize) -> Duration {
+        if let Some(duration) = test_retry_backoff_override() {
+            return duration;
+        }
+
         let index = attempt.min(HTTP_RETRY_BACKOFF_MS.len() - 1);
         Duration::from_millis(HTTP_RETRY_BACKOFF_MS[index])
     }
@@ -756,6 +764,22 @@ impl TonApiClient {
 
         SendBocError::new(classify_toncenter_send_boc_error(&raw_msg), raw_msg)
     }
+}
+
+fn test_retry_backoff_override() -> Option<Duration> {
+    let value = env::var(TEST_TONCENTER_RETRY_BACKOFF_MS_ENV).ok()?;
+    let value = value.trim();
+    if value.is_empty() {
+        return None;
+    }
+    value.parse::<u64>().ok().map(Duration::from_millis)
+}
+
+fn toncenter_min_request_interval() -> Duration {
+    env::var(TEST_TONCENTER_MIN_REQUEST_INTERVAL_MS_ENV)
+        .ok()
+        .and_then(|value| value.trim().parse::<u64>().ok())
+        .map_or(TONCENTER_MIN_REQUEST_INTERVAL, Duration::from_millis)
 }
 
 fn classify_toncenter_send_boc_error(raw_msg: &str) -> SendBocErrorKind {

@@ -37,6 +37,7 @@ pub(crate) struct DebugBuilder {
     method: DebugMethod,
     stack: Option<Tuple>,
     expected_execution_error: Option<String>,
+    capture_outer_frame_locals: bool,
 }
 
 struct CliDebugConfig {
@@ -174,6 +175,7 @@ impl CliDebugBuilder {
             method: DebugMethod::main(),
             stack: Tuple::empty(),
             expected_execution_error: self.expected_execution_error,
+            capture_outer_frame_locals: true,
             _project: Some(self.project),
             _temp_dir: self.temp_dir,
             client_handle: None,
@@ -195,6 +197,7 @@ impl DebugBuilder {
             method: DebugMethod::main(),
             stack: None,
             expected_execution_error: None,
+            capture_outer_frame_locals: true,
         }
     }
 
@@ -251,6 +254,11 @@ impl DebugBuilder {
         self
     }
 
+    pub(crate) const fn without_outer_frame_local_snapshots(mut self) -> Self {
+        self.capture_outer_frame_locals = false;
+        self
+    }
+
     pub(crate) fn build(self) -> DebugSession {
         let (default_project_path, project) = if let Some(project) = self.project {
             (project.path().to_path_buf(), Some(project))
@@ -294,6 +302,7 @@ impl DebugBuilder {
             method: self.method,
             stack: self.stack.unwrap_or_else(Tuple::empty),
             expected_execution_error: self.expected_execution_error,
+            capture_outer_frame_locals: self.capture_outer_frame_locals,
             _project: project,
             _temp_dir: self.temp_dir,
             client_handle: None,
@@ -310,6 +319,7 @@ pub(crate) struct DebugSession {
     method: DebugMethod,
     stack: Tuple,
     expected_execution_error: Option<String>,
+    capture_outer_frame_locals: bool,
     _project: Option<Project>,
     _temp_dir: TempDir,
     client_handle: Option<DebugProcess>,
@@ -329,8 +339,17 @@ impl DebugSession {
         let stack = self.stack.clone();
         let method = self.method.clone();
         let project_root = self.project_ref.path.clone();
+        let capture_outer_frame_locals = self.capture_outer_frame_locals;
         let handle = thread::spawn(move || {
-            run_script_file(&code, &project_root, port, debug_listener, method, stack)
+            run_script_file(
+                &code,
+                &project_root,
+                port,
+                debug_listener,
+                method,
+                stack,
+                capture_outer_frame_locals,
+            )
         });
 
         let address = format!("127.0.0.1:{port}");

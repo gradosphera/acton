@@ -172,12 +172,28 @@ fn run_npm_command(
     cache_dir: &Path,
     args: &[&str],
 ) -> std::process::Output {
+    let npm_home = project_dir.join(".npm-home");
+    let npm_prefix = project_dir.join(".npm-prefix");
+    let npm_tmp = project_dir.join(".npm-tmp");
+    let npm_userconfig = project_dir.join(".npmrc");
+    fs::create_dir_all(&npm_home).unwrap();
+    fs::create_dir_all(&npm_prefix).unwrap();
+    fs::create_dir_all(&npm_tmp).unwrap();
+    if !npm_userconfig.exists() {
+        fs::write(&npm_userconfig, "").unwrap();
+    }
+
     Command::new("npm")
         .args(args)
         .current_dir(project_dir)
         .env("PATH", path_env)
+        .env("HOME", &npm_home)
+        .env("USERPROFILE", &npm_home)
+        .env("TMPDIR", &npm_tmp)
         .env("ACTON_BIN", acton_exe())
         .env("NPM_CONFIG_CACHE", cache_dir)
+        .env("NPM_CONFIG_PREFIX", &npm_prefix)
+        .env("NPM_CONFIG_USERCONFIG", &npm_userconfig)
         .env("NPM_CONFIG_AUDIT", "false")
         .env("NPM_CONFIG_FUND", "false")
         .env("NPM_CONFIG_FETCH_RETRIES", "3")
@@ -2171,7 +2187,7 @@ fn package_uses_eslint(package_json: &JsonValue) -> bool {
 }
 
 #[cfg(unix)]
-fn assert_app_template_npm_quality_checks(test_name: &str, template: &str, cache_dir: &Path) {
+fn assert_app_template_npm_quality_checks(test_name: &str, template: &str) {
     if !is_npm_available() {
         eprintln!("Skipping npm app template checks: npm is not available in PATH");
         return;
@@ -2179,6 +2195,7 @@ fn assert_app_template_npm_quality_checks(test_name: &str, template: &str, cache
 
     let workspace = ProjectBuilder::new(test_name).without_acton_toml().build();
     let project_dir = workspace.path().join("generated");
+    let cache_dir = workspace.path().join("npm-cache");
     create_app_project(&workspace, &project_dir, template);
 
     let package_json: JsonValue =
@@ -2190,8 +2207,8 @@ fn assert_app_template_npm_quality_checks(test_name: &str, template: &str, cache
         "{template} app template must expose npm run fmt:check"
     );
 
-    let path_env = setup_real_npm_toolchain(&project_dir, cache_dir);
-    let install_output = run_npm_command(&project_dir, &path_env, cache_dir, &["ci"]);
+    let path_env = setup_real_npm_toolchain(&project_dir, &cache_dir);
+    let install_output = run_npm_command(&project_dir, &path_env, &cache_dir, &["ci"]);
     if !install_output.status.success() && npm_failure_looks_environment_specific(&install_output) {
         eprintln!(
             "Skipping npm app template checks for {template} due to environment-specific npm failure:\nstdout:\n{}\nstderr:\n{}",
@@ -2215,7 +2232,7 @@ fn assert_app_template_npm_quality_checks(test_name: &str, template: &str, cache
         package_uses_eslint(&package_json),
         "{template} app template must depend on ESLint"
     );
-    let lint_output = run_npm_command(&project_dir, &path_env, cache_dir, &["run", "lint"]);
+    let lint_output = run_npm_command(&project_dir, &path_env, &cache_dir, &["run", "lint"]);
     assert!(
         lint_output.status.success(),
         "npm run lint failed for {template} app:\nstdout:\n{}\nstderr:\n{}",
@@ -2223,7 +2240,7 @@ fn assert_app_template_npm_quality_checks(test_name: &str, template: &str, cache
         String::from_utf8_lossy(&lint_output.stderr)
     );
 
-    let build_output = run_npm_command(&project_dir, &path_env, cache_dir, &["run", "build"]);
+    let build_output = run_npm_command(&project_dir, &path_env, &cache_dir, &["run", "build"]);
     assert!(
         build_output.status.success(),
         "npm run build failed for {template} app:\nstdout:\n{}\nstderr:\n{}",
@@ -2231,7 +2248,7 @@ fn assert_app_template_npm_quality_checks(test_name: &str, template: &str, cache
         String::from_utf8_lossy(&build_output.stderr)
     );
 
-    let test_output = run_npm_command(&project_dir, &path_env, cache_dir, &["run", "test"]);
+    let test_output = run_npm_command(&project_dir, &path_env, &cache_dir, &["run", "test"]);
     assert!(
         test_output.status.success(),
         "npm run test failed for {template} app:\nstdout:\n{}\nstderr:\n{}",
@@ -2240,7 +2257,7 @@ fn assert_app_template_npm_quality_checks(test_name: &str, template: &str, cache
     );
 
     let typecheck_output =
-        run_npm_command(&project_dir, &path_env, cache_dir, &["run", "typecheck"]);
+        run_npm_command(&project_dir, &path_env, &cache_dir, &["run", "typecheck"]);
     assert!(
         typecheck_output.status.success(),
         "npm run typecheck failed for {template} app:\nstdout:\n{}\nstderr:\n{}",
@@ -2248,7 +2265,7 @@ fn assert_app_template_npm_quality_checks(test_name: &str, template: &str, cache
         String::from_utf8_lossy(&typecheck_output.stderr)
     );
 
-    let fmt_output = run_npm_command(&project_dir, &path_env, cache_dir, &["run", "fmt:check"]);
+    let fmt_output = run_npm_command(&project_dir, &path_env, &cache_dir, &["run", "fmt:check"]);
     assert!(
         fmt_output.status.success(),
         "npm run fmt:check failed for {template} app:\nstdout:\n{}\nstderr:\n{}",
@@ -2259,19 +2276,35 @@ fn assert_app_template_npm_quality_checks(test_name: &str, template: &str, cache
 
 #[cfg(unix)]
 #[test]
-fn test_new_app_templates_npm_quality_checks() {
-    let cache_workspace = ProjectBuilder::new("new-app-templates-npm-cache")
-        .without_acton_toml()
-        .build();
-    let cache_dir = cache_workspace.path().join("npm-cache");
+fn test_new_empty_app_template_npm_quality_checks() {
+    assert_app_template_npm_quality_checks("new-empty-app-npm-quality-checks", "empty");
+}
 
-    for template in ["empty", "counter", "jetton", "nft", "w5-extension"] {
-        assert_app_template_npm_quality_checks(
-            &format!("new-{template}-app-npm-quality-checks"),
-            template,
-            &cache_dir,
-        );
-    }
+#[cfg(unix)]
+#[test]
+fn test_new_counter_app_template_npm_quality_checks() {
+    assert_app_template_npm_quality_checks("new-counter-app-npm-quality-checks", "counter");
+}
+
+#[cfg(unix)]
+#[test]
+fn test_new_jetton_app_template_npm_quality_checks() {
+    assert_app_template_npm_quality_checks("new-jetton-app-npm-quality-checks", "jetton");
+}
+
+#[cfg(unix)]
+#[test]
+fn test_new_nft_app_template_npm_quality_checks() {
+    assert_app_template_npm_quality_checks("new-nft-app-npm-quality-checks", "nft");
+}
+
+#[cfg(unix)]
+#[test]
+fn test_new_w5_extension_app_template_npm_quality_checks() {
+    assert_app_template_npm_quality_checks(
+        "new-w5-extension-app-npm-quality-checks",
+        "w5-extension",
+    );
 }
 
 fn read_new_template_file(template: &str, relative_path: &str) -> String {

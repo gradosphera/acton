@@ -2053,6 +2053,11 @@ impl ActonCommand {
             self.cmd = self.cmd.env("NO_COLOR", "1");
         }
 
+        self.cmd = self
+            .cmd
+            .env("ACTON_TEST_TONCENTER_RETRY_BACKOFF_MS", "0")
+            .env("ACTON_TEST_TONCENTER_MIN_REQUEST_INTERVAL_MS", "0");
+
         self.cmd
     }
 
