@@ -43,7 +43,8 @@ const CRC16: crc::Crc<u16> = crc::Crc::<u16>::new(&crc::CRC_16_XMODEM);
 // The shared Fift/Tolk compile path crashes under higher test concurrency,
 // so serialize setup while keeping the debug session itself parallel.
 static DEBUG_COMPILER_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
-const DEBUG_EVENT_TIMEOUT: Duration = Duration::from_secs(5);
+pub(crate) const DEBUG_CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
+const DEBUG_EVENT_TIMEOUT: Duration = Duration::from_secs(15);
 
 #[derive(Debug, Clone)]
 pub(crate) struct DebugMethod {

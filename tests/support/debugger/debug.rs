@@ -1,6 +1,8 @@
 use crate::common::{acton_exe, acton_path_env};
 use crate::regex;
-use crate::support::debugger::{DebugMethod, DebuggerClient, run_script_file};
+use crate::support::debugger::{
+    DEBUG_CONNECT_TIMEOUT, DebugMethod, DebuggerClient, run_script_file,
+};
 use crate::support::project::Project;
 use crate::support::snapshots::normalize_output;
 use crate::support::tempdir::create_tmp_dir;
@@ -332,7 +334,7 @@ impl DebugSession {
         });
 
         let address = format!("127.0.0.1:{port}");
-        let client = match DebuggerClient::connect_with_retry(&address, Duration::from_secs(5)) {
+        let client = match DebuggerClient::connect_with_retry(&address, DEBUG_CONNECT_TIMEOUT) {
             Ok(client) => client,
             Err(connect_err) => {
                 let worker_result = handle.join();

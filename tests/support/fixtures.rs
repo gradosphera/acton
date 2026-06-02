@@ -176,6 +176,12 @@ impl FixtureProject {
         opts.copy_inside = true;
 
         copy(&fixture_dir, tmp.path(), &opts).expect("Failed to copy fixture project");
+        let copied_project_path = tmp.path().join(name);
+        let copied_acton_dir = copied_project_path.join(".acton");
+        if copied_acton_dir.exists() {
+            fs::remove_dir_all(&copied_acton_dir)
+                .expect("Failed to remove copied fixture .acton directory");
+        }
 
         tmp
     }
