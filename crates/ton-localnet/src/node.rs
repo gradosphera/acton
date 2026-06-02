@@ -1,6 +1,9 @@
 use crate::executor::{ExecContext, TvmExecutor};
 use crate::localnet::compute_normalized_ext_in_hash;
-use crate::remote::{RemoteProvider, account_meta_from_shard_account, fetch_remote_shard_account};
+use crate::remote::{
+    RemoteProvider, account_meta_from_shard_account, fetch_remote_library,
+    fetch_remote_shard_account,
+};
 use crate::storage::{
     self, GlobalLibraryEntry, GlobalLibraryLookup, JettonMasterMeta, NftItemMeta,
 };
@@ -23,7 +26,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::broadcast;
 use tycho_types::boc::Boc;
 use tycho_types::boc::BocRepr;
-use tycho_types::cell::{CellBuilder, CellFamily, Store};
+use tycho_types::cell::{Cell, CellBuilder, CellFamily, Store};
 use tycho_types::models::{
     AccountState, CurrencyCollection, IntAddr, IntMsgInfo, LibDescr, Message, MsgInfo,
     OptionalAccount, OwnedMessage, ShardAccount, StdAddr, StdAddrFormat,
@@ -58,6 +61,7 @@ pub const GIVER_ADDR: Addr = Addr {
 };
 
 pub const GIVER_BALANCE: u128 = 1_000_000_000_000_000_000; // 1B TON
+const EXOTIC_LIBRARY_TAG: u8 = 2;
 
 impl Node {
     pub fn new(
@@ -895,8 +899,13 @@ impl Node {
     pub(crate) fn rebuild_global_libraries_from_accounts(&mut self) -> anyhow::Result<()> {
         self.global_libraries.clear();
 
-        let mut accounts: Vec<_> = self.latest.accounts.iter().collect();
-        accounts.sort_by_key(|(address, _)| **address);
+        let mut accounts: Vec<_> = self
+            .latest
+            .accounts
+            .iter()
+            .map(|(address, meta)| (*address, meta.clone()))
+            .collect();
+        accounts.sort_by_key(|(address, _)| *address);
         for (address, meta) in accounts {
             if meta.status != AccountStatus::Active {
                 continue;
@@ -920,10 +929,12 @@ impl Node {
                             first_seen_lt: lt,
                             last_seen_lt: lt,
                         });
-                entry.publishers.insert(*address);
+                entry.publishers.insert(address);
                 entry.first_seen_lt = entry.first_seen_lt.min(lt);
                 entry.last_seen_lt = entry.last_seen_lt.max(lt);
             }
+            let lt = meta.last_trans_lt.unwrap_or(0);
+            self.register_account_code_libraries(&address, None, &shard_account_boc, lt)?;
         }
 
         self.vm_global_libs_dirty = true;
@@ -1062,9 +1073,161 @@ impl Node {
         Ok(())
     }
 
+    fn register_account_code_libraries(
+        &mut self,
+        account: &Addr,
+        provider: Option<&RemoteProvider>,
+        shard_account_boc: &BocBytes,
+        lt: Lt,
+    ) -> anyhow::Result<()> {
+        let mut pending = Self::collect_code_library_refs_from_shard_account(shard_account_boc)?;
+        let mut processed = HashSet::new();
+
+        while let Some(hash) = pending.pop() {
+            if !processed.insert(hash) {
+                continue;
+            }
+
+            let lib = match self.register_existing_global_library_publisher(account, hash, lt)? {
+                Some(lib) => lib,
+                None => match self.cas.get(&hash) {
+                    Some(lib_boc) => {
+                        let lib = Boc::decode(&lib_boc).with_context(|| {
+                            format!("Failed to decode cached remote library {}", hash.to_hex())
+                        })?;
+                        self.register_account_code_library(account, hash, &lib, lt)?;
+                        lib
+                    }
+                    None if let Some(provider) = provider => {
+                        match fetch_remote_library(&hash, provider) {
+                            Ok(lib) => {
+                                self.register_account_code_library(account, hash, &lib, lt)?;
+                                lib
+                            }
+                            Err(err) => {
+                                tracing::warn!(
+                                    "Failed to load remote library {} for account {}: {err:#}",
+                                    hash.to_hex(),
+                                    account
+                                );
+                                continue;
+                            }
+                        }
+                    }
+                    None => continue,
+                },
+            };
+            pending.extend(Self::collect_library_refs(&lib)?);
+        }
+
+        Ok(())
+    }
+
+    fn register_existing_global_library_publisher(
+        &mut self,
+        account: &Addr,
+        hash: Hash256,
+        lt: Lt,
+    ) -> anyhow::Result<Option<Cell>> {
+        let Some(entry) = self.global_libraries.get_mut(&hash) else {
+            return Ok(None);
+        };
+
+        let lib = Boc::decode(&entry.lib_boc)
+            .with_context(|| format!("Failed to decode global library {}", hash.to_hex()))?;
+
+        if entry.publishers.insert(*account) {
+            entry.last_seen_lt = lt;
+            self.vm_global_libs_dirty = true;
+        }
+
+        Ok(Some(lib))
+    }
+
+    fn register_account_code_library(
+        &mut self,
+        account: &Addr,
+        hash: Hash256,
+        lib: &Cell,
+        lt: Lt,
+    ) -> anyhow::Result<()> {
+        let lib_boc: BocBytes = Boc::encode(lib.clone()).into();
+        self.cas.put(lib_boc.clone(), hash);
+        let entry = self
+            .global_libraries
+            .entry(hash)
+            .or_insert_with(|| GlobalLibraryEntry {
+                hash,
+                lib_boc,
+                publishers: std::iter::once(*account).collect(),
+                first_seen_lt: lt,
+                last_seen_lt: lt,
+            });
+        if entry.publishers.insert(*account) {
+            entry.last_seen_lt = lt;
+        }
+        entry.first_seen_lt = entry.first_seen_lt.min(lt);
+        entry.last_seen_lt = entry.last_seen_lt.max(lt);
+        self.vm_global_libs_dirty = true;
+        self.vm_global_libs_boc = None;
+        Ok(())
+    }
+
+    fn collect_code_library_refs_from_shard_account(
+        shard_account_boc: &BocBytes,
+    ) -> anyhow::Result<Vec<Hash256>> {
+        let cell = Boc::decode(shard_account_boc).context("Failed to decode shard account BOC")?;
+        let shard_account = cell
+            .parse::<ShardAccount>()
+            .context("Failed to parse shard account")?;
+        let opt_account = shard_account
+            .account
+            .load()
+            .context("Failed to load optional account from shard account")?;
+
+        let Some(account) = opt_account.0 else {
+            return Ok(Vec::new());
+        };
+        let AccountState::Active(state_init) = account.state else {
+            return Ok(Vec::new());
+        };
+        let Some(code) = state_init.code else {
+            return Ok(Vec::new());
+        };
+        Self::collect_library_refs(&code)
+    }
+
+    fn collect_library_refs(root: &Cell) -> anyhow::Result<Vec<Hash256>> {
+        let mut hashes = HashSet::new();
+        let mut visited = HashSet::new();
+        Self::collect_library_refs_inner(root, &mut hashes, &mut visited)?;
+        Ok(hashes.into_iter().collect())
+    }
+
+    fn collect_library_refs_inner(
+        cell: &Cell,
+        hashes: &mut HashSet<Hash256>,
+        visited: &mut HashSet<Hash256>,
+    ) -> anyhow::Result<()> {
+        if !visited.insert(Hash256(*cell.repr_hash().as_array())) {
+            return Ok(());
+        }
+
+        if let Some(hash) = library_ref_hash(cell)? {
+            hashes.insert(hash);
+        }
+
+        for index in 0..cell.reference_count() {
+            if let Some(child) = cell.reference_cloned(index) {
+                Self::collect_library_refs_inner(&child, hashes, visited)?;
+            }
+        }
+        Ok(())
+    }
+
     fn extract_public_libraries_from_shard_account(
         shard_account_boc: &BocBytes,
-    ) -> anyhow::Result<HashMap<Hash256, tycho_types::cell::Cell>> {
+    ) -> anyhow::Result<HashMap<Hash256, Cell>> {
         let cell = Boc::decode(shard_account_boc).context("Failed to decode shard account BOC")?;
         let shard_account = cell
             .parse::<ShardAccount>()
@@ -1745,7 +1908,7 @@ impl Node {
             last_trans_lt: 0,
         };
         let mut builder = CellBuilder::new();
-        sa.store_into(&mut builder, tycho_types::cell::Cell::empty_context())?;
+        sa.store_into(&mut builder, Cell::empty_context())?;
         let cell = builder.build()?;
         Ok(Boc::encode(cell).into())
     }
@@ -1762,6 +1925,7 @@ impl Node {
         let lt = meta.last_trans_lt.unwrap_or(0);
         self.latest.accounts.insert(*addr, meta);
         self.update_public_libraries_from_account_diff(addr, None, Some(&boc), lt)?;
+        self.register_account_code_libraries(addr, Some(provider), &boc, lt)?;
         Ok(Some(boc))
     }
 
@@ -1862,9 +2026,7 @@ fn account_state_preview_from_boc(boc: &BocBytes) -> Option<AccountStatePreview>
     account_state_preview_from_optional_account_cell(&cell)
 }
 
-fn account_state_preview_from_optional_account_cell(
-    cell: &tycho_types::cell::Cell,
-) -> Option<AccountStatePreview> {
+fn account_state_preview_from_optional_account_cell(cell: &Cell) -> Option<AccountStatePreview> {
     let hash = Hash256(*cell.repr_hash().as_array());
     let optional_account = cell.parse::<OptionalAccount>().ok()?;
     let Some(account) = optional_account.0 else {
@@ -2094,6 +2256,23 @@ fn merge_jetton_content(content: &mut Value, remote_content: &Value) {
             _ => {}
         }
     }
+}
+
+fn library_ref_hash(cell: &Cell) -> anyhow::Result<Option<Hash256>> {
+    if !cell.is_exotic() {
+        return Ok(None);
+    }
+
+    let slice = cell.as_slice_allow_exotic();
+    if slice.size_bits() != 8 + 256 {
+        return Ok(None);
+    }
+
+    let mut slice = cell.as_slice_allow_exotic();
+    if slice.load_u8()? != EXOTIC_LIBRARY_TAG {
+        return Ok(None);
+    }
+    Ok(Some(Hash256(slice.load_u256()?.0)))
 }
 
 #[cfg(test)]
@@ -2619,6 +2798,97 @@ mod tests {
             entry.publishers.contains(&account_a),
             "publisher A must be tracked"
         );
+    }
+
+    #[test]
+    fn account_code_library_reference_from_cache_is_visible_globally() {
+        let mut node = make_test_node(Box::new(NoopExecutor));
+        let account = test_addr(0x21);
+        let library = make_lib_root(21);
+        let hash = Hash256(*library.repr_hash().as_array());
+        node.cas.put(Boc::encode(library.clone()).into(), hash);
+
+        let code_ref = CellBuilder::build_library(&HashBytes(hash.0));
+        let account_boc =
+            make_active_shard_account_boc_with_state(account, Some(code_ref), None, Dict::new(), 1);
+
+        node.register_account_code_libraries(&account, None, &account_boc, 21)
+            .expect("cached code library must be registered");
+
+        let entry = found_library_entry(&node, hash).expect("code library must appear globally");
+        assert_eq!(entry.lib_boc, Boc::encode(library).into());
+        assert!(entry.publishers.contains(&account));
+    }
+
+    #[test]
+    fn account_code_library_reference_from_cache_registers_nested_libraries() {
+        let mut node = make_test_node(Box::new(NoopExecutor));
+        let account = test_addr(0x24);
+
+        let nested = make_lib_root(24);
+        let nested_hash = Hash256(*nested.repr_hash().as_array());
+        node.cas.put(Boc::encode(nested).into(), nested_hash);
+
+        let nested_ref = CellBuilder::build_library(&HashBytes(nested_hash.0));
+        let mut parent_builder = CellBuilder::new();
+        parent_builder.store_u32(25).expect("must store seed");
+        parent_builder
+            .store_reference(nested_ref)
+            .expect("must store nested library ref");
+        let parent = parent_builder.build().expect("must build parent library");
+        let parent_hash = Hash256(*parent.repr_hash().as_array());
+        node.cas.put(Boc::encode(parent).into(), parent_hash);
+
+        let code_ref = CellBuilder::build_library(&HashBytes(parent_hash.0));
+        let account_boc =
+            make_active_shard_account_boc_with_state(account, Some(code_ref), None, Dict::new(), 1);
+
+        node.register_account_code_libraries(&account, None, &account_boc, 24)
+            .expect("cached code libraries must be registered recursively");
+
+        assert!(
+            found_library_entry(&node, parent_hash).is_some(),
+            "parent code library must be registered"
+        );
+        assert!(
+            found_library_entry(&node, nested_hash).is_some(),
+            "nested code library must be registered"
+        );
+    }
+
+    #[test]
+    fn rebuild_global_libraries_registers_cached_code_reference_libraries() {
+        let mut node = make_test_node(Box::new(NoopExecutor));
+        let account = test_addr(0x23);
+        let library = make_lib_root(23);
+        let hash = Hash256(*library.repr_hash().as_array());
+        node.cas.put(Boc::encode(library.clone()).into(), hash);
+
+        let code_ref = CellBuilder::build_library(&HashBytes(hash.0));
+        let account_boc =
+            make_active_shard_account_boc_with_state(account, Some(code_ref), None, Dict::new(), 1);
+        let account_hash = compute_boc_hash(&account_boc).expect("account BOC must hash");
+        node.cas.put(account_boc, account_hash);
+        node.latest.accounts.insert(
+            account,
+            AccountMeta {
+                account_hash,
+                status: AccountStatus::Active,
+                cached_balance: Some(1),
+                last_trans_lt: Some(23),
+                last_trans_hash: None,
+                code_hash: None,
+                data_hash: None,
+                frozen_hash: None,
+            },
+        );
+
+        node.rebuild_global_libraries_from_accounts()
+            .expect("rebuild must register cached code refs");
+
+        let entry = found_library_entry(&node, hash).expect("code library must appear globally");
+        assert_eq!(entry.lib_boc, Boc::encode(library).into());
+        assert!(entry.publishers.contains(&account));
     }
 
     #[test]
