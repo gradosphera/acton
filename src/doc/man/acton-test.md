@@ -95,6 +95,17 @@ Full backtraces also raise executor verbosity to collect source locations and
 call stacks without opening the debugger.
 {{/option}}
 
+{{#option "`--no-capture`" }}
+Print test `println` and `eprintln` output as it is produced.
+
+The output is still captured for reporters such as JUnit and the test UI.
+Executor debug logs from `--verbose`, including `debug.dumpStack()`, are not
+printed live by this flag.
+
+This flag is not supported with `--mutate`, because mutation testing executes
+child test processes and captures their output for mutation reports.
+{{/option}}
+
 {{/options}}
 
 ### Coverage Options
@@ -398,6 +409,8 @@ Acton discovers tests by finding files that end with `.test.tolk`.
   per-test profile next to `Info`, `Transactions`, and `Logs`
 - `--junit-path` matters when the JUnit reporter is enabled; it defaults to
   `[test].junit-path`, or `test-results` when it is not configured
+- `--no-capture` prints `println` and `eprintln` output during the test run,
+  while keeping captured stdout and stderr available to non-console reporters
 - executor debug logs are hidden by default; re-run with `--verbose` when you need
   level-1 executor output such as `debug.dumpStack()`
 - `--verbose` is only low-level executor logging; `--coverage` also collects

@@ -92,6 +92,7 @@ pub struct TestResult {
     pub get_result: GetMethodResult,
     pub captured_stdout: String,
     pub captured_stderr: String,
+    pub captured_debug_output: String,
     pub assert_failure: Option<AssertFailure>,
     pub expected_exit_code: Option<i32>,
     pub accounts: FxHashMap<StdAddr, ShardAccount>,
@@ -210,7 +211,7 @@ impl<'a> TestRunner<'a> {
             || config.report_formats.contains(&ReportFormat::Console)
         {
             let console_config = ConsoleConfig {
-                show_output: true,
+                show_output: !config.no_capture,
                 project_root: project_root.to_path_buf(),
             };
             reporter_manager.add_reporter(Box::new(ConsoleReporter::new(console_config)));
@@ -234,7 +235,7 @@ impl<'a> TestRunner<'a> {
         }
 
         if config.report_formats.contains(&ReportFormat::Dot) {
-            reporter_manager.add_reporter(Box::new(DotReporter::new()));
+            reporter_manager.add_reporter(Box::new(DotReporter::new(!config.no_capture)));
         }
     }
 
@@ -349,6 +350,7 @@ impl<'a> TestRunner<'a> {
                 stdout_buffer: String::new(),
                 stderr_buffer: String::new(),
                 capture_output: true,
+                live_output: self.config.no_capture,
             },
             asserts: AssertsContext {
                 assert_failure: &mut assert_failure,
@@ -423,7 +425,8 @@ impl<'a> TestRunner<'a> {
             };
 
         let mut captured_stdout = captured_stdout;
-        Self::append_debug_output(&mut captured_stdout, &result, verbosity);
+        let captured_debug_output = Self::debug_output(&result, verbosity);
+        append_output_block(&mut captured_stdout, &captured_debug_output);
 
         let executed_get_methods = if self.config.coverage
             || (self.config.gas_profile.is_some() && self.config.gas_profile_include_tests)
@@ -441,6 +444,7 @@ impl<'a> TestRunner<'a> {
             get_result: result,
             captured_stdout,
             captured_stderr,
+            captured_debug_output,
             assert_failure,
             expected_exit_code,
             accounts: world_state.take_accounts(),
@@ -449,37 +453,35 @@ impl<'a> TestRunner<'a> {
         })
     }
 
-    fn append_debug_output(
-        stdout: &mut String,
-        get_result: &GetMethodResult,
-        verbosity: ExecutorVerbosity,
-    ) {
+    fn debug_output(get_result: &GetMethodResult, verbosity: ExecutorVerbosity) -> String {
         if matches!(verbosity, ExecutorVerbosity::Off) {
-            return;
+            return String::new();
         }
 
         let GetMethodResult::Success(result) = get_result else {
-            return;
+            return String::new();
         };
 
-        let debug_output = result
+        result
             .vm_log
             .lines()
             .filter_map(|line| line.strip_prefix("#DEBUG#:"))
             .map(str::trim_start)
             .collect::<Vec<_>>()
-            .join("\n");
+            .join("\n")
+    }
+}
 
-        if debug_output.is_empty() {
-            return;
-        }
+fn append_output_block(stdout: &mut String, output: &str) {
+    if output.is_empty() {
+        return;
+    }
 
-        if !stdout.is_empty() && !stdout.ends_with('\n') {
-            stdout.push('\n');
-        }
-        stdout.push_str(&debug_output);
+    if !stdout.is_empty() && !stdout.ends_with('\n') {
         stdout.push('\n');
     }
+    stdout.push_str(output);
+    stdout.push('\n');
 }
 
 fn dump_trace_if_available(
@@ -1298,6 +1300,7 @@ fn run_file_tests(
         let TestResult {
             captured_stdout,
             captured_stderr,
+            captured_debug_output,
             assert_failure,
             expected_exit_code: dyn_expected_exit_code,
             accounts,
@@ -1359,6 +1362,7 @@ fn run_file_tests(
             gas_used,
             stdout: captured_stdout,
             stderr: captured_stderr,
+            debug_output: captured_debug_output,
             vm_log,
             assert_failure: assert_failure.clone(),
             expected_exit_code,

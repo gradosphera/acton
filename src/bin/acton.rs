@@ -264,6 +264,13 @@ enum Commands {
         debug_port: Option<u16>,
         #[arg(long, help = "Enable backtraces", help_heading = "Debugging")]
         backtrace: Option<BacktraceMode>,
+        #[arg(
+            long,
+            help = "Print test stdout/stderr immediately while still capturing it for reporters",
+            help_heading = "Debugging",
+            conflicts_with = "mutate"
+        )]
+        no_capture: bool,
 
         // Coverage
         #[arg(long, help = "Generate a coverage profile", help_heading = "Coverage")]
@@ -1915,6 +1922,7 @@ fn main() {
             debug,
             debug_port,
             backtrace,
+            no_capture,
             coverage,
             coverage_format,
             coverage_file,
@@ -1964,6 +1972,7 @@ fn main() {
                     debug,
                     debug_port,
                     backtrace,
+                    no_capture,
                     coverage,
                     coverage_format,
                     coverage_file,
@@ -2678,6 +2687,7 @@ fn create_test_config(
     debug: bool,
     debug_port: Option<u16>,
     backtrace: Option<BacktraceMode>,
+    no_capture: bool,
     coverage: bool,
     coverage_format: Option<CoverageFormat>,
     coverage_file: Option<String>,
@@ -2782,6 +2792,7 @@ fn create_test_config(
             ui_port,
         );
         config.verbosity = verbosity;
+        config.no_capture = no_capture;
         config.mutation_ids = mutation_ids;
         if mutation_rules_file.is_some() {
             config.mutation_rules_file = mutation_rules_file;
@@ -2799,6 +2810,7 @@ fn create_test_config(
         debug,
         debug_port: debug_port.unwrap_or(12345),
         backtrace,
+        no_capture,
         coverage,
         coverage_minimum_percent,
         coverage_include_wrappers,

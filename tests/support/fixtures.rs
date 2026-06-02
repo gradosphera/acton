@@ -147,6 +147,7 @@ impl FixtureProject {
             verify_wallet: None,
             verify_network: None,
             test_fail_fast: false,
+            test_no_capture: false,
             script_fork_net: None,
             build_info: false,
             force_no_color_env: true,

@@ -1194,6 +1194,7 @@ impl Project {
             verify_wallet: None,
             verify_network: None,
             test_fail_fast: false,
+            test_no_capture: false,
             script_fork_net: None,
             build_info: false,
             force_no_color_env: true,
@@ -1251,6 +1252,7 @@ pub(crate) struct ActonCommand {
     pub(crate) verify_wallet: Option<String>,
     pub(crate) verify_network: Option<String>,
     pub(crate) test_fail_fast: bool,
+    pub(crate) test_no_capture: bool,
     pub(crate) script_fork_net: Option<String>,
     pub(crate) build_info: bool,
     pub(crate) force_no_color_env: bool,
@@ -1668,6 +1670,11 @@ impl ActonCommand {
         self
     }
 
+    pub(crate) fn no_capture(mut self) -> Self {
+        self.test_no_capture = true;
+        self
+    }
+
     /// Enable `JUnit` merge mode (all suites in single file)
     ///
     /// # Examples
@@ -1910,6 +1917,10 @@ impl ActonCommand {
 
         if self.test_fail_fast {
             self.cmd = self.cmd.arg("--fail-fast");
+        }
+
+        if self.test_no_capture {
+            self.cmd = self.cmd.arg("--no-capture");
         }
 
         if let Some(contract) = self.build_contract {

@@ -1324,6 +1324,7 @@ impl TestSettings {
                         _ => None,
                     })
             }),
+            no_capture: false,
             coverage: coverage_override.unwrap_or_else(|| self.coverage_enabled().unwrap_or(false)),
             coverage_format: coverage_format_override.or_else(|| {
                 self.coverage_format_value()

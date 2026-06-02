@@ -973,6 +973,7 @@ pub struct IoContext {
     pub stdout_buffer: String,
     pub stderr_buffer: String,
     pub capture_output: bool,
+    pub live_output: bool,
 }
 
 pub struct AssertsContext<'a> {

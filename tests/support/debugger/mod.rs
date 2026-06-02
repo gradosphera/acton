@@ -350,6 +350,7 @@ fn execute_script(
             stdout_buffer: String::new(),
             stderr_buffer: String::new(),
             capture_output: true,
+            live_output: false,
         },
         asserts: AssertsContext {
             assert_failure: &mut assert_failure,

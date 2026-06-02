@@ -11,7 +11,7 @@ use num_bigint::BigInt;
 use num_traits::ToPrimitive;
 use std::borrow::Cow;
 use std::collections::HashSet;
-use std::io::{IsTerminal, stdin};
+use std::io::{self, IsTerminal, Write, stdin};
 use tolk_compiler::SourceMap;
 use tolk_compiler::abi::Ty;
 use tolk_compiler::types_kernel::{TyIdx, render_ty};
@@ -73,8 +73,11 @@ fn println_impl(
     if ctx.io.capture_output {
         ctx.io.stdout_buffer.push_str(&formatted);
         ctx.io.stdout_buffer.push('\n');
-    } else {
-        println!("{formatted}");
+    }
+    if ctx.io.live_output || !ctx.io.capture_output {
+        let mut stdout = io::stdout().lock();
+        writeln!(stdout, "{formatted}")?;
+        stdout.flush()?;
     }
     Ok(())
 }
@@ -84,8 +87,11 @@ fn eprintln_impl(ctx: &mut Context, _stack: &mut Tuple, s: String) -> anyhow::Re
     if ctx.io.capture_output {
         ctx.io.stderr_buffer.push_str(&s);
         ctx.io.stderr_buffer.push('\n');
-    } else {
-        eprintln!("{s}");
+    }
+    if ctx.io.live_output || !ctx.io.capture_output {
+        let mut stderr = io::stderr().lock();
+        writeln!(stderr, "{s}")?;
+        stderr.flush()?;
     }
     Ok(())
 }
