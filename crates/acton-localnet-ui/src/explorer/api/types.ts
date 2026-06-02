@@ -182,6 +182,30 @@ export interface LocalnetNodeInfo {
   }
 }
 
+export type ApiCallStatus = "success" | "failed"
+export type ApiCallType = "read" | "write"
+export type ApiCallFamily = "control" | "emulate" | "json_rpc" | "streaming" | "v2" | "v3"
+
+export interface ApiCallRecord {
+  readonly sequence: number
+  readonly status: ApiCallStatus
+  readonly status_code: number
+  readonly call_type: ApiCallType
+  readonly api_family: ApiCallFamily
+  readonly http_method: string
+  readonly path: string
+  readonly method: string
+  readonly request_id: unknown
+  readonly timestamp_ms: number
+  readonly duration_ms: number
+}
+
+export interface ApiCallLogResponse {
+  readonly calls: readonly ApiCallRecord[]
+  readonly total_retained: number
+  readonly max_retained: number
+}
+
 export interface StartupWallet {
   readonly name: string
   readonly mnemonic: readonly string[]

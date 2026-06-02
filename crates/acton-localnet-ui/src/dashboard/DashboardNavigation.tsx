@@ -50,6 +50,7 @@ const mainItems: SidebarItem[] = [
 ]
 
 const apiItems: SidebarItem[] = [
+  {label: "API Calls", icon: Braces, path: "/api-calls"},
   {label: "v2 API", icon: FileJson, path: "/api-reference/v2"},
   {label: "v3 API", icon: Braces, path: "/api-reference/v3"},
   {label: "Control API", icon: Settings2, path: "/api-reference/control"},

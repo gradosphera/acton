@@ -192,6 +192,11 @@ pub struct SetNetworkConditionsRequest {
 }
 
 #[derive(Deserialize)]
+pub struct GetApiCallsRequest {
+    pub limit: Option<usize>,
+}
+
+#[derive(Deserialize)]
 pub struct CompilerAbiRegistration {
     pub code_hash: String,
     pub compiler_abi: Value,

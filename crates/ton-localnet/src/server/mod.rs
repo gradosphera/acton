@@ -6,10 +6,15 @@ use crate::localnet::Localnet;
 use acton_config::color::OwoColorize;
 use axum::extract::FromRef;
 use serde::Serialize;
-use std::collections::HashSet;
+use serde_json::Value;
+use std::collections::{HashSet, VecDeque};
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::broadcast;
+
+const MAX_API_CALLS: usize = 500;
 
 #[derive(Clone, Debug, Serialize)]
 pub struct StartupWallet {
@@ -29,6 +34,7 @@ pub struct ServerState {
     pub state_source: Arc<StateSourceInfo>,
     pub shutdown: ShutdownSignal,
     pub network_conditions: NetworkConditions,
+    pub api_calls: ApiCallLog,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -69,6 +75,149 @@ impl NetworkConditions {
     pub fn info(&self) -> NetworkConditionsInfo {
         NetworkConditionsInfo {
             response_delay_ms: self.response_delay_ms(),
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct ApiCallLog {
+    entries: Arc<Mutex<VecDeque<ApiCallRecord>>>,
+    next_sequence: Arc<AtomicU64>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct ApiCallRecord {
+    pub sequence: u64,
+    pub status: ApiCallStatus,
+    pub status_code: u16,
+    pub call_type: ApiCallType,
+    pub api_family: ApiCallFamily,
+    pub http_method: String,
+    pub path: String,
+    pub method: String,
+    pub request_id: Value,
+    pub timestamp_ms: u128,
+    pub duration_ms: u128,
+}
+
+#[derive(Clone, Copy, Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ApiCallStatus {
+    Success,
+    Failed,
+}
+
+#[derive(Clone, Copy, Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ApiCallType {
+    Read,
+    Write,
+}
+
+#[derive(Clone, Copy, Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ApiCallFamily {
+    Control,
+    Emulate,
+    JsonRpc,
+    Streaming,
+    V2,
+    V3,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct ApiCallLogSnapshot {
+    pub calls: Vec<ApiCallRecord>,
+    pub total_retained: usize,
+    pub max_retained: usize,
+}
+
+#[derive(Clone, Debug)]
+pub struct ApiCallStart {
+    pub started_at: SystemTime,
+    pub duration_start: Instant,
+}
+
+#[derive(Clone, Debug)]
+pub struct ApiCallInput {
+    pub call_type: ApiCallType,
+    pub api_family: ApiCallFamily,
+    pub http_method: String,
+    pub path: String,
+    pub method: String,
+    pub request_id: Value,
+    pub status_code: u16,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct ApiCallAlreadyRecorded;
+
+impl ApiCallLog {
+    fn new() -> Self {
+        Self {
+            entries: Arc::new(Mutex::new(VecDeque::with_capacity(MAX_API_CALLS))),
+            next_sequence: Arc::new(AtomicU64::new(1)),
+        }
+    }
+
+    #[must_use]
+    pub fn start() -> ApiCallStart {
+        ApiCallStart {
+            started_at: SystemTime::now(),
+            duration_start: Instant::now(),
+        }
+    }
+
+    pub fn record(&self, input: ApiCallInput, start: ApiCallStart) {
+        let sequence = self.next_sequence.fetch_add(1, Ordering::Relaxed);
+        let status = if input.status_code < 400 {
+            ApiCallStatus::Success
+        } else {
+            ApiCallStatus::Failed
+        };
+        let timestamp_ms = start
+            .started_at
+            .duration_since(UNIX_EPOCH)
+            .map_or(0, |duration| duration.as_millis());
+
+        let record = ApiCallRecord {
+            sequence,
+            status,
+            status_code: input.status_code,
+            call_type: input.call_type,
+            api_family: input.api_family,
+            http_method: input.http_method,
+            path: input.path,
+            method: input.method,
+            request_id: input.request_id,
+            timestamp_ms,
+            duration_ms: start.duration_start.elapsed().as_millis(),
+        };
+
+        let mut entries = self
+            .entries
+            .lock()
+            .expect("API call log lock must not be poisoned");
+        if entries.len() == MAX_API_CALLS {
+            entries.pop_front();
+        }
+        entries.push_back(record);
+    }
+
+    #[must_use]
+    pub fn snapshot(&self, limit: Option<usize>) -> ApiCallLogSnapshot {
+        let entries = self
+            .entries
+            .lock()
+            .expect("API call log lock must not be poisoned");
+        let limit = limit.unwrap_or(MAX_API_CALLS).min(MAX_API_CALLS);
+        let skip = entries.len().saturating_sub(limit);
+        let calls = entries.iter().skip(skip).cloned().collect();
+
+        ApiCallLogSnapshot {
+            calls,
+            total_retained: entries.len(),
+            max_retained: MAX_API_CALLS,
         }
     }
 }
@@ -125,6 +274,12 @@ impl FromRef<ServerState> for NetworkConditions {
     }
 }
 
+impl FromRef<ServerState> for ApiCallLog {
+    fn from_ref(state: &ServerState) -> Self {
+        state.api_calls.clone()
+    }
+}
+
 pub struct ServerArgs {
     pub port: u16,
     pub db_path: Option<String>,
@@ -148,6 +303,7 @@ pub async fn run_server(node: Arc<Localnet>, args: ServerArgs) -> anyhow::Result
 
     seed_startup_wallet_names(&node, &startup_wallets).await?;
     let network_conditions = NetworkConditions::new(response_delay_ms);
+    let api_calls = ApiCallLog::new();
 
     let state_source = StateSourceInfo {
         state_source: if fork_network.is_some() {
@@ -166,6 +322,7 @@ pub async fn run_server(node: Arc<Localnet>, args: ServerArgs) -> anyhow::Result
             state_source: Arc::new(state_source),
             shutdown: shutdown.clone(),
             network_conditions: network_conditions.clone(),
+            api_calls,
         },
         rate_limit_rps,
     );

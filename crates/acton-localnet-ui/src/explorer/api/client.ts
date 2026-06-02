@@ -5,6 +5,7 @@ import type {
   AccountStatesResponse,
   ApiResponse,
   FullAccountState,
+  ApiCallLogResponse,
   JettonMaster,
   JettonWallet,
   JettonWalletData,
@@ -323,6 +324,12 @@ export class TonClient {
   async getNodeInfo(): Promise<LocalnetNodeInfo> {
     const url = this.buildUrl(this.addressNameBaseUrl, "/acton_nodeInfo")
     return this.request(url, "Failed to fetch node info")
+  }
+
+  async getApiCalls(limit = 200): Promise<ApiCallLogResponse> {
+    const url = this.buildUrl(this.addressNameBaseUrl, "/acton_getApiCalls")
+    url.searchParams.append("limit", limit.toString())
+    return this.request(url, "Failed to fetch API calls")
   }
 
   async getStartupWallets(): Promise<StartupWallet[]> {

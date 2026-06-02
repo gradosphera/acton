@@ -85,6 +85,13 @@ const quickSearchResults: readonly SearchResult[] = [
     icon: Wallet,
   },
   {
+    id: "quick-api-calls",
+    title: "API Calls",
+    description: "Recent API traffic handled by localnet",
+    href: "/api-calls",
+    icon: FileJson,
+  },
+  {
     id: "quick-tokens",
     title: "Tokens",
     description: "Jettons indexed from the local network",

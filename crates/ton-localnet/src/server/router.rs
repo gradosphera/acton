@@ -2,18 +2,22 @@ use super::handlers::utils::get_extra;
 use super::handlers::{
     detect_address, detect_hash, dump_state, emulate_trace_v1, faucet, get_account_states_v3,
     get_address_balance, get_address_information, get_address_information_v3, get_address_name,
-    get_address_state, get_block_header, get_block_transactions, get_block_transactions_ext,
-    get_compiler_abi, get_config_all, get_config_param, get_consensus_block,
-    get_extended_address_information, get_jetton_masters, get_jetton_wallets, get_libraries,
-    get_masterchain_info, get_nft_items, get_out_msg_queue_size, get_pending_transactions_v3,
-    get_shard_account_cell, get_shards, get_startup_wallets, get_status, get_traces,
-    get_transactions, get_transactions_by_message_v3, get_transactions_std, get_transactions_v3,
-    json_rpc, load_state, lookup_block, pack_address, register_compiler_abis, run_get_method,
-    run_get_method_std, run_get_method_v3, send_boc, send_boc_return_hash, send_internal_message,
-    send_message_v3, set_address_name, set_network_conditions, set_shard_account, streaming_sse,
-    streaming_ws, try_locate_result_tx, try_locate_source_tx, try_locate_tx, unpack_address,
+    get_address_state, get_api_calls, get_block_header, get_block_transactions,
+    get_block_transactions_ext, get_compiler_abi, get_config_all, get_config_param,
+    get_consensus_block, get_extended_address_information, get_jetton_masters, get_jetton_wallets,
+    get_libraries, get_masterchain_info, get_nft_items, get_out_msg_queue_size,
+    get_pending_transactions_v3, get_shard_account_cell, get_shards, get_startup_wallets,
+    get_status, get_traces, get_transactions, get_transactions_by_message_v3, get_transactions_std,
+    get_transactions_v3, json_rpc, load_state, lookup_block, pack_address, register_compiler_abis,
+    run_get_method, run_get_method_std, run_get_method_v3, send_boc, send_boc_return_hash,
+    send_internal_message, send_message_v3, set_address_name, set_network_conditions,
+    set_shard_account, streaming_sse, streaming_ws, try_locate_result_tx, try_locate_source_tx,
+    try_locate_tx, unpack_address,
 };
-use crate::server::{NetworkConditions, ServerState};
+use crate::server::{
+    ApiCallAlreadyRecorded, ApiCallFamily, ApiCallInput, ApiCallLog, ApiCallType,
+    NetworkConditions, ServerState,
+};
 use axum::{
     Json, Router,
     extract::Request,
@@ -24,7 +28,7 @@ use axum::{
 };
 #[cfg(not(debug_assertions))]
 use include_dir::{Dir, include_dir};
-use serde_json::json;
+use serde_json::{Value, json};
 #[cfg(debug_assertions)]
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -124,6 +128,7 @@ pub fn create_router(state: ServerState, rate_limit_rps: Option<u32>) -> Router 
         .merge(api_v3_router)
         .merge(emulate_router)
         .merge(streaming_router);
+    let api_calls_for_admin = state.api_calls.clone();
     let acton_router = Router::new()
         .route("/acton_fundAccount", post(faucet))
         .route("/acton_getAddressName", get(get_address_name))
@@ -136,7 +141,11 @@ pub fn create_router(state: ServerState, rate_limit_rps: Option<u32>) -> Router 
         .route("/acton_sendInternalMessage", post(send_internal_message))
         .route("/acton_getStartupWallets", get(get_startup_wallets))
         .route("/acton_setNetworkConditions", post(set_network_conditions))
-        .route("/acton_nodeInfo", get(get_status));
+        .route("/acton_getApiCalls", get(get_api_calls))
+        .route("/acton_nodeInfo", get(get_status))
+        .layer(middleware::from_fn(move |request, next| {
+            record_api_call(request, next, api_calls_for_admin.clone())
+        }));
 
     if let Some(limit) = rate_limit_rps {
         let mut governor_config = GovernorConfigBuilder::default();
@@ -151,6 +160,11 @@ pub fn create_router(state: ServerState, rate_limit_rps: Option<u32>) -> Router 
             .error_handler(move |error| governor_error_response(error, limit));
         api_router = api_router.layer(governor_layer);
     }
+
+    let api_calls_for_api = state.api_calls.clone();
+    api_router = api_router.layer(middleware::from_fn(move |request, next| {
+        record_api_call(request, next, api_calls_for_api.clone())
+    }));
 
     let app = Router::new()
         .nest("/api", api_router)
@@ -183,6 +197,114 @@ async fn delay_response(request: Request, next: Next, conditions: NetworkConditi
         sleep(Duration::from_millis(delay_ms)).await;
     }
     response
+}
+
+async fn record_api_call(request: Request, next: Next, api_calls: ApiCallLog) -> Response {
+    let start = ApiCallLog::start();
+    let http_method = request.method().as_str().to_owned();
+    let path = request.uri().path().to_owned();
+    let response = next.run(request).await;
+
+    if response
+        .extensions()
+        .get::<ApiCallAlreadyRecorded>()
+        .is_some()
+    {
+        return response;
+    }
+
+    let status_code = response.status().as_u16();
+    if let Some(mut input) = api_call_input(&http_method, &path) {
+        input.status_code = status_code;
+        api_calls.record(input, start);
+    }
+
+    response
+}
+
+fn api_call_input(http_method: &str, path: &str) -> Option<ApiCallInput> {
+    let normalized_api_path = path.strip_prefix("/api").unwrap_or(path);
+    let (api_family, method) = if path.starts_with("/acton_") {
+        if matches!(path, "/acton_getApiCalls" | "/acton_nodeInfo") {
+            return None;
+        }
+        (
+            ApiCallFamily::Control,
+            path.trim_start_matches('/').to_owned(),
+        )
+    } else if normalized_api_path == "/v2"
+        || normalized_api_path == "/v2/jsonRPC"
+        || normalized_api_path == "/v2/v2/jsonRPC"
+    {
+        (ApiCallFamily::JsonRpc, "jsonRPC".to_owned())
+    } else if normalized_api_path.starts_with("/v2/") {
+        (
+            ApiCallFamily::V2,
+            normalized_api_path
+                .trim_start_matches("/v2/")
+                .split('/')
+                .next()
+                .unwrap_or("v2")
+                .to_owned(),
+        )
+    } else if normalized_api_path.starts_with("/v3/") {
+        (
+            ApiCallFamily::V3,
+            normalized_api_path
+                .trim_start_matches("/v3/")
+                .split('/')
+                .next()
+                .unwrap_or("v3")
+                .to_owned(),
+        )
+    } else if normalized_api_path.starts_with("/emulate/") {
+        (
+            ApiCallFamily::Emulate,
+            normalized_api_path
+                .trim_start_matches('/')
+                .split('/')
+                .next_back()
+                .unwrap_or("emulate")
+                .to_owned(),
+        )
+    } else if normalized_api_path.starts_with("/streaming/") {
+        (
+            ApiCallFamily::Streaming,
+            normalized_api_path.trim_start_matches('/').to_owned(),
+        )
+    } else {
+        return None;
+    };
+
+    Some(ApiCallInput {
+        call_type: classify_http_call_type(http_method, &method, normalized_api_path),
+        api_family,
+        http_method: http_method.to_owned(),
+        path: path.to_owned(),
+        method,
+        request_id: Value::Null,
+        status_code: 0,
+    })
+}
+
+fn classify_http_call_type(http_method: &str, method: &str, path: &str) -> ApiCallType {
+    if matches!(http_method, "GET" | "HEAD" | "OPTIONS") {
+        return ApiCallType::Read;
+    }
+
+    let method = method.to_ascii_lowercase();
+    let path = path.to_ascii_lowercase();
+    if method.contains("rungetmethod")
+        || method.starts_with("get")
+        || method.starts_with("detect")
+        || method.contains("packaddress")
+        || path.starts_with("/streaming/")
+        || path.starts_with("/emulate/")
+    {
+        ApiCallType::Read
+    } else {
+        ApiCallType::Write
+    }
 }
 
 fn loopback_cors() -> CorsLayer {

@@ -458,6 +458,53 @@ fn localnet_starts_and_serves_masterchain_info() {
 }
 
 #[test]
+fn localnet_records_api_calls_for_dashboard() {
+    let project = ProjectBuilder::new("localnet-api-calls-dashboard").build();
+    let node = project.localnet().start();
+
+    let mut initial_log = node.get_json("/acton_getApiCalls");
+    normalize_api_calls_for_snapshot(&mut initial_log);
+
+    let _admin_wallets = node.get_json("/acton_getStartupWallets");
+    let _admin_status = node.get_json("/acton_nodeInfo");
+    let _v2_status = node.get_json("/api/v2/getMasterchainInfo");
+    let _successful_rpc = node.post_json(
+        "/api/v2/jsonRPC",
+        &json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "getMasterchainInfo",
+            "params": {}
+        }),
+    );
+    let (failed_status, _failed_rpc) = node.post_json_with_status(
+        "/api/v2/jsonRPC",
+        &json!({
+            "jsonrpc": "2.0",
+            "id": "missing",
+            "method": "missingMethod",
+            "params": {}
+        }),
+    );
+
+    let mut logged_calls = node.get_json("/acton_getApiCalls?limit=10");
+    normalize_api_calls_for_snapshot(&mut logged_calls);
+
+    let snapshot = json!({
+        "initial_log": initial_log,
+        "failed_status": failed_status,
+        "logged_calls": logged_calls,
+    });
+
+    assertion().eq(
+        pretty_json_for_snapshot(&snapshot, project.path()),
+        snapbox::file!("snapshots/localnet/test_localnet_api_calls_dashboard.response.json"),
+    );
+
+    node.stop();
+}
+
+#[test]
 fn localnet_serves_get_shard_account_cell_for_empty_account() {
     let project = ProjectBuilder::new("localnet-shard-account-cell-empty").build();
     let node = project.localnet().start();
@@ -3993,6 +4040,24 @@ fn normalize_out_msg_queue_size_for_snapshot(response: &mut Value) {
                 if let Some(seqno) = id.get_mut("seqno") {
                     *seqno = json!("[SEQNO]");
                 }
+            }
+        }
+    }
+}
+
+fn normalize_api_calls_for_snapshot(response: &mut Value) {
+    normalize_extra_for_snapshot(response);
+
+    if let Some(calls) = response
+        .pointer_mut("/result/calls")
+        .and_then(Value::as_array_mut)
+    {
+        for call in calls {
+            if let Some(timestamp_ms) = call.get_mut("timestamp_ms") {
+                *timestamp_ms = json!("[TIMESTAMP_MS]");
+            }
+            if let Some(duration_ms) = call.get_mut("duration_ms") {
+                *duration_ms = json!("[DURATION_MS]");
             }
         }
     }

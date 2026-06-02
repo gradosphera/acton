@@ -37,6 +37,10 @@ const HomePage = React.lazy(async () => {
   const module = await import("./dashboard/pages/HomePage")
   return {default: module.HomePage}
 })
+const ApiCallsPage = React.lazy(async () => {
+  const module = await import("./dashboard/pages/ApiCallsPage")
+  return {default: module.ApiCallsPage}
+})
 const NftsPage = React.lazy(async () => {
   const module = await import("./dashboard/pages/NftsPage")
   return {default: module.NftsPage}
@@ -199,6 +203,19 @@ const AppContent: React.FC<AppContentProps> = ({client, theme, setTheme}) => {
           <Route path="/dashboard/wallets" element={<Navigate to="/wallets" replace />} />
           <Route path="/dashboard/tokens" element={<Navigate to="/tokens" replace />} />
           <Route path="/dashboard/nfts" element={<Navigate to="/nfts" replace />} />
+          <Route path="/dashboard/json-rpc-calls" element={<Navigate to="/api-calls" replace />} />
+          <Route path="/dashboard/api-calls" element={<Navigate to="/api-calls" replace />} />
+          <Route path="/json-rpc-calls" element={<Navigate to="/api-calls" replace />} />
+          <Route
+            path="/api-calls"
+            element={
+              <DashboardPage client={client} theme={theme} setTheme={setTheme}>
+                <RouteSuspense>
+                  <ApiCallsPage client={client} />
+                </RouteSuspense>
+              </DashboardPage>
+            }
+          />
           <Route
             path="/explorer"
             element={
