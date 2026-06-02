@@ -36,7 +36,8 @@ use tolk_syntax::ast::expressions::parse_tolk_int_literal;
 use ton_api::Network;
 use ton_emulator::emulator::Emulator;
 use ton_emulator::world_state::{
-    AccountsState, LocalAccountsState, RemoteAccountState, RemoteSnapshotCache, WorldState,
+    AccountsState, LocalAccountsState, RemoteAccountState, RemoteLibraryCache, RemoteSnapshotCache,
+    WorldState,
 };
 use ton_executor::get::step::StepGetExecutor;
 use ton_executor::get::{GetExecutor, GetMethodResult, GetMethodResultSuccess, RunGetMethodArgs};
@@ -288,6 +289,7 @@ fn execute_script(
                 net.clone(),
                 fork_block_number,
                 RemoteSnapshotCache::new(),
+                RemoteLibraryCache::new(),
                 fork_cache_enabled,
             );
             AccountsState::Remote(remote)

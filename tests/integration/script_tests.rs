@@ -5,7 +5,8 @@ use crate::support::toncenter::{
     append_custom_network_with_urls, format_captured_requests, spawn_toncenter_v2_mock,
     spawn_toncenter_v2_mock_with_capture, spawn_toncenter_v3_mock,
     toncenter_v2_account_info_ok_response, toncenter_v2_error_response,
-    toncenter_v2_send_boc_ok_response, toncenter_v2_seqno_ok_response,
+    toncenter_v2_get_libraries_ok_response, toncenter_v2_send_boc_ok_response,
+    toncenter_v2_seqno_ok_response, toncenter_v2_shard_account_cell_ok_response,
     write_fork_account_cache_summary,
 };
 use acton_config::color::ColorMode;
@@ -17,10 +18,15 @@ use std::thread;
 use std::time::{Duration, Instant};
 use ton_executor::DEFAULT_CONFIG_DICT;
 use tycho_types::boc::Boc;
-use tycho_types::cell::{Cell, CellBuilder};
+use tycho_types::cell::{Cell, CellBuilder, HashBytes, Lazy};
+use tycho_types::models::{
+    Account, AccountState, CurrencyCollection, IntAddr, OptionalAccount, ShardAccount, StateInit,
+    StdAddr, StdAddrFormat, StorageInfo,
+};
 
 const DEPLOYER_MNEMONIC: &str = "cupboard match uphold miracle fog balance unknown region share hand trophy million toy narrow ability exchange first toast fresh maid report cram strong later";
 const TEST_TONCENTER_TESTNET_V2_URL_ENV: &str = "ACTON_TEST_TONCENTER_TESTNET_V2_URL";
+const AUTO_LOAD_LIBRARY_REMOTE_ADDRESS: &str = "EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ";
 
 const WAIT_FOR_TRACE_MESSAGES: &str = r"
 struct (0x91000001) TriggerForward {
@@ -2984,6 +2990,162 @@ fn script_get_method_missing_library_project(name: &str) -> Project {
         "#,
         )
         .build()
+}
+
+const AUTO_LOAD_LIBRARY_GETTER: &str = r"
+fun onInternalMessage(_: InMessage) {}
+fun onBouncedMessage(_: InMessageBounced) {}
+
+get fun currentCounter(): int {
+    return 123;
+}
+";
+
+fn auto_load_get_method_library_project(name: &str) -> Project {
+    let script = r#"
+        import "../../lib/emulation/network"
+        import "../../lib/io"
+
+        fun main() {
+            val counter = net.runGetMethod<int>(
+                address("__REMOTE_ADDRESS__"),
+                "currentCounter",
+            );
+            println("AUTO_LOADED_COUNTER={}", counter);
+        }
+    "#
+    .replace("__REMOTE_ADDRESS__", AUTO_LOAD_LIBRARY_REMOTE_ADDRESS);
+
+    ProjectBuilder::new(name)
+        .contract("getter", AUTO_LOAD_LIBRARY_GETTER)
+        .script_file("auto_load_get_method_library", &script)
+        .build()
+}
+
+fn compile_getter_code(project: &Project) -> Cell {
+    let output = project
+        .acton()
+        .compile("contracts/getter.tolk")
+        .base64_only()
+        .run()
+        .success();
+    Boc::decode_base64(output.get_stdout().trim()).expect("compiled getter BoC must decode")
+}
+
+fn shard_account_with_code_ref(code_ref: Cell) -> ShardAccount {
+    let (address, _) =
+        StdAddr::from_str_ext(AUTO_LOAD_LIBRARY_REMOTE_ADDRESS, StdAddrFormat::any())
+            .expect("remote address must parse");
+    ShardAccount {
+        account: Lazy::new(&OptionalAccount(Some(Account {
+            balance: CurrencyCollection::new(1_000_000_000),
+            address: IntAddr::Std(address),
+            last_trans_lt: 777,
+            state: AccountState::Active(StateInit {
+                code: Some(code_ref),
+                data: Some(Cell::default()),
+                ..Default::default()
+            }),
+            storage_stat: StorageInfo::default(),
+        })))
+        .expect("shard account must serialize"),
+        last_trans_hash: HashBytes([0x33; 32]),
+        last_trans_lt: 777,
+    }
+}
+
+fn auto_load_library_responses(
+    library_code: &Cell,
+    include_library: bool,
+) -> Vec<ToncenterV2MockResponse> {
+    let code_ref = CellBuilder::build_library(library_code.repr_hash());
+    let shard_account = shard_account_with_code_ref(code_ref);
+    let mut responses = vec![toncenter_v2_shard_account_cell_ok_response(&shard_account)];
+    if include_library {
+        responses.push(toncenter_v2_get_libraries_ok_response(&Boc::encode_base64(
+            library_code,
+        )));
+    } else {
+        responses.push(toncenter_v2_error_response(404, "mock library not found"));
+    }
+    responses
+}
+
+#[test]
+fn test_script_auto_loads_missing_get_method_library_from_net() {
+    let project = auto_load_get_method_library_project("script-auto-load-get-method-library");
+    let library_code = compile_getter_code(&project);
+    let (mock_url, mock_handle, captured_requests) =
+        spawn_toncenter_v2_mock_with_capture(auto_load_library_responses(&library_code, true));
+    append_custom_network(
+        project.path(),
+        "script-auto-load-lib",
+        &format!("{mock_url}/api/v2"),
+    );
+
+    let output = project
+        .acton()
+        .script("scripts/auto_load_get_method_library.tolk")
+        .fork_net("custom:script-auto-load-lib")
+        .run()
+        .success();
+    output.assert_snapshot_matches(
+        "integration/snapshots/script/test_script_auto_loads_missing_get_method_library_from_net.stdout.txt",
+    );
+
+    mock_handle.join().expect("mock toncenter must finish");
+    let captured_requests = captured_requests
+        .lock()
+        .expect("captured toncenter requests mutex poisoned");
+    fs::write(
+        project.path().join("auto-load-library-requests.txt"),
+        format_captured_requests(&captured_requests),
+    )
+    .expect("failed to write auto-load library request log");
+    output.assert_file_snapshot_matches(
+        "auto-load-library-requests.txt",
+        "integration/snapshots/script/test_script_auto_loads_missing_get_method_library_from_net.requests.txt",
+    );
+}
+
+#[test]
+fn test_script_auto_load_missing_get_method_library_keeps_failure_when_remote_missing() {
+    let project =
+        auto_load_get_method_library_project("script-auto-load-get-method-library-missing");
+    let library_code = compile_getter_code(&project);
+    let (mock_url, mock_handle, captured_requests) =
+        spawn_toncenter_v2_mock_with_capture(auto_load_library_responses(&library_code, false));
+    append_custom_network(
+        project.path(),
+        "script-auto-load-lib-missing",
+        &format!("{mock_url}/api/v2"),
+    );
+
+    let output = project
+        .acton()
+        .script("scripts/auto_load_get_method_library.tolk")
+        .fork_net("custom:script-auto-load-lib-missing")
+        .run()
+        .failure();
+    output.assert_snapshot_matches(
+        "integration/snapshots/script/test_script_auto_load_missing_get_method_library_keeps_failure_when_remote_missing.stdout.txt",
+    );
+
+    mock_handle.join().expect("mock toncenter must finish");
+    let captured_requests = captured_requests
+        .lock()
+        .expect("captured toncenter requests mutex poisoned");
+    fs::write(
+        project
+            .path()
+            .join("auto-load-missing-library-requests.txt"),
+        format_captured_requests(&captured_requests),
+    )
+    .expect("failed to write auto-load missing library request log");
+    output.assert_file_snapshot_matches(
+        "auto-load-missing-library-requests.txt",
+        "integration/snapshots/script/test_script_auto_load_missing_get_method_library_keeps_failure_when_remote_missing.requests.txt",
+    );
 }
 
 #[test]

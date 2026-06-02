@@ -53,7 +53,8 @@ use tolk_compiler::abi::ContractABI;
 use tolk_syntax::{AstNode, HasName, SourceFile};
 use ton_emulator::emulator::Emulator;
 use ton_emulator::world_state::{
-    AccountsState, LocalAccountsState, RemoteAccountState, RemoteSnapshotCache, WorldState,
+    AccountsState, LocalAccountsState, RemoteAccountState, RemoteLibraryCache, RemoteSnapshotCache,
+    WorldState,
 };
 use ton_executor::get::step::StepGetExecutor;
 use ton_executor::get::{GetExecutor, GetMethodResult, GetMethodResultSuccess, RunGetMethodArgs};
@@ -114,6 +115,7 @@ pub struct TestRunner<'a> {
     reporter_manager: &'a mut ReporterManager,
     mutation_overrides: BTreeMap<String, Cell>,
     remote_cache: RemoteSnapshotCache,
+    remote_library_cache: RemoteLibraryCache,
     fuzz_seed: u64,
     /// Contracts used as `library_ref` dependency. We need to register it for correct
     /// work of dependent contracts.
@@ -197,6 +199,7 @@ impl<'a> TestRunner<'a> {
             mutation_overrides,
             ref_contracts,
             remote_cache: RemoteSnapshotCache::new(),
+            remote_library_cache: RemoteLibraryCache::new(),
             fuzz_seed,
         })
     }
@@ -312,6 +315,7 @@ impl<'a> TestRunner<'a> {
                     net.clone(),
                     self.config.fork_block_number,
                     self.remote_cache.clone(),
+                    self.remote_library_cache.clone(),
                     self.config.fork_cache_enabled,
                 );
                 AccountsState::Remote(remote)

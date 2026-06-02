@@ -1109,12 +1109,12 @@ impl ChainContext<'_> {
     #[must_use]
     pub fn build_libs_with_hash_owner(&self, owner: &HashBytes) -> Dict<HashBytes, LibDescr> {
         let mut libs = Dict::<HashBytes, LibDescr>::new();
-        for lib in &self.world_state.libs() {
+        for (hash, lib) in self.world_state.libs() {
             let mut publishers = Dict::new();
             publishers.add(owner, ()).ok();
 
             libs.add(
-                lib.repr_hash(),
+                hash,
                 LibDescr {
                     lib: lib.clone(),
                     publishers,

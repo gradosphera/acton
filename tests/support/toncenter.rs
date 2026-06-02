@@ -12,10 +12,11 @@ use std::time::{Duration, Instant};
 use ton::ton_core::types::TonAddress;
 use tvm_ffi::json_stack::legacy_stack_to_json;
 use tvm_ffi::stack::{Tuple, TupleItem};
+use tycho_types::boc::Boc;
 use tycho_types::cell::HashBytes;
 use tycho_types::cell::{Cell, CellBuilder, CellFamily, Store};
 use tycho_types::dict::{Dict, RawDict};
-use tycho_types::models::{IntAddr, StdAddr};
+use tycho_types::models::{IntAddr, ShardAccount, StdAddr};
 
 #[derive(Clone)]
 pub(crate) struct ToncenterV2MockResponse {
@@ -308,6 +309,21 @@ pub(crate) fn toncenter_v2_account_info_ok_response(
                     "lt": lt.to_string(),
                     "hash": hash,
                 }
+            }
+        })
+        .to_string(),
+    }
+}
+
+pub(crate) fn toncenter_v2_shard_account_cell_ok_response(
+    shard_account: &ShardAccount,
+) -> ToncenterV2MockResponse {
+    ToncenterV2MockResponse {
+        status: 200,
+        body: serde_json::json!({
+            "ok": true,
+            "result": {
+                "bytes": Boc::encode_base64(to_cell(shard_account))
             }
         })
         .to_string(),
