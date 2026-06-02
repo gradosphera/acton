@@ -2060,6 +2060,22 @@ fn test_new_counter_app_project_supports_npm_scripts() {
             .unwrap()
             .contains_key("app")
     );
+    let package_json: JsonValue =
+        serde_json::from_str(&fs::read_to_string(project_dir.join("package.json")).unwrap())
+            .unwrap();
+    let scripts = package_json["scripts"].as_object().unwrap();
+    assert!(
+        scripts.contains_key("fmt:check"),
+        "counter app template must expose npm run fmt:check"
+    );
+    assert!(
+        scripts.contains_key("lint"),
+        "counter app template must expose npm run lint"
+    );
+    assert!(
+        package_uses_eslint(&package_json),
+        "counter app template must depend on ESLint"
+    );
 
     let cache_path = project_dir.join(".npm-cache");
     let cache_dir = cache_path.as_path();
@@ -2079,6 +2095,14 @@ fn test_new_counter_app_project_supports_npm_scripts() {
         "npm ci failed:\nstdout:\n{}\nstderr:\n{}",
         String::from_utf8_lossy(&install_output.stdout),
         String::from_utf8_lossy(&install_output.stderr)
+    );
+
+    let lint_output = run_npm_command(&project_dir, &path_env, cache_dir, &["run", "lint"]);
+    assert!(
+        lint_output.status.success(),
+        "npm run lint failed:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&lint_output.stdout),
+        String::from_utf8_lossy(&lint_output.stderr)
     );
 
     let build_output = run_npm_command(&project_dir, &path_env, cache_dir, &["run", "build"]);
@@ -2278,12 +2302,6 @@ fn assert_app_template_npm_quality_checks(test_name: &str, template: &str) {
 #[test]
 fn test_new_empty_app_template_npm_quality_checks() {
     assert_app_template_npm_quality_checks("new-empty-app-npm-quality-checks", "empty");
-}
-
-#[cfg(unix)]
-#[test]
-fn test_new_counter_app_template_npm_quality_checks() {
-    assert_app_template_npm_quality_checks("new-counter-app-npm-quality-checks", "counter");
 }
 
 #[cfg(unix)]

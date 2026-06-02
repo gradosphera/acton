@@ -260,7 +260,7 @@ fun main() {
         dest: {
             stateInit: counterInit,
         },
-    })).waitForFirstTransaction(true, 30, 100) == null) {
+    })).waitForFirstTransaction(true, 40, 25) == null) {
         println("DEPLOY_NULL");
         return;
     }
@@ -275,7 +275,7 @@ fun main() {
         body: IncreaseCounter {
             increaseBy: 5,
         },
-    })).waitForFirstTransaction(true, 30, 100) == null) {
+    })).waitForFirstTransaction(true, 40, 25) == null) {
         println("INCREASE_NULL");
         return;
     }

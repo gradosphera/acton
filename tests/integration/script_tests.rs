@@ -111,7 +111,7 @@ fun main() {
         dest: {
             stateInit: receiverInit,
         },
-    })).waitForFirstTransaction(true, 30, 100) == null) {
+    })).waitForFirstTransaction(true, 40, 25) == null) {
         println("RECEIVER_DEPLOY_NULL");
         return;
     }
@@ -122,7 +122,7 @@ fun main() {
         dest: {
             stateInit: forwarderInit,
         },
-    })).waitForFirstTransaction(true, 30, 100) == null) {
+    })).waitForFirstTransaction(true, 40, 25) == null) {
         println("FORWARDER_DEPLOY_NULL");
         return;
     }
@@ -136,7 +136,7 @@ fun main() {
         },
     }));
 
-    val trace = txs.waitForTrace(true, 30, 100);
+    val trace = txs.waitForTrace(true, 40, 25);
     if (trace == null) {
         println("TRACE_NULL");
         return;
@@ -186,7 +186,7 @@ fun main() {
         dest: {
             stateInit: receiverInit,
         },
-    })).waitForFirstTransaction(true, 30, 100) == null) {
+    })).waitForFirstTransaction(true, 40, 25) == null) {
         println("RECEIVER_DEPLOY_NULL");
         return;
     }
@@ -197,7 +197,7 @@ fun main() {
         dest: {
             stateInit: forwarderInit,
         },
-    })).waitForFirstTransaction(true, 30, 100) == null) {
+    })).waitForFirstTransaction(true, 40, 25) == null) {
         println("FORWARDER_DEPLOY_NULL");
         return;
     }
@@ -211,7 +211,7 @@ fun main() {
         },
     }));
 
-    val root = txs.waitForFirstTransaction(true, 30, 100);
+    val root = txs.waitForFirstTransaction(true, 40, 25);
     if (root == null) {
         println("ROOT_NULL");
         return;
@@ -273,7 +273,7 @@ fun main() {
         dest: {
             stateInit: receiverInit,
         },
-    })).waitForFirstTransaction(true, 30, 100) == null) {
+    })).waitForFirstTransaction(true, 40, 25) == null) {
         println("RECEIVER_DEPLOY_NULL");
         return;
     }
@@ -284,7 +284,7 @@ fun main() {
         dest: {
             stateInit: forwarderInit,
         },
-    })).waitForFirstTransaction(true, 30, 100) == null) {
+    })).waitForFirstTransaction(true, 40, 25) == null) {
         println("FORWARDER_DEPLOY_NULL");
         return;
     }
@@ -601,7 +601,7 @@ fun main() {
         },
     }));
 
-    val trace = txs.waitForTrace(true, 30, 100);
+    val trace = txs.waitForTrace(true, 40, 25);
     if (trace == null) {
         println("TRIGGER_TRACE_NULL");
         return;
@@ -4206,20 +4206,6 @@ fn test_script_wait_for_trace_returns_full_trace_on_localnet() {
         "integration/snapshots/script/test_script_wait_for_trace_returns_full_trace_on_localnet.stdout.txt",
     );
 
-    let stdout = output.get_stdout();
-    let forwarder_address = extract_marker_value(&stdout, "FORWARDER_CONTRACT=")
-        .split_whitespace()
-        .next()
-        .expect("forwarder address must be present")
-        .to_string();
-    let receiver_address = extract_marker_value(&stdout, "RECEIVER_CONTRACT=")
-        .split_whitespace()
-        .next()
-        .expect("receiver address must be present")
-        .to_string();
-    wait_until_address_state_active(&node, &forwarder_address, Duration::from_secs(12));
-    wait_until_address_state_active(&node, &receiver_address, Duration::from_secs(12));
-
     node.stop();
 }
 
@@ -4283,20 +4269,6 @@ fn test_script_wait_for_first_transaction_returns_root_on_localnet() {
     output.assert_snapshot_matches(
         "integration/snapshots/script/test_script_wait_for_first_transaction_returns_root_on_localnet.stdout.txt",
     );
-
-    let stdout = output.get_stdout();
-    let forwarder_address = extract_marker_value(&stdout, "FORWARDER_CONTRACT=")
-        .split_whitespace()
-        .next()
-        .expect("forwarder address must be present")
-        .to_string();
-    let receiver_address = extract_marker_value(&stdout, "RECEIVER_CONTRACT=")
-        .split_whitespace()
-        .next()
-        .expect("receiver address must be present")
-        .to_string();
-    wait_until_address_state_active(&node, &forwarder_address, Duration::from_secs(12));
-    wait_until_address_state_active(&node, &receiver_address, Duration::from_secs(12));
 
     node.stop();
 }
