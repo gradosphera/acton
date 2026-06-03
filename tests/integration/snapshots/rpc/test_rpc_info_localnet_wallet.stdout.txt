@@ -10,8 +10,11 @@ Remote Account
   Code Hash:         0xfeb5ff6820e2ff0d9483e7e0d62c817d846789fb4ae580c878866d959dabd5c0
   Data Hash:         0xedcec1db765c9ca1ef98e8507707483dfbb869e87ab4f06bafce18df2ff9446c
 
-Local Match
-  Contract:          <none>
+ABI Match
+  Contract:          WalletV4r2
 
 Decoded Storage
-  <local ABI not found>
+  plugins: []
+  publicKey: 76272186050566279163040038748792344521503364478398705319249212365083262662181
+  seqno: 1
+  subwalletId: 698983191

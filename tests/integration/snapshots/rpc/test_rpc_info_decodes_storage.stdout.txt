@@ -10,8 +10,8 @@ Remote Account
   Code Hash:         0x15407004a66e0cf95a67c39edbb54a531dfdb6df93fb7d365fae57a34b874747
   Data Hash:         0x14b1b536ff08a2e98a9767b0b177e691dd70b69aa437f2c44f438e2a19fc3928
 
-Local Match
-  Contract:          counter (counter)
+ABI Match
+  Contract:          counter
 
 Decoded Storage
   counter: 42

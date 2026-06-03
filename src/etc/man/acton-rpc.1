@@ -37,14 +37,16 @@ Query blockchain account state through a configured network endpoint.
 .RE
 .sp
 .RS 4
-\h'-04'\(bu\h'+03'decode account storage through local ABI metadata when a match is found
+\h'-04'\(bu\h'+03'decode account storage through local or bundled ABI metadata when a match is
+found
 .RE
 .sp
 The command works without a project manifest for raw remote inspection.
 .sp
 When Acton can resolve a local project and finds a contract with the same
 compiled \fBcode_hash\fR, it also prints the matched contract name and decodes the
-account storage using the local compiler ABI.
+account storage using the local compiler ABI. If no local match exists, Acton
+falls back to its bundled ABI catalog.
 .SH "SUBCOMMANDS"
 .SS "acton rpc info"
 Show information about a single account.
@@ -79,16 +81,16 @@ hashes
 .RE
 .sp
 .RS 4
-\h'-04'\(bu\h'+03'local contract match information when a project contract has the same
-\fBcode_hash\fR
+\h'-04'\(bu\h'+03'ABI match information when a project contract or bundled catalog entry has
+the same \fBcode_hash\fR
 .RE
 .sp
 .RS 4
 \h'-04'\(bu\h'+03'decoded storage in a YAML\-like view when compiler ABI metadata is available
 .RE
 .sp
-If no local ABI match is found, Acton still prints the raw remote account
-information and reports that decoded storage is unavailable.
+If no ABI match is found, Acton still prints the raw remote account information
+and reports that decoded storage is unavailable.
 .SS "acton rpc block"
 Print the latest masterchain block info returned by TonCenter.
 .SS "Synopsis"
@@ -190,9 +192,9 @@ Print decoded message bodies in the transaction tree.
 .RE
 .sp
 Tree and verbose modes then reuse the same transaction tree formatter as Acton
-tests. When current account code matches a local contract in the project,
-Acton prints local contract names through the local ABI. Add \fB\-\-show\-bodies\fR
-to print decoded inbound message bodies.
+tests. When current account code matches a local contract or bundled catalog
+entry, Acton prints the matched contract name. Add \fB\-\-show\-bodies\fR to print
+decoded inbound message bodies.
 .SH "DISPLAY OPTIONS"
 .sp
 \fB\-\-color\fR \fIwhen\fR
@@ -246,7 +248,8 @@ Acton loads \fB\&.env\fR automatically, so the simplest setup during project wor
 usually to keep these keys there and use shell environment variables only for
 one\-off overrides or CI.
 .SH "ABI MATCHING"
-Storage decoding is best\-effort and depends on local project context.
+Storage decoding is best\-effort and depends on local project context or the
+bundled ABI catalog.
 .sp
 Acton attempts to:
 .sp
@@ -263,11 +266,16 @@ Acton attempts to:
 .RE
 .sp
 .RS 4
-\h'-04' 4.\h'+01'decode storage with the matched contract\[cq]s compiler ABI
+\h'-04' 4.\h'+01'fall back to the bundled ABI catalog when there is no local ABI
+.RE
+.sp
+.RS 4
+\h'-04' 5.\h'+01'decode storage with the matched compiler ABI
 .RE
 .sp
 This means decoding is robust for contracts you control in the current Acton
-project, but not guaranteed for arbitrary third\-party deployments.
+project, and available for known third\-party deployments in the bundled
+catalog.
 .SH "EXIT STATUS"
 .sp
 .RS 4
@@ -276,7 +284,7 @@ project, but not guaranteed for arbitrary third\-party deployments.
 .sp
 .RS 4
 \h'-04'\(bu\h'+03'\fB1\fR: The address was invalid, the network could not be resolved, the remote
-request failed, or local ABI decoding encountered an unrecoverable error.
+request failed, or ABI decoding encountered an unrecoverable error.
 .RE
 .SH "EXAMPLES"
 .sp

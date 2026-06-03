@@ -1,4 +1,5 @@
 use crate::commands::common::{error_fmt, format_nanotons};
+use crate::context::code_lookup_hash;
 use crate::contract_interface::{
     compile_optional_contract_interface, is_boc_path, read_precompiled_boc,
 };
@@ -121,13 +122,27 @@ fn rpc_info_cmd(address: &str, net: Option<String>) -> anyhow::Result<()> {
         .map(|code| find_local_contract_match(code.repr_hash(), &config))
         .transpose()?
         .flatten();
+    let catalog_contract = code.as_ref().and_then(|code| {
+        acton_abi_catalog::find_contract_by_code_hash(&code_lookup_hash(code).to_string())
+    });
+    let local_storage_abi = matched_contract
+        .as_ref()
+        .and_then(|contract| contract.abi.clone());
+    let catalog_storage_abi = catalog_contract.map(acton_abi_catalog::CatalogContract::abi);
 
-    let decoded_storage = match (&data, matched_contract.as_ref()) {
-        (Some(data), Some(contract)) => contract
-            .abi
-            .as_ref()
-            .map(|abi| decode_storage_json(data, abi, &network))
-            .transpose()?,
+    let decoded_storage = match (
+        &data,
+        local_storage_abi.as_deref(),
+        catalog_storage_abi.as_deref(),
+    ) {
+        (Some(data), Some(abi), _) => Some(decode_storage_json(data, abi, &network)?),
+        (Some(data), None, Some(abi)) => match decode_storage_json(data, abi, &network) {
+            Ok(decoded_storage) => Some(decoded_storage),
+            Err(err) => {
+                warn!("Skipping bundled ABI storage decode: {err:#}");
+                None
+            }
+        },
         _ => None,
     };
 
@@ -165,14 +180,11 @@ fn rpc_info_cmd(address: &str, net: Option<String>) -> anyhow::Result<()> {
     }
 
     if code.is_some() {
-        print_section("Local Match");
+        print_section("ABI Match");
         if let Some(contract) = &matched_contract {
-            print_kv(
-                "Contract",
-                format!("{} ({})", contract.contract_id, contract.contract_name)
-                    .green()
-                    .to_string(),
-            );
+            print_kv("Contract", contract.contract_name.green().to_string());
+        } else if let Some(contract) = catalog_contract {
+            print_kv("Contract", contract.display_name.green().to_string());
         } else {
             print_kv("Contract", "<none>".dimmed().to_string());
         }
@@ -183,13 +195,13 @@ fn rpc_info_cmd(address: &str, net: Option<String>) -> anyhow::Result<()> {
             print_section("Decoded Storage");
             print_yaml_value(None, &decoded_storage, 2);
         }
-        None if data.is_some() && matched_contract.is_some() => {
+        None if data.is_some() && (matched_contract.is_some() || catalog_contract.is_some()) => {
             print_section("Decoded Storage");
             println!("  {}", "<unavailable>".dimmed());
         }
         None if data.is_some() => {
             print_section("Decoded Storage");
-            println!("  {}", "<local ABI not found>".dimmed());
+            println!("  {}", "<ABI not found>".dimmed());
         }
         None => {}
     }
@@ -246,7 +258,6 @@ fn load_rpc_config() -> anyhow::Result<ActonConfig> {
 
 #[derive(Clone)]
 struct LocalContractMatch {
-    contract_id: String,
     contract_name: String,
     abi: Option<Arc<ContractABI>>,
 }
@@ -258,7 +269,6 @@ fn find_local_contract_match(
     for candidate in load_local_contract_candidates(config)? {
         if &candidate.code_hash == code_hash {
             return Ok(Some(LocalContractMatch {
-                contract_id: candidate.contract_id,
                 contract_name: candidate.contract_name,
                 abi: candidate.abi,
             }));

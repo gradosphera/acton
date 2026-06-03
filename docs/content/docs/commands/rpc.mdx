@@ -22,13 +22,15 @@ Query blockchain account state through a configured network endpoint.
 - inspect balance, last transaction metadata, and state hashes
 - render a TonCenter v3 trace as a decoded transaction tree
 - match deployed code against a local Acton project by `code_hash`
-- decode account storage through local ABI metadata when a match is found
+- decode account storage through local or bundled ABI metadata when a match is
+  found
 
 The command works without a project manifest for raw remote inspection.
 
 When Acton can resolve a local project and finds a contract with the same
 compiled `code_hash`, it also prints the matched contract name and decodes the
-account storage using the local compiler ABI.
+account storage using the local compiler ABI. If no local match exists, Acton
+falls back to its bundled ABI catalog.
 
 ## Subcommands
 
@@ -87,12 +89,12 @@ Supported values include `mainnet`, `testnet`, `localnet`, and
 - remote account metadata such as status, balance, last transaction LT and
   hashes
 - code and data hashes when the account has deployed state
-- local contract match information when a project contract has the same
-  `code_hash`
+- ABI match information when a project contract or bundled catalog entry has
+  the same `code_hash`
 - decoded storage in a YAML-like view when compiler ABI metadata is available
 
-If no local ABI match is found, Acton still prints the raw remote account
-information and reports that decoded storage is unavailable.
+If no ABI match is found, Acton still prints the raw remote account information
+and reports that decoded storage is unavailable.
 
 ### acton rpc block
 
@@ -302,9 +304,9 @@ Print decoded message bodies in the transaction tree.
 - total transaction and message counts
 
 Tree and verbose modes then reuse the same transaction tree formatter as Acton
-tests. When current account code matches a local contract in the project,
-Acton prints local contract names through the local ABI. Add `--show-bodies`
-to print decoded inbound message bodies.
+tests. When current account code matches a local contract or bundled catalog
+entry, Acton prints the matched contract name. Add `--show-bodies` to print
+decoded inbound message bodies.
 
 ## Display Options
 
@@ -418,23 +420,26 @@ one-off overrides or CI.
 
 ## ABI Matching
 
-Storage decoding is best-effort and depends on local project context.
+Storage decoding is best-effort and depends on local project context or the
+bundled ABI catalog.
 
 Acton attempts to:
 
 1. fetch the remote account code cell
 2. compute its `code_hash`
 3. compare that hash with locally configured contracts
-4. decode storage with the matched contract's compiler ABI
+4. fall back to the bundled ABI catalog when there is no local ABI
+5. decode storage with the matched compiler ABI
 
 This means decoding is robust for contracts you control in the current Acton
-project, but not guaranteed for arbitrary third-party deployments.
+project, and available for known third-party deployments in the bundled
+catalog.
 
 ## Exit Status
 
 - `0`: The selected RPC query completed successfully.
 - `1`: The address was invalid, the network could not be resolved, the remote
-  request failed, or local ABI decoding encountered an unrecoverable error.
+  request failed, or ABI decoding encountered an unrecoverable error.
 
 ## Examples
 
