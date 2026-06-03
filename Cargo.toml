@@ -35,6 +35,7 @@ license = "MIT OR Apache-2.0"
 [workspace.dependencies]
 # local crates
 acton-config = { path = "crates/acton-config" }
+acton-abi-catalog = { path = "crates/acton-abi-catalog" }
 acton-debug = { path = "crates/acton-debug" }
 acton-mdman = { path = "crates/acton-mdman" }
 ton-objs = { path = "crates/ton-objs" }
@@ -142,6 +143,7 @@ semver = "1.0.27"
 indicatif = "0.18.3"
 flate2 = "1.1.5"
 tar = "0.4.46"
+zstd = "0.13.3"
 
 # axum for test ui
 axum = { version = "0.8.1", features = ["ws"] }
@@ -197,6 +199,7 @@ cc = "1.2"
 [dependencies]
 # local crates
 acton-config = { workspace = true }
+acton-abi-catalog = { workspace = true }
 acton-debug = { workspace = true }
 acton-mdman = { workspace = true }
 tolk-compiler = { workspace = true }

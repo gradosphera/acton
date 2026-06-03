@@ -68,6 +68,7 @@ struct DecodedMessageBody {
 #[derive(Clone, Copy, Debug)]
 enum MessageBodyDirection {
     Incoming,
+    ExternalIncoming,
     Outgoing,
     ExternalOutgoing,
 }
@@ -204,18 +205,16 @@ impl<'a> FormatterContext<'a> {
         code: i32,
     ) -> Option<AbiExitCodeInfo> {
         let code_cell = Self::account_code(&self.accounts, &StdAddr::new(0, tx.account));
-        let (_, build) = self.build_cache.result_for_code(&code_cell)?;
-        Self::find_custom_exit_code_info(code, build.abi.as_deref())
+        self.find_code_cell_custom_exit_code_info(code_cell, code)
     }
 
     fn find_address_custom_exit_code_info(
         &self,
         addr: &StdAddr,
-        code: i32,
+        exit_code: i32,
     ) -> Option<AbiExitCodeInfo> {
         let code_cell = Self::account_code(&self.accounts, addr);
-        let (_, build) = self.build_cache.result_for_code(&code_cell)?;
-        Self::find_custom_exit_code_info(code, build.abi.as_deref())
+        self.find_code_cell_custom_exit_code_info(code_cell, exit_code)
     }
 
     fn find_code_custom_exit_code_info(
@@ -224,8 +223,23 @@ impl<'a> FormatterContext<'a> {
         exit_code: i32,
     ) -> Option<AbiExitCodeInfo> {
         let code_cell = Boc::decode_base64(code_boc64).ok();
-        let (_, build) = self.build_cache.result_for_code(&code_cell)?;
-        Self::find_custom_exit_code_info(exit_code, build.abi.as_deref())
+        self.find_code_cell_custom_exit_code_info(code_cell, exit_code)
+    }
+
+    fn find_code_cell_custom_exit_code_info(
+        &self,
+        code_cell: Option<Cell>,
+        exit_code: i32,
+    ) -> Option<AbiExitCodeInfo> {
+        self.build_cache
+            .result_for_code(&code_cell)
+            .and_then(|(_, build)| {
+                Self::find_custom_exit_code_info(exit_code, build.abi.as_deref())
+            })
+            .or_else(|| {
+                let abi = Self::catalog_abi_for_code(code_cell.as_ref())?;
+                Self::find_custom_exit_code_info(exit_code, Some(abi.as_ref()))
+            })
     }
 
     pub(crate) fn format_external_not_accepted_vm_result(
@@ -967,16 +981,25 @@ See https://ton-blockchain.github.io/acton/docs/wallets for more information
                     )
                 };
 
-                self.try_decode_message_with_builds(
-                    in_msg.body,
+                let destination_abis = self.prioritized_abis(
                     self.build_cache.prioritized_results(destination_build),
+                    self.catalog_abi_for_address(Some(&info.dst)),
+                );
+                let source_abis = self.prioritized_abis(
+                    self.build_cache.prioritized_results(source_build),
+                    self.catalog_abi_for_address(info.src.as_ref()),
+                );
+
+                self.try_decode_message_with_abis(
+                    in_msg.body,
+                    destination_abis,
                     destination_direction,
                     info.bounced,
                 )
                 .or_else(|| {
-                    self.try_decode_message_with_builds(
+                    self.try_decode_message_with_abis(
                         in_msg.body,
-                        self.build_cache.prioritized_results(source_build),
+                        source_abis,
                         source_direction,
                         info.bounced,
                     )
@@ -1042,15 +1065,17 @@ See https://ton-blockchain.github.io/acton/docs/wallets for more information
             return None;
         };
 
-        let build = self.build_result_for_tx_account(tx)?;
-        let abi = build.abi.as_ref()?;
-        self.try_decode_message_body_types(
+        let account_code = self.code_for_tx_account(tx);
+        let build = self.build_result_for_tx_account(tx);
+        let abis = self.prioritized_abis(
+            self.build_cache.prioritized_results(build),
+            Self::catalog_abi_for_code(account_code.as_ref()),
+        );
+        self.try_decode_message_with_abis(
             in_msg.body,
-            abi,
-            abi.incoming_external
-                .iter()
-                .map(|message| message.body_ty_idx),
-            0,
+            abis,
+            MessageBodyDirection::ExternalIncoming,
+            false,
         )
     }
 
@@ -1059,23 +1084,31 @@ See https://ton-blockchain.github.io/acton/docs/wallets for more information
         tx: &Transaction,
         msg: &RelaxedMessage,
     ) -> Option<DecodedMessageBody> {
+        let account_code = self.code_for_tx_account(tx);
         let build = self.build_result_for_tx_account(tx);
-        self.try_decode_message_with_builds(
-            msg.body,
+        let abis = self.prioritized_abis(
             self.build_cache.prioritized_results(build),
+            Self::catalog_abi_for_code(account_code.as_ref()),
+        );
+        self.try_decode_message_with_abis(
+            msg.body,
+            abis,
             MessageBodyDirection::ExternalOutgoing,
             false,
         )
     }
 
-    fn build_result_for_tx_account(&self, tx: &Transaction) -> Option<context::CompilationResult> {
-        let code = self
-            .accounts
+    fn code_for_tx_account(&self, tx: &Transaction) -> Option<Cell> {
+        self.accounts
             .iter()
             .find_map(|(addr, _)| {
                 (addr.address == tx.account).then(|| Self::account_code(&self.accounts, addr))
             })
-            .flatten();
+            .flatten()
+    }
+
+    fn build_result_for_tx_account(&self, tx: &Transaction) -> Option<context::CompilationResult> {
+        let code = self.code_for_tx_account(tx);
         self.build_cache
             .result_for_code(&code)
             .map(|(_, result)| result)
@@ -1094,22 +1127,75 @@ See https://ton-blockchain.github.io/acton/docs/wallets for more information
             .map(|(_, result)| result)
     }
 
-    fn try_decode_message_with_builds(
+    fn catalog_abi_for_address(&self, dst: Option<&IntAddr>) -> Option<Arc<ContractABI>> {
+        let code = match dst? {
+            IntAddr::Std(addr) => Self::account_code(&self.accounts, addr),
+            IntAddr::Var(_) => None,
+        };
+        Self::catalog_abi_for_code(code.as_ref())
+    }
+
+    fn catalog_abi_for_code(code: Option<&Cell>) -> Option<Arc<ContractABI>> {
+        let code_hash = context::code_lookup_hash(code?);
+        acton_abi_catalog::find_abi_by_code_hash(&code_hash.to_string())
+    }
+
+    fn prioritized_abis(
+        &self,
+        builds: Vec<context::CompilationResult>,
+        fallback_abi: Option<Arc<ContractABI>>,
+    ) -> Vec<Arc<ContractABI>> {
+        let mut abis = Vec::new();
+        for build in builds {
+            if let Some(abi) = build.abi {
+                abis.push(abi);
+            }
+        }
+        if let Some(abi) = fallback_abi {
+            abis.push(abi);
+        }
+        abis
+    }
+
+    fn with_opcode_fallback_abis(
+        &self,
+        mut abis: Vec<Arc<ContractABI>>,
+        opcode: Option<u32>,
+    ) -> Vec<Arc<ContractABI>> {
+        let Some(opcode) = opcode else {
+            return abis;
+        };
+        if opcode == 0 {
+            return abis;
+        }
+
+        for abi in acton_abi_catalog::find_abis_by_opcode(opcode) {
+            if abis
+                .iter()
+                .any(|existing| existing.contract_name == abi.contract_name)
+            {
+                continue;
+            }
+            abis.push(abi);
+        }
+
+        abis
+    }
+
+    fn try_decode_message_with_abis(
         &self,
         body: CellSlice<'_>,
-        builds: Vec<context::CompilationResult>,
+        abis: Vec<Arc<ContractABI>>,
         direction: MessageBodyDirection,
         bounced: bool,
     ) -> Option<DecodedMessageBody> {
         let opcode = Self::opcode_after_bounce_prefix(body, bounced);
-        for build in builds {
-            let Some(abi) = build.abi.as_ref() else {
-                continue;
-            };
-            let candidates = Self::compiler_message_candidates(abi, direction, opcode);
+        let abis = self.with_opcode_fallback_abis(abis, opcode);
+        for abi in abis {
+            let candidates = Self::compiler_message_candidates(&abi, direction, opcode);
             if let Some(decoded) = self.try_decode_message_body_types(
                 body,
-                abi,
+                &abi,
                 candidates,
                 if bounced { 32 } else { 0 },
             ) {
@@ -1131,6 +1217,15 @@ See https://ton-blockchain.github.io/acton/docs/wallets for more information
         match direction {
             MessageBodyDirection::Incoming => {
                 for message in &abi.incoming_messages {
+                    Self::push_compiler_message_candidate(
+                        &mut candidates,
+                        &mut seen,
+                        message.body_ty_idx,
+                    );
+                }
+            }
+            MessageBodyDirection::ExternalIncoming => {
+                for message in &abi.incoming_external {
                     Self::push_compiler_message_candidate(
                         &mut candidates,
                         &mut seen,
@@ -2182,27 +2277,27 @@ See https://ton-blockchain.github.io/acton/docs/wallets for more information
     }
 
     fn format_external_incoming_message_name(&self, tx: &Transaction, opcode: u32) -> String {
+        if let Some(name) = self.external_incoming_message_name(tx, opcode) {
+            return Self::color_message_name(&name);
+        }
+
+        self.format_unknown_message_name(opcode)
+    }
+
+    fn external_incoming_message_name(&self, tx: &Transaction, opcode: u32) -> Option<String> {
+        let account_code = self.code_for_tx_account(tx);
         let build = self.build_result_for_tx_account(tx);
-        self.format_message_name_from_build(opcode, build.as_ref())
+        let abis = self.prioritized_abis(
+            self.build_cache.prioritized_results(build),
+            Self::catalog_abi_for_code(account_code.as_ref()),
+        );
+        let abis = self.with_opcode_fallback_abis(abis, Some(opcode));
+        Self::message_name_from_abis(opcode, abis)
     }
 
     fn format_outgoing_external_message_name(&self, tx: &Transaction, opcode: u32) -> String {
         let build = self.build_result_for_tx_account(tx);
         self.format_message_name_from_builds(opcode, self.build_cache.prioritized_results(build))
-    }
-
-    fn format_message_name_from_build(
-        &self,
-        opcode: u32,
-        build: Option<&context::CompilationResult>,
-    ) -> String {
-        if let Some(build) = build
-            && let Some(name) = build.message_name_by_opcode(opcode)
-        {
-            return Self::color_message_name(&name);
-        }
-
-        self.format_unknown_message_name(opcode)
     }
 
     fn format_message_name_from_builds(
@@ -2223,6 +2318,14 @@ See https://ton-blockchain.github.io/acton/docs/wallets for more information
         } else {
             Self::color_message_name(&format!("0x{opcode:08x}"))
         }
+    }
+
+    fn message_name_from_abis(
+        opcode: u32,
+        abis: impl IntoIterator<Item = Arc<ContractABI>>,
+    ) -> Option<String> {
+        abis.into_iter()
+            .find_map(|abi| abi.find_message_name_by_opcode(opcode).map(str::to_owned))
     }
 
     fn message_name_from_endpoint_builds(
@@ -2278,6 +2381,7 @@ See https://ton-blockchain.github.io/acton/docs/wallets for more information
 
         let code = info.code?;
         let code_hash = code.repr_hash();
+        let code_lookup_hash = context::code_lookup_hash(&code);
 
         // contract can be registered as a cell with a name
         if let Some(cell_name) = self.known_code_cells.get(code_hash) {
@@ -2289,6 +2393,12 @@ See https://ton-blockchain.github.io/acton/docs/wallets for more information
         let compilation_result = self.build_cache.result_for_code(&Some(code));
         if let Some((_, result)) = compilation_result {
             return Some(result.display_name);
+        }
+
+        if let Some(contract) =
+            acton_abi_catalog::find_contract_by_code_hash(&code_lookup_hash.to_string())
+        {
+            return Some(contract.display_name.clone());
         }
 
         None
