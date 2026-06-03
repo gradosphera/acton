@@ -30,7 +30,7 @@ use ton_api::Network;
 use ton_source_map::SourceLocation;
 use tvm_ffi::stack::{Tuple, TupleItem};
 use tycho_types::boc::Boc;
-use tycho_types::cell::{Cell, CellSlice, HashBytes};
+use tycho_types::cell::{Cell, CellBuilder, CellSlice, HashBytes};
 use tycho_types::models::{
     AccountState, AccountStatus, Base64StdAddrFlags, ComputePhase, ComputePhaseSkipReason,
     DisplayBase64StdAddr, ExecutedComputePhase, IntAddr, Message, MsgInfo, RelaxedMessage,
@@ -845,8 +845,10 @@ See https://ton-blockchain.github.io/acton/docs/wallets for more information
             let resolved_body = self.resolve_external_incoming_message_body(tx, &in_msg);
             let message_name = resolved_body.as_ref().map_or_else(
                 || {
-                    let mut body = in_msg.body;
-                    self.format_external_incoming_message_name(tx, body.load_u32().unwrap_or(0))
+                    self.format_external_incoming_message_name(
+                        tx,
+                        Self::opcode_from_body(in_msg.body, false),
+                    )
                 },
                 |body| Self::color_message_name(&body.name),
             );
@@ -1020,7 +1022,7 @@ See https://ton-blockchain.github.io/acton/docs/wallets for more information
 
         let resolved_body = self.resolve_outgoing_external_message_body(tx, msg);
         let message_name = resolved_body.as_ref().map_or_else(
-            || self.format_outgoing_external_message_name(tx, Self::extract_opcode(msg)),
+            || self.format_outgoing_external_message_name(tx, Self::message_opcode(msg)),
             |body| Self::color_message_name(&body.name),
         );
 
@@ -1189,7 +1191,15 @@ See https://ton-blockchain.github.io/acton/docs/wallets for more information
         direction: MessageBodyDirection,
         bounced: bool,
     ) -> Option<DecodedMessageBody> {
-        let opcode = Self::opcode_after_bounce_prefix(body, bounced);
+        let (opcode, body_tail) = Self::opcode_and_body_tail_after_bounce_prefix(body, bounced)
+            .map_or((None, None), |(opcode, body_tail)| {
+                (Some(opcode), Some(body_tail))
+            });
+
+        if let Some(decoded) = Self::try_decode_text_comment_body(opcode, body_tail) {
+            return Some(decoded);
+        }
+
         let abis = self.with_opcode_fallback_abis(abis, opcode);
         for abi in abis {
             let candidates = Self::compiler_message_candidates(&abi, direction, opcode);
@@ -1333,11 +1343,55 @@ See https://ton-blockchain.github.io/acton/docs/wallets for more information
     }
 
     fn opcode_after_bounce_prefix(body: CellSlice<'_>, bounced: bool) -> Option<u32> {
+        Self::opcode_and_body_tail_after_bounce_prefix(body, bounced).map(|(opcode, _)| opcode)
+    }
+
+    fn opcode_and_body_tail_after_bounce_prefix(
+        body: CellSlice<'_>,
+        bounced: bool,
+    ) -> Option<(u32, CellSlice<'_>)> {
         let mut parser = body;
         if bounced {
             parser.load_u32().ok()?;
         }
-        parser.load_u32().ok()
+        let opcode = parser.load_u32().ok()?;
+        Some((opcode, parser))
+    }
+
+    fn try_decode_text_comment_body(
+        opcode: Option<u32>,
+        body_tail: Option<CellSlice<'_>>,
+    ) -> Option<DecodedMessageBody> {
+        if opcode != Some(0) {
+            return None;
+        }
+        let body_tail = body_tail?;
+
+        Some(DecodedMessageBody {
+            name: "text comment".to_owned(),
+            data: UnpackedValue::Object {
+                name: "TextComment".to_owned(),
+                fields: vec![("text".to_owned(), Self::text_comment_tail_value(body_tail))],
+            },
+        })
+    }
+
+    fn text_comment_tail_value(parser: CellSlice<'_>) -> UnpackedValue {
+        let mut text_parser = parser;
+        if let Some(bytes) = Tuple::parse_snake_bytes_slice(&mut text_parser)
+            && let Ok(text) = String::from_utf8(bytes)
+        {
+            return UnpackedValue::String(text);
+        }
+
+        Self::remaining_slice_as_cell(parser)
+            .map_or(UnpackedValue::Null, UnpackedValue::RemainingBitsAndRefs)
+    }
+
+    fn remaining_slice_as_cell(mut parser: CellSlice<'_>) -> Option<Cell> {
+        let mut builder = CellBuilder::new();
+        builder.store_slice(parser.load_remaining()).ok()?;
+        builder.build().ok()
     }
 
     fn try_decode_message_body_types<I>(
@@ -1925,7 +1979,7 @@ See https://ton-blockchain.github.io/acton/docs/wallets for more information
             return None;
         };
 
-        let message_name = self.format_unknown_message_name(Self::extract_opcode(msg));
+        let message_name = self.format_unknown_message_name(Self::message_opcode(msg));
 
         let msg_info = if let Some(ext_addr) = &info.dst {
             let hex_data = hex::encode(&ext_addr.data);
@@ -2233,19 +2287,16 @@ See https://ton-blockchain.github.io/acton/docs/wallets for more information
         }
     }
 
-    #[allow(clippy::useless_let_if_seq)]
-    fn extract_opcode(in_msg: &RelaxedMessage) -> u32 {
-        let mut body = in_msg.body;
+    fn message_opcode(in_msg: &RelaxedMessage) -> Option<u32> {
         let bounced = match &in_msg.info {
             RelaxedMsgInfo::Int(info) => info.bounced,
             RelaxedMsgInfo::ExtOut(_) => false,
         };
-        let mut opcode = body.load_u32().unwrap_or(0);
-        if bounced {
-            // if bounced read another 32 bit to get the actual opcode
-            opcode = body.load_u32().unwrap_or(0);
-        }
-        opcode
+        Self::opcode_after_bounce_prefix(in_msg.body, bounced)
+    }
+
+    fn opcode_from_body(body: CellSlice<'_>, bounced: bool) -> Option<u32> {
+        Self::opcode_after_bounce_prefix(body, bounced)
     }
 
     fn color_message_name(name: &str) -> String {
@@ -2257,13 +2308,13 @@ See https://ton-blockchain.github.io/acton/docs/wallets for more information
             return Self::color_message_name(&name);
         }
 
-        self.format_unknown_message_name(Self::extract_opcode(in_msg))
+        self.format_unknown_message_name(Self::message_opcode(in_msg))
     }
 
     fn incoming_message_name(&self, in_msg: &RelaxedMessage) -> Option<String> {
-        let opcode = Self::extract_opcode(in_msg);
+        let opcode = Self::message_opcode(in_msg);
         let RelaxedMsgInfo::Int(info) = &in_msg.info else {
-            return (opcode == 0).then(|| "empty".to_owned());
+            return Self::generic_message_name(opcode);
         };
 
         let destination_build = self.build_result_for_address(Some(&info.dst));
@@ -2272,12 +2323,21 @@ See https://ton-blockchain.github.io/acton/docs/wallets for more information
             .as_ref()
             .and_then(|src| self.build_result_for_address(Some(src)));
 
-        self.message_name_from_endpoint_builds(opcode, destination_build, source_build)
-            .or_else(|| (opcode == 0).then(|| "empty".to_owned()))
+        opcode
+            .and_then(|opcode| {
+                self.message_name_from_endpoint_builds(opcode, destination_build, source_build)
+            })
+            .or_else(|| Self::generic_message_name(opcode))
     }
 
-    fn format_external_incoming_message_name(&self, tx: &Transaction, opcode: u32) -> String {
-        if let Some(name) = self.external_incoming_message_name(tx, opcode) {
+    fn format_external_incoming_message_name(
+        &self,
+        tx: &Transaction,
+        opcode: Option<u32>,
+    ) -> String {
+        if let Some(opcode) = opcode
+            && let Some(name) = self.external_incoming_message_name(tx, opcode)
+        {
             return Self::color_message_name(&name);
         }
 
@@ -2295,7 +2355,15 @@ See https://ton-blockchain.github.io/acton/docs/wallets for more information
         Self::message_name_from_abis(opcode, abis)
     }
 
-    fn format_outgoing_external_message_name(&self, tx: &Transaction, opcode: u32) -> String {
+    fn format_outgoing_external_message_name(
+        &self,
+        tx: &Transaction,
+        opcode: Option<u32>,
+    ) -> String {
+        let Some(opcode) = opcode else {
+            return self.format_unknown_message_name(None);
+        };
+
         let build = self.build_result_for_tx_account(tx);
         self.format_message_name_from_builds(opcode, self.build_cache.prioritized_results(build))
     }
@@ -2309,14 +2377,22 @@ See https://ton-blockchain.github.io/acton/docs/wallets for more information
             return Self::color_message_name(&name);
         }
 
-        self.format_unknown_message_name(opcode)
+        self.format_unknown_message_name(Some(opcode))
     }
 
-    fn format_unknown_message_name(&self, opcode: u32) -> String {
-        if opcode == 0 {
-            Self::color_message_name("empty")
-        } else {
-            Self::color_message_name(&format!("0x{opcode:08x}"))
+    fn format_unknown_message_name(&self, opcode: Option<u32>) -> String {
+        match opcode {
+            None => Self::color_message_name("empty"),
+            Some(0) => Self::color_message_name("text comment"),
+            Some(opcode) => Self::color_message_name(&format!("0x{opcode:08x}")),
+        }
+    }
+
+    fn generic_message_name(opcode: Option<u32>) -> Option<String> {
+        match opcode {
+            None => Some("empty".to_owned()),
+            Some(0) => Some("text comment".to_owned()),
+            Some(_) => None,
         }
     }
 

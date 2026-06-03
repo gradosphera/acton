@@ -1394,6 +1394,82 @@ fn formatter_catalog_opcode_fallback_decodes_manual_jetton_transfer() {
 }
 
 #[test]
+fn formatter_zero_opcode_text_comment_shows_tail() {
+    let boc_bytes = compiled_formatter_catalog_sink_boc_bytes();
+
+    ProjectBuilder::new("formatter-zero-opcode-text-comment")
+        .contract_from_boc("catalog_sink", boc_bytes)
+        .test_file(
+            "formatter_zero_opcode_text_comment",
+            r#"
+            import "../../lib/build"
+            import "../../lib/emulation/network"
+            import "../../lib/emulation/testing"
+            import "../../lib/io"
+            import "../../lib/testing/expect"
+
+            get fun `test formatter zero opcode text comment shows tail`() {
+                val sender = testing.treasury("sender");
+
+                val init = ContractState {
+                    code: build("catalog_sink"),
+                    data: createEmptyCell(),
+                };
+                val sinkAddress = AutoDeployAddress { stateInit: init }.calculateAddress();
+
+                expect(net.send(sender.address, createMessage({
+                    bounce: false,
+                    value: ton("1"),
+                    dest: {
+                        stateInit: init,
+                    },
+                }))).toHaveSuccessfulDeploy({ to: sinkAddress });
+
+                val commentBody = beginCell()
+                    .storeUint(0, 32)
+                    .storeString("approve")
+                    .endCell()
+                    .beginParse();
+                val longText = "abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789";
+                val longCommentBody = beginCell()
+                    .storeUint(0, 32)
+                    .storeString(longText)
+                    .endCell()
+                    .beginParse();
+
+                val txs = net.send(sender.address, createMessage({
+                    bounce: false,
+                    value: ton("0.2"),
+                    dest: sinkAddress,
+                    body: commentBody,
+                }));
+                val longTxs = net.send(sender.address, createMessage({
+                    bounce: false,
+                    value: ton("0.2"),
+                    dest: sinkAddress,
+                    body: longCommentBody,
+                }));
+
+                expect(txs).toHaveLength(1);
+                expect(longTxs).toHaveLength(1);
+                println(txs);
+                println(longTxs);
+            }
+        "#,
+        )
+        .build()
+        .acton()
+        .test()
+        .show_bodies()
+        .run()
+        .success()
+        .assert_passed(1)
+        .assert_snapshot_matches(
+            "integration/snapshots/formatter/formatter_zero_opcode_text_comment_shows_tail.stdout.txt",
+        );
+}
+
+#[test]
 fn formatter_hides_bodies_without_show_bodies_flag() {
     linear_formatter_project(
         "formatter-hides-bodies-without-show-bodies-flag",
@@ -1916,6 +1992,13 @@ fn formatter_println_renders_bounced_and_compute_skipped_transactions() {
             r#"
 get fun `test formatter println bounced and compute skipped`() {
     val (sender, echoAddress) = deployFmBounceHarness();
+    val bouncedBody = beginCell()
+        .storeUint(0xFFFFFFFF, 32)
+        .storeAny(FmBouncePing {
+            queryId: 401,
+        })
+        .endCell()
+        .beginParse();
 
     val bounced = net.send(
         sender.address,
@@ -1923,9 +2006,7 @@ get fun `test formatter println bounced and compute skipped`() {
             bounce: false,
             value: ton("0.2"),
             dest: echoAddress,
-            body: FmBouncePing {
-                queryId: 401,
-            },
+            body: bouncedBody,
         }).bounced(),
     );
 

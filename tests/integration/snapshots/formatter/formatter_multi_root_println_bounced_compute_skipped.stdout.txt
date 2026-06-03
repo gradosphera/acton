@@ -11,7 +11,8 @@
   ✓ formatter println bounced and compute skipped [TIME]
     └─ Test output:
        N/A -> sender A
-       └── (!) empty 0.2 TON -> fm_bounce_echo B                                       gas=271
+       └── (!) FmBouncePing 0.2 TON -> fm_bounce_echo B                                gas=271
+           queryId: 401
        
        N/A -> sender A
        └── FmBouncePing 0.2 TON -> EQAAAA..ALrXfh B                                    compute phase skipped aborted
