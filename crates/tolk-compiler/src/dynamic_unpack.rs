@@ -683,7 +683,9 @@ fn map_key_bit_len<S: UnpackSchema + ?Sized>(symbols: &S, ty_idx: TyIdx) -> anyh
         .ok_or_else(|| anyhow!("ABI ty_idx {ty_idx} was not found"))?;
     match ty {
         Ty::Bool => Ok(1),
-        Ty::IntN { n } | Ty::UintN { n } => u16::try_from(*n).context("map key width exceeds u16"),
+        Ty::BitsN { n } | Ty::IntN { n } | Ty::UintN { n } => {
+            u16::try_from(*n).context("map key width exceeds u16")
+        }
         Ty::Address => Ok(StdAddr::BITS_WITHOUT_ANYCAST),
         Ty::AliasRef { alias_name, .. } => {
             let decl = symbols
@@ -865,7 +867,10 @@ mod tests {
         AliasInstantiation, ContractABI, StructInstantiation, UnionVariant,
     };
     use expect_test::{Expect, expect};
+    use tycho_types::cell::CellDataBuilder;
     use tycho_types::cell::{CellBuilder, CellFamily, Store};
+    use tycho_types::dict::{DictKey, StoreDictKey};
+    use tycho_types::error::Error;
     use tycho_types::models::{AnyAddr, ExtAddr, StdAddr};
 
     fn empty_abi() -> ContractABI {
@@ -1124,6 +1129,95 @@ mod tests {
         let data = unpack_from_abi_slice(&mut slice, &abi, payload_ty_idx).unwrap();
 
         assert!(matches!(data, UnpackedValue::Object { .. }));
+    }
+
+    #[test]
+    fn decodes_map_with_bits264_key_and_void_value() {
+        #[derive(Clone, Eq, Ord, PartialEq, PartialOrd)]
+        struct Bits264([u8; 33]);
+
+        impl DictKey for Bits264 {
+            const BITS: u16 = 264;
+        }
+
+        impl StoreDictKey for Bits264 {
+            fn store_into_data(&self, data: &mut CellDataBuilder) -> Result<(), Error> {
+                data.store_raw(&self.0, Self::BITS)
+            }
+        }
+
+        let mut abi = empty_abi();
+        let key_ty_idx = add_ty(&mut abi, Ty::BitsN { n: 264 });
+        let value_ty_idx = add_ty(&mut abi, Ty::Void);
+        let map_ty_idx = add_ty(
+            &mut abi,
+            Ty::MapKV {
+                key_ty_idx,
+                value_ty_idx,
+            },
+        );
+        let mut map = dict::Dict::<Bits264, ()>::new();
+        map.set(Bits264([0x11; 33]), ()).unwrap();
+
+        let mut builder = CellBuilder::new();
+        map.store_into(&mut builder, Cell::empty_context()).unwrap();
+        let cell = builder.build().unwrap();
+        let mut slice = cell.as_slice_allow_exotic();
+
+        let data = unpack_from_abi_slice(&mut slice, &abi, map_ty_idx).unwrap();
+
+        assert_unpacked_snapshot(
+            &data,
+            expect![[r"
+                Map(
+                    [
+                        (
+                            Bits(
+                                (
+                                    [
+                                        17,
+                                        17,
+                                        17,
+                                        17,
+                                        17,
+                                        17,
+                                        17,
+                                        17,
+                                        17,
+                                        17,
+                                        17,
+                                        17,
+                                        17,
+                                        17,
+                                        17,
+                                        17,
+                                        17,
+                                        17,
+                                        17,
+                                        17,
+                                        17,
+                                        17,
+                                        17,
+                                        17,
+                                        17,
+                                        17,
+                                        17,
+                                        17,
+                                        17,
+                                        17,
+                                        17,
+                                        17,
+                                        17,
+                                    ],
+                                    264,
+                                ),
+                            ),
+                            Void,
+                        ),
+                    ],
+                )
+            "]],
+        );
     }
 
     #[test]
