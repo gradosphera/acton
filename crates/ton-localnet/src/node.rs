@@ -29,7 +29,7 @@ use tycho_types::boc::BocRepr;
 use tycho_types::cell::{Cell, CellBuilder, CellFamily, Store};
 use tycho_types::models::{
     AccountState, CurrencyCollection, IntAddr, IntMsgInfo, LibDescr, Message, MsgInfo,
-    OptionalAccount, OwnedMessage, ShardAccount, StdAddr, StdAddrFormat,
+    OptionalAccount, OwnedMessage, ShardAccount, StdAddr,
 };
 use tycho_types::prelude::HashBytes;
 
@@ -590,13 +590,9 @@ impl Node {
                 balance: wallet_data.balance.to_str_radix(10).parse().unwrap_or(0),
                 code_hash,
                 data_hash,
-                jetton_address: self
-                    .parse_addr_internal(&wallet_data.jetton_master_address)
-                    .unwrap_or(*addr),
+                jetton_address: convert_addr(&wallet_data.jetton_master_address),
                 last_transaction_lt,
-                owner_address: self
-                    .parse_addr_internal(&wallet_data.owner_address)
-                    .unwrap_or(*addr),
+                owner_address: convert_addr(&wallet_data.owner_address),
             };
 
             self.history.jetton_wallets.insert(*addr, wallet_meta);
@@ -644,9 +640,7 @@ impl Node {
 
             let master_meta = JettonMasterMeta {
                 address: *addr,
-                admin_address: self
-                    .parse_addr_internal(&jetton_data.admin_address)
-                    .unwrap_or(*addr),
+                admin_address: convert_addr(&jetton_data.admin_address),
                 code_hash,
                 data_hash,
                 jetton_content,
@@ -706,14 +700,8 @@ impl Node {
                 address: *addr,
                 code_hash,
                 data_hash,
-                collection_address: nft_data
-                    .collection_address
-                    .as_deref()
-                    .and_then(|a| self.parse_addr_internal(a)),
-                owner_address: nft_data
-                    .owner_address
-                    .as_deref()
-                    .and_then(|a| self.parse_addr_internal(a)),
+                collection_address: nft_data.collection_address.as_ref().map(convert_addr),
+                owner_address: nft_data.owner_address.as_ref().map(convert_addr),
                 content: ton_indexer::nfts::parse_nft_content(nft_data.individual_content),
                 index: nft_data.index.to_str_radix(10),
                 init: nft_data.init,
@@ -875,14 +863,6 @@ impl Node {
         let end = (start + limit).min(items.len());
 
         Ok(items[start..end].to_vec())
-    }
-
-    fn parse_addr_internal(&self, s: &str) -> Option<Addr> {
-        let (int_addr, _) = StdAddr::from_str_ext(s, StdAddrFormat::any()).ok()?;
-        Some(Addr {
-            workchain: i32::from(int_addr.workchain),
-            addr: int_addr.address.0,
-        })
     }
 
     #[must_use]
@@ -2289,6 +2269,7 @@ mod tests {
     use tycho_types::dict::Dict;
     use tycho_types::models::{
         Account, CurrencyCollection, IntAddr, OptionalAccount, SimpleLib, StateInit, StdAddr,
+        StdAddrFormat,
     };
 
     struct NoopExecutor;
