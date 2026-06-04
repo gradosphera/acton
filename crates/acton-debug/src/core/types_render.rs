@@ -5,7 +5,7 @@ use std::fmt::{self, Write};
 use std::sync::OnceLock;
 use tolk_compiler::SourceMap;
 use tolk_compiler::abi::ContractABI;
-use tolk_compiler::dynamic_unpack::{self, UnpackedValue};
+use tolk_compiler::dynamic_unpack::{self, UnpackSchema, UnpackedValue};
 use tolk_compiler::source_map::{AbiStruct, Declaration};
 use tolk_compiler::types_kernel::{Ty, TyIdx, calc_width_on_stack, render_ty};
 use tvm_ffi::from_stack::FromStack;
@@ -768,6 +768,21 @@ fn render_int_address(type_name: String, addr: &IntAddr) -> RenderedValue {
     match addr {
         IntAddr::Std(addr) => render_std_address(type_name, addr.to_string(), addr),
         IntAddr::Var(_) => RenderedValue::typed_leaf(addr.to_string(), type_name),
+    }
+}
+
+fn render_cell_address(
+    symbols: &dyn UnpackSchema,
+    type_name: String,
+    ty_idx: TyIdx,
+    cell: &CellLike,
+) -> RenderedValue {
+    // TonCenter returns address stack values as cells, so ABI address fields
+    // need this decode path before falling back to generic cell rendering.
+    if let Some(address) = decode_cell_like(cell).and_then(|cell| cell.parse::<IntAddr>().ok()) {
+        render_int_address(type_name, &address)
+    } else {
+        typed_leaf_for_ty(symbols, ty_idx, render_cell_like(cell))
     }
 }
 
@@ -1602,7 +1617,7 @@ fn format_map_raw_value(slice: TyCellSlice<'_>) -> Result<String, String> {
 }
 
 fn decode_abi_data(
-    symbols: &SourceMap,
+    symbols: &dyn UnpackSchema,
     parser: &mut TyCellSlice<'_>,
     ty_idx: TyIdx,
 ) -> Option<UnpackedValue> {
@@ -1615,7 +1630,7 @@ fn decode_abi_data(
 }
 
 fn render_map_value_with_symbols(
-    symbols: &SourceMap,
+    symbols: &dyn UnpackSchema,
     value_slice: TyCellSlice<'_>,
     value_ty_idx: TyIdx,
 ) -> Option<RenderedValue> {
@@ -1625,7 +1640,7 @@ fn render_map_value_with_symbols(
 }
 
 fn render_typed_cell(
-    symbols: &SourceMap,
+    symbols: &dyn UnpackSchema,
     type_name: String,
     inner_ty_idx: TyIdx,
     cell: &CellLike,
@@ -1640,7 +1655,7 @@ fn render_typed_cell(
 }
 
 fn render_typed_cell_with_decoded_data(
-    symbols: &SourceMap,
+    symbols: &dyn UnpackSchema,
     type_name: String,
     cell: &CellLike,
     decoded: Option<(TyIdx, UnpackedValue)>,
@@ -1732,7 +1747,11 @@ fn source_map_ty_idx_for_abi_ty(
     }
 }
 
-fn render_abi_data(symbols: &SourceMap, data: UnpackedValue, ty_idx: TyIdx) -> RenderedValue {
+fn render_abi_data(
+    symbols: &dyn UnpackSchema,
+    data: UnpackedValue,
+    ty_idx: TyIdx,
+) -> RenderedValue {
     let type_name = render_ty(symbols, ty_idx);
     let shape_ty_idx = resolve_alias_shape_ty(symbols, ty_idx).unwrap_or(ty_idx);
     if abi_object_is_enum(symbols, shape_ty_idx) {
@@ -1780,7 +1799,7 @@ fn render_abi_data(symbols: &SourceMap, data: UnpackedValue, ty_idx: TyIdx) -> R
 }
 
 fn render_abi_enum_data(
-    symbols: &SourceMap,
+    symbols: &dyn UnpackSchema,
     data: UnpackedValue,
     type_name: String,
     enum_ty_idx: TyIdx,
@@ -1797,7 +1816,7 @@ fn render_abi_enum_data(
 }
 
 fn render_abi_array_items(
-    symbols: &SourceMap,
+    symbols: &dyn UnpackSchema,
     items: Vec<UnpackedValue>,
     ty_idx: TyIdx,
 ) -> Vec<RenderedValue> {
@@ -1823,7 +1842,7 @@ fn render_abi_array_items(
 }
 
 fn render_abi_map(
-    symbols: &SourceMap,
+    symbols: &dyn UnpackSchema,
     entries: Vec<(UnpackedValue, UnpackedValue)>,
     ty_idx: TyIdx,
 ) -> RenderedValue {
@@ -1851,7 +1870,11 @@ fn render_abi_map(
     }
 }
 
-fn format_abi_map_key(symbols: &SourceMap, data: &UnpackedValue, key_ty_idx: TyIdx) -> String {
+fn format_abi_map_key(
+    symbols: &dyn UnpackSchema,
+    data: &UnpackedValue,
+    key_ty_idx: TyIdx,
+) -> String {
     let shape_ty_idx = resolve_alias_shape_ty(symbols, key_ty_idx).unwrap_or(key_ty_idx);
     if abi_object_is_enum(symbols, shape_ty_idx) {
         return abi_enum_value_name(symbols, shape_ty_idx, data)
@@ -1879,7 +1902,7 @@ fn format_abi_map_key(symbols: &SourceMap, data: &UnpackedValue, key_ty_idx: TyI
     }
 }
 
-fn abi_object_is_enum(symbols: &SourceMap, ty_idx: TyIdx) -> bool {
+fn abi_object_is_enum(symbols: &dyn UnpackSchema, ty_idx: TyIdx) -> bool {
     matches!(
         symbols
             .ty_by_idx(resolve_alias_shape_ty(symbols, ty_idx).unwrap_or(ty_idx))
@@ -1888,19 +1911,23 @@ fn abi_object_is_enum(symbols: &SourceMap, ty_idx: TyIdx) -> bool {
     )
 }
 
-fn enum_raw_value_ty(symbols: &SourceMap, ty_idx: TyIdx) -> Option<TyIdx> {
+fn enum_raw_value_ty(symbols: &dyn UnpackSchema, ty_idx: TyIdx) -> Option<TyIdx> {
     match symbols.ty_by_idx(ty_idx)? {
-        Ty::EnumRef { enum_name } => Some(symbols.get_enum(enum_name).encoded_as_ty_idx),
-        Ty::AliasRef { .. } => enum_raw_value_ty(symbols, symbols.alias_target_of(ty_idx)?),
+        Ty::EnumRef { enum_name } => Some(symbols.enum_decl_info(enum_name)?.encoded_as_ty_idx),
+        Ty::AliasRef { .. } => enum_raw_value_ty(symbols, symbols.alias_target_for(ty_idx)?.ty_idx),
         _ => None,
     }
 }
 
-fn abi_enum_value_name(symbols: &SourceMap, ty_idx: TyIdx, data: &UnpackedValue) -> Option<String> {
+fn abi_enum_value_name(
+    symbols: &dyn UnpackSchema,
+    ty_idx: TyIdx,
+    data: &UnpackedValue,
+) -> Option<String> {
     let Ty::EnumRef { enum_name } = symbols.ty_by_idx(ty_idx)? else {
         return None;
     };
-    let enum_ref = symbols.get_enum(enum_name);
+    let enum_ref = symbols.enum_decl_info(enum_name)?;
     enum_ref
         .members
         .iter()
@@ -1912,7 +1939,11 @@ fn abi_enum_value_name(symbols: &SourceMap, ty_idx: TyIdx, data: &UnpackedValue)
         .map(|member| format!("{}.{}", enum_ref.name, member.name))
 }
 
-fn abi_enum_fallback_value(symbols: &SourceMap, ty_idx: TyIdx, data: &UnpackedValue) -> String {
+fn abi_enum_fallback_value(
+    symbols: &dyn UnpackSchema,
+    ty_idx: TyIdx,
+    data: &UnpackedValue,
+) -> String {
     let enum_name = match symbols.ty_by_idx(ty_idx) {
         Some(Ty::EnumRef { enum_name }) => enum_name.as_str(),
         _ => return format!("{data:?}"),
@@ -1924,10 +1955,14 @@ fn abi_enum_fallback_value(symbols: &SourceMap, ty_idx: TyIdx, data: &UnpackedVa
     }
 }
 
-fn abi_object_context_ty(symbols: &SourceMap, object_name: &str, ty_idx: TyIdx) -> Option<TyIdx> {
+fn abi_object_context_ty(
+    symbols: &dyn UnpackSchema,
+    object_name: &str,
+    ty_idx: TyIdx,
+) -> Option<TyIdx> {
     match symbols.ty_by_idx(ty_idx)? {
         Ty::AliasRef { .. } => {
-            let target = symbols.alias_target_of(ty_idx)?;
+            let target = symbols.alias_target_for(ty_idx)?.ty_idx;
             abi_object_context_ty(symbols, object_name, target).or(Some(target))
         }
         Ty::Union { variants, .. } => resolve_union_object_ty(symbols, variants, object_name),
@@ -1936,25 +1971,25 @@ fn abi_object_context_ty(symbols: &SourceMap, object_name: &str, ty_idx: TyIdx) 
 }
 
 fn abi_object_field_ty(
-    symbols: &SourceMap,
+    symbols: &dyn UnpackSchema,
     ty_idx: TyIdx,
     object_name: &str,
     field_name: &str,
 ) -> Option<TyIdx> {
     match symbols.ty_by_idx(ty_idx)? {
         Ty::StructRef { struct_name: _, .. } => symbols
-            .struct_fields_of(ty_idx)?
+            .struct_fields_for(ty_idx)?
             .into_iter()
             .find(|field| field.name == field_name)
             .map(|field| field.ty_idx),
         Ty::EnumRef { enum_name } if field_name == "value" => {
-            Some(symbols.get_enum(enum_name).encoded_as_ty_idx)
+            Some(symbols.enum_decl_info(enum_name)?.encoded_as_ty_idx)
         }
         Ty::CellOf { inner_ty_idx } if object_name == "Cell" && field_name == "ref" => {
             Some(*inner_ty_idx)
         }
         Ty::AliasRef { .. } => {
-            let target = symbols.alias_target_of(ty_idx)?;
+            let target = symbols.alias_target_for(ty_idx)?.ty_idx;
             abi_object_field_ty(symbols, target, object_name, field_name)
         }
         Ty::Union { variants, .. } => {
@@ -1988,15 +2023,15 @@ fn abi_object_field_ty(
     }
 }
 
-fn resolve_alias_shape_ty(symbols: &SourceMap, ty_idx: TyIdx) -> Option<TyIdx> {
+fn resolve_alias_shape_ty(symbols: &dyn UnpackSchema, ty_idx: TyIdx) -> Option<TyIdx> {
     match symbols.ty_by_idx(ty_idx)? {
-        Ty::AliasRef { .. } => symbols.alias_target_of(ty_idx),
+        Ty::AliasRef { .. } => symbols.alias_target_for(ty_idx).map(|target| target.ty_idx),
         _ => None,
     }
 }
 
 fn resolve_union_object_ty(
-    symbols: &SourceMap,
+    symbols: &dyn UnpackSchema,
     variants: &[tolk_compiler::types_kernel::UnionVariant],
     object_name: &str,
 ) -> Option<TyIdx> {
@@ -2013,7 +2048,7 @@ fn resolve_union_object_ty(
 }
 
 fn union_variant_labels(
-    symbols: &SourceMap,
+    symbols: &dyn UnpackSchema,
     variants: &[tolk_compiler::types_kernel::UnionVariant],
 ) -> Vec<Option<String>> {
     let simple_labels = variants
@@ -2042,7 +2077,7 @@ fn union_variant_labels(
         .collect()
 }
 
-fn union_label_simple(symbols: &SourceMap, ty_idx: TyIdx) -> Option<String> {
+fn union_label_simple(symbols: &dyn UnpackSchema, ty_idx: TyIdx) -> Option<String> {
     let ty = symbols.ty_by_idx(ty_idx)?;
     Some(match ty {
         Ty::Int => "int".to_owned(),
@@ -2072,7 +2107,9 @@ fn union_label_simple(symbols: &SourceMap, ty_idx: TyIdx) -> Option<String> {
         Ty::MapKV { .. } => "map".to_owned(),
         Ty::EnumRef { enum_name } => enum_name.clone(),
         Ty::StructRef { struct_name, .. } => struct_name.clone(),
-        Ty::AliasRef { .. } => union_label_simple(symbols, symbols.alias_target_of(ty_idx)?)?,
+        Ty::AliasRef { .. } => {
+            union_label_simple(symbols, symbols.alias_target_for(ty_idx)?.ty_idx)?
+        }
         Ty::GenericT { name_t } => name_t.clone(),
         Ty::Union { variants, .. } => variants
             .iter()
@@ -2100,7 +2137,7 @@ fn format_abi_bits(bytes: &[u8], bit_len: usize) -> String {
 }
 
 fn render_map_value(
-    symbols: &SourceMap,
+    symbols: &dyn UnpackSchema,
     value_slice: TyCellSlice<'_>,
     value_ty_idx: TyIdx,
 ) -> RenderedValue {
@@ -2139,7 +2176,7 @@ fn render_map_value(
 }
 
 fn render_map_dict(
-    symbols: &SourceMap,
+    symbols: &dyn UnpackSchema,
     root: Option<Cell>,
     key_ty_idx: TyIdx,
     value_ty_idx: TyIdx,
@@ -2328,7 +2365,7 @@ fn flatten_lisp_list(items: &[VmStackValue]) -> Vec<&VmStackValue> {
 }
 
 fn typed_leaf_for_ty(
-    symbols: &SourceMap,
+    symbols: &dyn UnpackSchema,
     ty_idx: TyIdx,
     value: impl Into<String>,
 ) -> RenderedValue {
@@ -2347,7 +2384,7 @@ fn typed_leaf(type_name: impl Into<String>, value: impl Into<String>) -> Rendere
 // The returned RenderedValue can be transformed to a plain string, like "Point { x: 10, y: 20 }"
 // or to an expandable DAP tree view (for VS Code debugger).
 fn debug_format(
-    symbols: &SourceMap,
+    symbols: &dyn UnpackSchema,
     r: &mut StackReader,
     ty_idx: TyIdx,
     un_tuple_if_w: bool,
@@ -2466,6 +2503,18 @@ fn debug_format(
         },
 
         Ty::Slice | Ty::Remaining | Ty::BitsN { .. } => match r.read_slot() {
+            // TonCenter can encode get-method slice values as cells in legacy stack JSON.
+            SlotValue::Live(VmStackValue::Cell(cell)) => {
+                let (bits, refs, hash) = cell_like_meta(cell);
+                render_openable_cell_like(
+                    ty_name,
+                    render_cell_like(cell),
+                    bits,
+                    refs,
+                    hash,
+                    Some(cell.clone()),
+                )
+            }
             SlotValue::Live(VmStackValue::CellSlice(cs)) => {
                 let (bits, refs, hash) = slice_meta(cs);
                 render_openable_cell_like(
@@ -2523,6 +2572,10 @@ fn debug_format(
         },
 
         Ty::Address | Ty::AddressOpt | Ty::AddressExt | Ty::AddressAny => match r.read_slot() {
+            // TonCenter encodes get-method address values as cells in legacy stack JSON.
+            SlotValue::Live(VmStackValue::Cell(cell)) => {
+                render_cell_address(symbols, ty_name, ty_idx, cell)
+            }
             SlotValue::Live(VmStackValue::CellSlice(cs)) => match try_parse_address(cs) {
                 Some(raw) => match raw.parse::<StdAddr>() {
                     Ok(addr) => render_std_address(ty_name, addr.to_string(), &addr),
@@ -2615,9 +2668,9 @@ fn debug_format(
 
         Ty::StructRef { .. } => {
             let mut fields: Vec<(String, RenderedValue)> = Vec::new();
-            for f in symbols.struct_fields_of(ty_idx).unwrap_or_default() {
+            for f in symbols.struct_fields_for(ty_idx).unwrap_or_default() {
                 let field_val = debug_format(symbols, r, f.ty_idx, false);
-                fields.push((f.name.clone(), field_val));
+                fields.push((f.name, field_val));
             }
             RenderedValue::Struct {
                 type_name: ty_name,
@@ -2626,7 +2679,8 @@ fn debug_format(
         }
 
         Ty::AliasRef { .. } => {
-            let Some(target_ty_idx) = symbols.alias_target_of(ty_idx) else {
+            let Some(target_ty_idx) = symbols.alias_target_for(ty_idx).map(|target| target.ty_idx)
+            else {
                 return typed_leaf_for_ty(symbols, ty_idx, "unresolved alias");
             };
             debug_format(symbols, r, target_ty_idx, false)
@@ -2634,7 +2688,9 @@ fn debug_format(
 
         Ty::EnumRef { enum_name } => match r.read_slot() {
             SlotValue::Live(VmStackValue::Integer(s)) => {
-                let enum_ref = symbols.get_enum(enum_name);
+                let Some(enum_ref) = symbols.enum_decl_info(enum_name) else {
+                    return typed_leaf_for_ty(symbols, ty_idx, s.clone());
+                };
                 let text = enum_ref.members.iter().find(|m| &m.value == s).map_or_else(
                     || format!("{}({})", enum_ref.name, s),
                     |m| format!("{}.{}", enum_ref.name, m.name),
@@ -2739,7 +2795,7 @@ fn debug_format(
 }
 
 pub(crate) fn debug_print_from_stack(
-    symbols: &SourceMap,
+    symbols: &dyn UnpackSchema,
     slots: &[SlotValue],
     ty_idx: TyIdx,
 ) -> RenderedValue {
@@ -2768,8 +2824,9 @@ fn tuple_items_to_vm_stack_values(tuple: &Tuple) -> Vec<VmStackValue> {
     tuple.iter().map(tuple_item_to_vm_stack_value).collect()
 }
 
+#[must_use]
 pub fn render_tuple_as_tolk_type(
-    symbols: &SourceMap,
+    symbols: &dyn UnpackSchema,
     tuple: &Tuple,
     ty_idx: TyIdx,
 ) -> RenderedValue {
@@ -2795,7 +2852,7 @@ pub fn render_tuple_item_as_tolk_type(
     }
 }
 
-fn top_level_tuple_is_stack_frame(symbols: &SourceMap, ty_idx: TyIdx) -> bool {
+fn top_level_tuple_is_stack_frame(symbols: &dyn UnpackSchema, ty_idx: TyIdx) -> bool {
     let Some(ty) = symbols.ty_by_idx(ty_idx) else {
         return false;
     };
@@ -2814,8 +2871,8 @@ fn top_level_tuple_is_stack_frame(symbols: &SourceMap, ty_idx: TyIdx) -> bool {
             ..
         } => *stack_width != 1,
         Ty::AliasRef { .. } => symbols
-            .alias_target_of(ty_idx)
-            .is_some_and(|target_ty_idx| top_level_tuple_is_stack_frame(symbols, target_ty_idx)),
+            .alias_target_for(ty_idx)
+            .is_some_and(|target| top_level_tuple_is_stack_frame(symbols, target.ty_idx)),
         _ => false,
     }
 }
@@ -3820,8 +3877,9 @@ mod tests {
                 items_ty_idx: vec![bool_ty_idx, uint32_ty_idx],
             },
         );
+        let symbols = source_map_with_types(unique_types);
         let rendered = render_abi_data(
-            &source_map_with_types(unique_types),
+            &symbols,
             UnpackedValue::Array(vec![
                 UnpackedValue::Bool(true),
                 UnpackedValue::Number(7.into()),
@@ -3848,8 +3906,9 @@ mod tests {
                 value_ty_idx,
             },
         );
+        let symbols = source_map_with_types(unique_types);
         let rendered = render_abi_data(
-            &source_map_with_types(unique_types),
+            &symbols,
             UnpackedValue::Map(vec![(
                 UnpackedValue::Number(1.into()),
                 UnpackedValue::Bool(true),
@@ -4364,7 +4423,6 @@ mod tests {
         builder.store_uint(2, 2).unwrap();
         builder.store_uint(1024, 16).unwrap();
         let cell = builder.build().unwrap();
-
         let rendered = render_typed_cell(
             &symbols,
             "Cell<GasRecord>".to_owned(),
