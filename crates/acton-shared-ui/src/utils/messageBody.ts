@@ -306,7 +306,139 @@ const toSerializedCellScalar = (
   rawValue: cell.toBoc({idx: false, crc32: false}).toString("hex"),
 })
 
-const toParsedValue = (value: unknown): ParsedValue => {
+interface ParsedValueTypeContext {
+  readonly symbols: SymTable
+  readonly tyIdx: number
+}
+
+function tryGetTy(symbols: SymTable, tyIdx: number): Ty | undefined {
+  try {
+    return symbols.tyByIdx(tyIdx)
+  } catch {
+    return undefined
+  }
+}
+
+function toParsedValueWithType(
+  value: unknown,
+  context: ParsedValueTypeContext,
+): ParsedValue | undefined {
+  const ty = tryGetTy(context.symbols, context.tyIdx)
+  if (!ty) {
+    return undefined
+  }
+
+  switch (ty.kind) {
+    case "nullable": {
+      return value === null
+        ? {kind: "null"}
+        : toParsedValue(value, {symbols: context.symbols, tyIdx: ty.inner_ty_idx})
+    }
+    case "cellOf": {
+      if (typeof value !== "object" || value === null || !("ref" in value)) {
+        return undefined
+      }
+
+      return toParsedValue((value as {readonly ref: unknown}).ref, {
+        symbols: context.symbols,
+        tyIdx: ty.inner_ty_idx,
+      })
+    }
+    case "arrayOf":
+    case "lispListOf": {
+      if (!Array.isArray(value)) {
+        return undefined
+      }
+
+      return {
+        kind: "array",
+        items: value.map(item =>
+          toParsedValue(item, {symbols: context.symbols, tyIdx: ty.inner_ty_idx}),
+        ),
+      }
+    }
+    case "tensor":
+    case "shapedTuple": {
+      if (!Array.isArray(value)) {
+        return undefined
+      }
+
+      return {
+        kind: "array",
+        items: value.map((item, index) =>
+          toParsedValue(item, {
+            symbols: context.symbols,
+            tyIdx: ty.items_ty_idx[index] ?? context.tyIdx,
+          }),
+        ),
+      }
+    }
+    case "mapKV": {
+      if (!(value instanceof Dictionary)) {
+        return undefined
+      }
+
+      return {
+        kind: "map",
+        typeName: renderTy(context.symbols, context.tyIdx),
+        entries: [...value].map(([key, itemValue]) => ({
+          key: toParsedValue(key, {symbols: context.symbols, tyIdx: ty.key_ty_idx}),
+          value: toParsedValue(itemValue, {symbols: context.symbols, tyIdx: ty.value_ty_idx}),
+        })),
+      }
+    }
+    case "StructRef": {
+      const structRef = context.symbols.getStruct(ty.struct_name)
+      if (structRef.custom_pack_unpack?.unpack_from_slice) {
+        return undefined
+      }
+
+      if (typeof value !== "object" || value === null) {
+        return undefined
+      }
+
+      const objectValue = value as Record<string, unknown>
+      return {
+        kind: "object",
+        typeName: renderTy(context.symbols, context.tyIdx),
+        entries: context.symbols.structFieldsOf(context.tyIdx, false).map(field => ({
+          key: field.name,
+          value: toParsedValue(objectValue[field.name], {
+            symbols: context.symbols,
+            tyIdx: field.ty_idx,
+          }),
+        })),
+      }
+    }
+    case "AliasRef": {
+      const aliasRef = context.symbols.getAlias(ty.alias_name)
+      if (aliasRef.custom_pack_unpack?.unpack_from_slice) {
+        return undefined
+      }
+
+      const target = context.symbols.aliasTargetOf(context.tyIdx)
+      return toParsedValue(value, {symbols: context.symbols, tyIdx: target.ty_idx})
+    }
+    default: {
+      return undefined
+    }
+  }
+}
+
+const toParsedValue = (value: unknown, typeContext?: ParsedValueTypeContext): ParsedValue => {
+  let typedValue: ParsedValue | undefined
+  if (typeContext) {
+    try {
+      typedValue = toParsedValueWithType(value, typeContext)
+    } catch {
+      typedValue = undefined
+    }
+  }
+
+  if (typedValue) {
+    return typedValue
+  }
+
   if (value === null) {
     return {kind: "null"}
   }
@@ -458,7 +590,7 @@ const tryDecodeMessageWithCandidates = (
 
       return {
         name: getBodyTypeName(ctx.symbols, candidate.body_ty_idx),
-        value: toParsedValue(decoded),
+        value: toParsedValue(decoded, {symbols: ctx.symbols, tyIdx: candidate.body_ty_idx}),
       }
     } catch {
       continue
@@ -546,7 +678,7 @@ const tryDecodeStorageSliceWithAbi = (
 
       return {
         name: getBodyTypeName(ctx.symbols, candidate),
-        value: toParsedValue(decoded),
+        value: toParsedValue(decoded, {symbols: ctx.symbols, tyIdx: candidate}),
       }
     } catch {
       continue

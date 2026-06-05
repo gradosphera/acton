@@ -2,7 +2,7 @@ import * as React from "react"
 import {useCallback, useEffect, useMemo, useRef, useState} from "react"
 import {FiChevronRight, FiWifiOff} from "react-icons/fi"
 
-import type {TestReport, Trace} from "@acton/shared-ui"
+import type {TestReport, ThemeMode, Trace} from "@acton/shared-ui"
 
 import styles from "./App.module.css"
 import {Coverage} from "./components/Coverage/Coverage"
@@ -13,6 +13,15 @@ import {TestDetails} from "./components/TestDetails/TestDetails"
 const RUNNER_HEALTH_POLL_INTERVAL_MS = 1500
 
 type ActiveView = "tests" | "coverage" | "profile"
+
+const readInitialTheme = (): ThemeMode => {
+  const storedTheme = localStorage.getItem("theme")
+  if (storedTheme === "dark" || storedTheme === "light") {
+    return storedTheme
+  }
+
+  return globalThis.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
+}
 
 const formatResponseError = (response: Response, body: string): string => {
   const status = `${response.status} ${response.statusText}`.trim()
@@ -67,12 +76,7 @@ export const App: React.FC = () => {
   const [currentTraceError, setCurrentTraceError] = useState<string | undefined>()
   const [isCurrentTraceLoading, setIsCurrentTraceLoading] = useState(false)
   const [projectRoot, setProjectRoot] = useState<string>("")
-  const [theme, setTheme] = useState(() => {
-    return (
-      localStorage.getItem("theme") ||
-      (globalThis.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
-    )
-  })
+  const [theme, setTheme] = useState<ThemeMode>(readInitialTheme)
   const [loading, setLoading] = useState(true)
   const [coverageLcov, setCoverageLcov] = useState<string | undefined>()
   const [coverageLoaded, setCoverageLoaded] = useState(false)

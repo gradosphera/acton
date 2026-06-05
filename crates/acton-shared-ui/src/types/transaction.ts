@@ -54,6 +54,7 @@ export type ParsedValue =
     }
   | {
       readonly kind: "map"
+      readonly typeName?: string
       readonly entries: readonly ParsedValueMapEntry[]
     }
 

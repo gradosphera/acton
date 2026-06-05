@@ -1,4 +1,5 @@
 import type React from "react"
+import type {ThemeMode} from "@acton/shared-ui"
 
 import type {TonClient} from "../explorer/api/client"
 
@@ -7,8 +8,8 @@ import styles from "./DashboardPage.module.css"
 
 interface DashboardPageProps {
   readonly client: TonClient
-  readonly theme: string
-  readonly setTheme: (theme: string) => void
+  readonly theme: ThemeMode
+  readonly setTheme: (theme: ThemeMode) => void
   readonly children?: React.ReactNode
   readonly embedded?: boolean
 }

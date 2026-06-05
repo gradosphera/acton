@@ -568,34 +568,6 @@
   color: var(--litenode-text-strong);
 }
 
-.themeSwitch {
-  display: inline-flex;
-  width: max-content;
-  margin-left: auto;
-  align-items: center;
-  overflow: hidden;
-  padding: 4px;
-  border: 1px solid var(--litenode-border-control);
-  border-radius: 9999px;
-  background: transparent;
-  color: var(--litenode-text-muted);
-  cursor: pointer;
-}
-
-.themeSwitchItem {
-  width: 26px;
-  height: 26px;
-  padding: 6px;
-  border-radius: 9999px;
-  box-sizing: border-box;
-  color: var(--litenode-text-muted);
-}
-
-.themeSwitchItemActive {
-  background: var(--litenode-surface-active);
-  color: var(--litenode-text);
-}
-
 .contentArea {
   height: 100%;
   min-width: 0;
@@ -1601,10 +1573,6 @@
   .navItemMain {
     gap: 10px;
     font-size: 0.85rem;
-  }
-
-  .themeSwitch {
-    margin-left: auto;
   }
 
   .searchPanel {

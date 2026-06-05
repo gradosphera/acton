@@ -9,16 +9,16 @@ import {
   KeyRound,
   LayoutGrid,
   Menu,
-  Moon,
   Search as SearchIcon,
   Settings2,
-  Sun,
   Wallet,
   X,
 } from "lucide-react"
 import type {LucideIcon} from "lucide-react"
 import * as React from "react"
 import {useLocation, useNavigate} from "react-router-dom"
+import {ThemeSwitch} from "@acton/shared-ui"
+import type {ThemeMode} from "@acton/shared-ui"
 
 import type {TonClient} from "../explorer/api/client"
 import {readExplorerLastPath, writeExplorerLastPath} from "../explorer/explorerResume"
@@ -29,8 +29,8 @@ import styles from "./DashboardPage.module.css"
 
 interface DashboardNavigationProps {
   readonly client: TonClient
-  readonly theme: string
-  readonly setTheme: (theme: string) => void
+  readonly theme: ThemeMode
+  readonly setTheme: (theme: ThemeMode) => void
 }
 
 interface SidebarItem {
@@ -231,22 +231,10 @@ export const DashboardNavigation: React.FC<DashboardNavigationProps> = ({
                 })}
               </div>
 
-              <button
-                type="button"
-                className={styles.themeSwitch}
-                aria-label="Toggle Theme"
-                data-theme-toggle=""
-                onClick={() => setTheme(theme === "light" ? "dark" : "light")}
-              >
-                <Sun
-                  fill="currentColor"
-                  className={`${styles.themeSwitchItem} ${theme === "light" ? styles.themeSwitchItemActive : ""}`}
-                />
-                <Moon
-                  fill="currentColor"
-                  className={`${styles.themeSwitchItem} ${theme === "dark" ? styles.themeSwitchItemActive : ""}`}
-                />
-              </button>
+              <ThemeSwitch
+                theme={theme}
+                onToggleTheme={() => setTheme(theme === "light" ? "dark" : "light")}
+              />
             </div>
           </nav>
         </div>
