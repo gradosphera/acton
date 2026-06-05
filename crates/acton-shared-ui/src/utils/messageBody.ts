@@ -500,18 +500,29 @@ const getStorageCandidates = (compilerAbi: ContractABI): readonly number[] => {
   return [...new Map(candidates).values()]
 }
 
-const getStorageDataSlice = (shardAccountBase64: string): Slice | undefined => {
+const parseShardAccount = (shardAccountBase64: string) => {
   try {
-    const shard = loadShardAccount(Cell.fromBase64(shardAccountBase64).beginParse())
-    const state = shard.account?.storage.state
-    if (state?.type !== "active" || !state.state.data) {
-      return undefined
-    }
-
-    return state.state.data.beginParse()
+    return loadShardAccount(Cell.fromBase64(shardAccountBase64).beginParse())
   } catch {
+    return
+  }
+}
+
+const getStorageDataSlice = (shardAccountBase64: string): Slice | undefined => {
+  const shard = parseShardAccount(shardAccountBase64)
+  const state = shard?.account?.storage.state
+  if (state?.type !== "active" || !state.state.data) {
     return undefined
   }
+
+  return state.state.data.beginParse()
+}
+
+export const getShardAccountBalance = (shardAccountBase64: string): bigint | undefined => {
+  const shard = parseShardAccount(shardAccountBase64)
+  if (!shard) return
+
+  return shard.account?.storage.balance.coins ?? 0n
 }
 
 const tryDecodeStorageSliceWithAbi = (

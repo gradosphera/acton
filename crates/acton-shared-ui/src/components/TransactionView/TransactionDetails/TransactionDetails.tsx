@@ -6,7 +6,7 @@ import type {Cell} from "@ton/core"
 import type {BackendContractInfo, SourceLocation} from "@/types"
 import type {ContractData, TransactionInfo} from "@/types/transaction"
 import {DataBlock, fmt} from "@/index"
-import {decodeMessageBody, decodeStateInitData} from "@/utils/messageBody"
+import {decodeMessageBody, decodeStateInitData, getShardAccountBalance} from "@/utils/messageBody"
 import {
   computeSendMode,
   getTransactionActionPhase,
@@ -128,6 +128,7 @@ export function TransactionDetails({
       accumulator + (message.info.type === "internal" ? message.info.value.coins : 0n),
     0n,
   )
+  const endBalance = getShardAccountBalance(tx.shardAccountAfter)
   const tickTockStorageFeesDue = tickTockDescription?.storagePhase.storageFeesDue
   const hasAccountStatusChange = tx.transaction.oldStatus !== tx.transaction.endStatus
   const storageDiff = buildStorageDiff(tx.parsedStorageBefore, tx.parsedStorageAfter)
@@ -380,6 +381,12 @@ export function TransactionDetails({
               <div className={styles.multiColumnItemTitle}>Amount Sent (Total)</div>
               <div className={`${styles.multiColumnItemValue}`}>
                 {fmt.formatCurrency(sentTotal)}
+              </div>
+            </div>
+            <div className={styles.multiColumnItem}>
+              <div className={styles.multiColumnItemTitle}>End Balance</div>
+              <div className={`${styles.multiColumnItemValue}`}>
+                {endBalance === undefined ? "—" : fmt.formatCurrency(endBalance)}
               </div>
             </div>
             <div className={styles.multiColumnItem}>
