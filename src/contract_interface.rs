@@ -1,3 +1,4 @@
+use crate::context::code_lookup_hash;
 use acton_config::color::OwoColorize;
 use acton_config::config::{ActonConfig, ContractConfig};
 use anyhow::anyhow;
@@ -34,7 +35,7 @@ pub(crate) fn read_precompiled_boc(
 
     Ok(PrecompiledBoc {
         code_boc64: Boc::encode_base64(&boc),
-        code_hash: *boc.repr_hash(),
+        code_hash: code_lookup_hash(&boc),
     })
 }
 

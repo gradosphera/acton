@@ -257,7 +257,7 @@ fn build_impl(ctx: &mut Context, stk: &mut Tuple, path: String, id: String) -> a
         }
 
         let code_boc64 = Boc::encode_base64(&cell);
-        let code_hash = *cell.repr_hash();
+        let code_hash = code_lookup_hash(&cell);
 
         let interface = if let Some(contract_config) = &contract_config {
             compile_optional_contract_interface(
