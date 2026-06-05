@@ -3,7 +3,15 @@ import path from "node:path"
 import {Address} from "@ton/core"
 import type React from "react"
 import {useEffect, useMemo, useRef, useState} from "react"
-import {FiArrowUpRight, FiCheck, FiChevronDown, FiCircle, FiMinus, FiX} from "react-icons/fi"
+import {
+  FiArrowUpRight,
+  FiCheck,
+  FiChevronDown,
+  FiChevronUp,
+  FiCircle,
+  FiMinus,
+  FiX,
+} from "react-icons/fi"
 import {SiIntellijidea, SiRust, SiWebstorm} from "react-icons/si"
 import {VscCode} from "react-icons/vsc"
 
@@ -19,6 +27,7 @@ import {
 } from "@acton/shared-ui"
 import {
   applyParsedBodies,
+  buildValueFlowItems,
   fmt,
   getTransactionOpcode,
   processTransactions,
@@ -33,6 +42,7 @@ import {
   TableHeader,
   TableRow,
   resolveAbiOpcodeName,
+  ValueFlowTable,
 } from "@acton/shared-ui"
 
 import {useContracts} from "../../hooks/useContracts"
@@ -108,6 +118,7 @@ const MISSING_VM_LOG_HINT = [
   "No VM logs were collected for this trace.",
   "Re-run with --verbose flag",
 ].join("\n")
+const VALUE_FLOW_EXPANDED_STORAGE_KEY = "valueFlowExpanded"
 
 const toIdeSourcePosition = (location: SourceLocation): Pick<TestReport, "row" | "column"> => ({
   row: Math.max(0, location.line - 1),
@@ -150,6 +161,9 @@ export const TestDetails: React.FC<TestDetailsProps> = ({
   const [selectedTraceIndex, setSelectedTraceIndex] = useState<number>(() => {
     const saved = localStorage.getItem(`selectedTraceIndex:${test.suite_name}::${test.name}`)
     return saved ? Number.parseInt(saved, 10) : 0
+  })
+  const [isValueFlowExpanded, setIsValueFlowExpanded] = useState(() => {
+    return localStorage.getItem(VALUE_FLOW_EXPANDED_STORAGE_KEY) === "true"
   })
   const [selectedIdeName, setSelectedIdeName] = useState<string | null>(() => {
     return localStorage.getItem("selectedIde")
@@ -435,6 +449,11 @@ export const TestDetails: React.FC<TestDetailsProps> = ({
   const parsedTransactions = useMemo(() => {
     return parsedTraceTransactionsWithBodies[selectedTraceIndex] ?? []
   }, [parsedTraceTransactionsWithBodies, selectedTraceIndex])
+  const valueFlowItems = useMemo(
+    () => buildValueFlowItems(parsedTransactions),
+    [parsedTransactions],
+  )
+  const shouldShowValueFlowToggle = activeTab === "transactions" && valueFlowItems.length > 0
 
   const currentTraceParseIssue = traceParseIssues.find(
     issue => issue.traceIndex === selectedTraceIndex,
@@ -605,6 +624,12 @@ export const TestDetails: React.FC<TestDetailsProps> = ({
   const handleSelectTraceIndex = (index: number) => {
     setSelectedTraceIndex(index)
     localStorage.setItem(`selectedTraceIndex:${test.suite_name}::${test.name}`, index.toString())
+  }
+
+  const handleToggleValueFlow = () => {
+    const nextExpanded = !isValueFlowExpanded
+    setIsValueFlowExpanded(nextExpanded)
+    localStorage.setItem(VALUE_FLOW_EXPANDED_STORAGE_KEY, nextExpanded ? "true" : "false")
   }
 
   useEffect(() => {
@@ -1098,6 +1123,11 @@ export const TestDetails: React.FC<TestDetailsProps> = ({
       }
       return (
         <>
+          {isValueFlowExpanded && valueFlowItems.length > 0 && (
+            <div className={styles.valueFlowSection}>
+              <ValueFlowTable items={valueFlowItems} contracts={contracts} />
+            </div>
+          )}
           <div className={styles.treeWrapper}>
             <TransactionTree
               transactions={parsedTransactions}
@@ -1191,25 +1221,40 @@ export const TestDetails: React.FC<TestDetailsProps> = ({
         </div>
       </div>
 
-      {shouldShowTraceSelector && (
+      {(shouldShowTraceSelector || shouldShowValueFlowToggle) && (
         <div className={styles.traceSelector}>
-          {trace.traces.map((traceItem, index) => (
+          {shouldShowTraceSelector && (
+            <div className={styles.traceTabs}>
+              {trace.traces.map((traceItem, index) => (
+                <button
+                  key={`${trace.name}-${index}`}
+                  type="button"
+                  className={`${styles.traceTab} ${selectedTraceIndex === index ? styles.activeTraceTab : ""}`}
+                  onClick={() => handleSelectTraceIndex(index)}
+                >
+                  {formatTraceName(traceItem.name, index)}
+                </button>
+              ))}
+              {skippedTracesCount > 0 && (
+                <button
+                  type="button"
+                  className={`${styles.traceTab} ${styles.skippedTraceTab}`}
+                  disabled
+                >
+                  {skippedTraceLabel}
+                </button>
+              )}
+            </div>
+          )}
+          {shouldShowValueFlowToggle && (
             <button
-              key={`${trace.name}-${index}`}
               type="button"
-              className={`${styles.traceTab} ${selectedTraceIndex === index ? styles.activeTraceTab : ""}`}
-              onClick={() => handleSelectTraceIndex(index)}
+              className={styles.valueFlowToggle}
+              onClick={handleToggleValueFlow}
+              aria-expanded={isValueFlowExpanded}
             >
-              {formatTraceName(traceItem.name, index)}
-            </button>
-          ))}
-          {skippedTracesCount > 0 && (
-            <button
-              type="button"
-              className={`${styles.traceTab} ${styles.skippedTraceTab}`}
-              disabled
-            >
-              {skippedTraceLabel}
+              <span>{isValueFlowExpanded ? "Hide" : "Show"} Value Flow</span>
+              {isValueFlowExpanded ? <FiChevronUp /> : <FiChevronDown />}
             </button>
           )}
         </div>

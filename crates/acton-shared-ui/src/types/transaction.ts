@@ -83,3 +83,9 @@ export interface ContractData {
   readonly letter: string
   readonly abi?: ContractABI
 }
+
+export interface ValueFlowItem {
+  readonly address: string
+  readonly change: bigint
+  readonly fee: bigint
+}

@@ -173,7 +173,16 @@
 
 .traceSelector {
   display: flex;
+  align-items: center;
   padding: 8px 16px;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.traceTabs {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
   gap: 8px;
   overflow-x: auto;
   overflow-y: hidden;
@@ -220,6 +229,38 @@
   color: var(--text-primary);
   background-color: var(--bg-color);
   font-weight: 600;
+}
+
+.valueFlowToggle {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  padding: 4px 8px;
+  border: none;
+  border-radius: var(--border-radius-sm);
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: normal;
+  transition:
+    background-color 0.2s,
+    color 0.2s;
+}
+
+.valueFlowToggle svg {
+  display: block;
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+}
+
+.valueFlowToggle:hover {
+  color: var(--text-primary);
 }
 
 .tabsContainer {
@@ -281,6 +322,11 @@
   flex: 1;
   width: 100%;
   min-height: 0;
+}
+
+.valueFlowSection {
+  flex: 0 0 auto;
+  padding: var(--spacing-md) var(--spacing-md) var(--spacing-sm);
 }
 
 .profileTab {

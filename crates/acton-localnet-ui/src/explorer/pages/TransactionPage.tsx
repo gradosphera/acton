@@ -1,23 +1,13 @@
 import {
-  ContractChip,
   type ContractData,
-  fmt,
   TransactionDetails,
   type TransactionInfo,
   TransactionTree,
+  ValueFlowTable,
+  type ValueFlowItem,
 } from "@acton/shared-ui"
 import {Address} from "@ton/core"
-import {
-  Activity,
-  AlertCircle,
-  ArrowLeft,
-  CheckCircle2,
-  List,
-  Loader2,
-  TrendingDown,
-  TrendingUp,
-  XCircle,
-} from "lucide-react"
+import {Activity, AlertCircle, ArrowLeft, CheckCircle2, List, Loader2, XCircle} from "lucide-react"
 import type React from "react"
 import {useEffect, useState} from "react"
 import {useNavigate, useParams} from "react-router-dom"
@@ -42,12 +32,6 @@ interface TransactionPageProps {
 }
 
 type TabType = "transactions" | "value-flow"
-
-interface ValueFlowItem {
-  readonly address: string
-  readonly change: bigint
-  readonly fee: bigint
-}
 
 interface ValueFlowAccumulator extends ValueFlowItem {
   readonly before: bigint
@@ -255,39 +239,11 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({client}) => {
 
               <div className={styles.tabContent}>
                 {activeTab === "value-flow" && (
-                  <div className={styles.valueFlowContainer}>
-                    <div className={styles.flowList}>
-                      <div className={styles.flowHeader}>
-                        <div className={styles.flowCol}>Account</div>
-                        <div className={styles.flowCol}>Balance Change</div>
-                        <div className={styles.flowCol}>Network Fee</div>
-                      </div>
-                      {valueFlow.map(item => (
-                        <div key={item.address} className={styles.flowRow}>
-                          <div className={styles.flowCol}>
-                            <ContractChip
-                              address={item.address}
-                              contracts={contracts}
-                              onContractClick={handleContractClick}
-                            />
-                          </div>
-                          <div
-                            className={`${styles.flowCol} ${item.change > 0n ? styles.statusSuccess : item.change < 0n ? styles.statusError : ""}`}
-                          >
-                            <div className={styles.changeValue}>
-                              {item.change > 0n ? (
-                                <TrendingUp size={14} />
-                              ) : item.change < 0n ? (
-                                <TrendingDown size={14} />
-                              ) : undefined}
-                              {fmt.formatCurrency(item.change)}
-                            </div>
-                          </div>
-                          <div className={styles.flowCol}>{fmt.formatCurrency(item.fee)}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                  <ValueFlowTable
+                    items={valueFlow}
+                    contracts={contracts}
+                    onContractClick={handleContractClick}
+                  />
                 )}
 
                 {activeTab === "transactions" && (
