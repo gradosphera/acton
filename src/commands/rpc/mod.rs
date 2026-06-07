@@ -1,7 +1,7 @@
 use crate::commands::common::{error_fmt, format_nanotons};
 use crate::context::code_lookup_hash;
 use crate::contract_interface::{
-    compile_optional_contract_interface, is_boc_path, read_precompiled_boc,
+    compile_optional_contract_interface_with_cache, is_boc_path, read_precompiled_boc,
 };
 use crate::file_build_cache::FileBuildCache;
 use acton_config::color::OwoColorize;
@@ -356,11 +356,12 @@ fn load_local_contract_candidate(
     let contract_path = contract.absolute_source_path(configured_project_root());
     if is_boc_path(&contract_path) {
         let precompiled = read_precompiled_boc(&contract_path, &contract.src)?;
-        let interface = compile_optional_contract_interface(
+        let interface = compile_optional_contract_interface_with_cache(
             config,
             configured_project_root(),
             contract_id,
             contract,
+            file_cache,
         )?;
         let (abi, source_map) = interface.map_or((None, None), |interface| {
             (
