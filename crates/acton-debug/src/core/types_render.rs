@@ -2376,6 +2376,38 @@ fn typed_leaf(type_name: impl Into<String>, value: impl Into<String>) -> Rendere
     RenderedValue::typed_leaf(value, type_name)
 }
 
+/// Toncenter v3 serializes empty dict/null stack values as `list: []`,
+/// which the legacy stack parser represents as an empty tuple.
+/// TODO: remove if fixed
+const fn slot_is_empty_tuple(slot: SlotValue<'_>) -> bool {
+    matches!(slot, SlotValue::Live(VmStackValue::Tuple(items)) if items.is_empty())
+}
+
+fn type_accepts_empty_toncenter_list_as_null(symbols: &dyn UnpackSchema, ty_idx: TyIdx) -> bool {
+    match symbols.ty_by_idx(ty_idx) {
+        Some(Ty::Cell | Ty::CellOf { .. } | Ty::MapKV { .. }) => true,
+        Some(Ty::AliasRef { .. }) => symbols.alias_target_for(ty_idx).is_some_and(|target| {
+            type_accepts_empty_toncenter_list_as_null(symbols, target.ty_idx)
+        }),
+        _ => false,
+    }
+}
+
+fn render_empty_map(
+    symbols: &dyn UnpackSchema,
+    key_ty_idx: TyIdx,
+    value_ty_idx: TyIdx,
+) -> RenderedValue {
+    RenderedValue::MapKV {
+        type_name: format!(
+            "map<{}, {}>",
+            render_ty(symbols, key_ty_idx),
+            render_ty(symbols, value_ty_idx)
+        ),
+        fields: vec![],
+    }
+}
+
 // ---------------------------------------------------------------------------
 // debug_format — recursive type-aware renderer (uses StackReader cursor)
 // ---------------------------------------------------------------------------
@@ -2591,20 +2623,18 @@ fn debug_format(
             key_ty_idx,
             value_ty_idx,
         } => match r.read_slot() {
-            SlotValue::Live(VmStackValue::Null) => RenderedValue::MapKV {
-                type_name: format!(
-                    "map<{}, {}>",
-                    render_ty(symbols, *key_ty_idx),
-                    render_ty(symbols, *value_ty_idx)
-                ),
-                fields: vec![],
-            },
+            SlotValue::Live(VmStackValue::Null) => {
+                render_empty_map(symbols, *key_ty_idx, *value_ty_idx)
+            }
             SlotValue::Live(VmStackValue::Cell(cell)) => {
                 if let Some(root) = decode_cell_like(cell) {
                     render_map_dict(symbols, Some(root), *key_ty_idx, *value_ty_idx)
                 } else {
                     typed_leaf_for_ty(symbols, ty_idx, "not a TVM cell")
                 }
+            }
+            slot if slot_is_empty_tuple(slot) => {
+                render_empty_map(symbols, *key_ty_idx, *value_ty_idx)
             }
             _ => typed_leaf_for_ty(symbols, ty_idx, "not a TVM cell"),
         },
@@ -2658,6 +2688,12 @@ fn debug_format(
                 match r.peek_slot() {
                     SlotValue::Live(VmStackValue::Null)
                     | SlotValue::LastSeen(VmStackValue::Null) => {
+                        r.read_slot();
+                        typed_leaf(ty_name, "null")
+                    }
+                    slot if slot_is_empty_tuple(slot)
+                        && type_accepts_empty_toncenter_list_as_null(symbols, *inner_ty_idx) =>
+                    {
                         r.read_slot();
                         typed_leaf(ty_name, "null")
                     }
@@ -3925,6 +3961,51 @@ mod tests {
         assert_eq!(fields[0].0, "1");
         assert_eq!(fields[0].1.dap_parts().0, "true");
         assert_eq!(fields[0].1.dap_parts().1.as_deref(), Some("bool"));
+    }
+
+    #[test]
+    fn render_map_accepts_toncenter_empty_list_as_empty_map() {
+        let mut unique_types = Vec::new();
+        let key_ty_idx = add_ty(&mut unique_types, Ty::IntN { n: 32 });
+        let value_ty_idx = add_ty(&mut unique_types, Ty::Bool);
+        let map_ty_idx = add_ty(
+            &mut unique_types,
+            Ty::MapKV {
+                key_ty_idx,
+                value_ty_idx,
+            },
+        );
+        let rendered = render_tuple_item_as_tolk_type(
+            &source_map_with_types(unique_types),
+            &TupleItem::Tuple(Tuple::empty()),
+            map_ty_idx,
+        );
+
+        let RenderedValue::MapKV { type_name, fields } = rendered else {
+            panic!("expected empty map");
+        };
+        assert_eq!(type_name, "map<int32, bool>");
+        assert!(fields.is_empty());
+    }
+
+    #[test]
+    fn render_nullable_cell_accepts_toncenter_empty_list_as_null() {
+        let unique_types = vec![
+            Ty::Cell,
+            Ty::Nullable {
+                inner_ty_idx: 0,
+                stack_type_id: None,
+                stack_width: None,
+            },
+        ];
+        let rendered = render_tuple_item_as_tolk_type(
+            &source_map_with_types(unique_types),
+            &TupleItem::Tuple(Tuple::empty()),
+            1,
+        );
+
+        assert_eq!(rendered.dap_parts().0, "null");
+        assert_eq!(rendered.dap_parts().1.as_deref(), Some("cell?"));
     }
 
     #[test]
