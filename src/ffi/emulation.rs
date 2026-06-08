@@ -3,7 +3,8 @@ use crate::commands::common::error_fmt;
 use crate::context::{
     AssertFailure, CompilationResult, Context, DebugStopRequested, FailedSendMessageResult,
     GetMethodAssertFailure, KnownAddress, MessageIterState, ParsedSearchParams, PendingMessageStep,
-    SearchField, Wallet, code_lookup_hash, compile_project_contract_with_cache, to_cell,
+    SearchField, Wallet, code_lookup_hash, compile_project_contract_with_cache,
+    is_treasury_code_hash, to_cell,
 };
 use crate::contract_interface::{
     compile_optional_contract_interface, is_boc_path, read_precompiled_boc,
@@ -29,7 +30,7 @@ use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use std::sync::{Arc, LazyLock};
+use std::sync::Arc;
 use std::time::{Duration, Instant, UNIX_EPOCH};
 use tolk_compiler::SourceMap;
 use tolk_compiler::abi::ContractABI;
@@ -61,16 +62,8 @@ use tycho_types::models::{
 };
 use tycho_types::num::{Tokens, Uint15};
 
-// Keep in sync with `impl.treasuryCode()` in `lib/emulation/testing.tolk`.
-const TREASURY_CODE_BOC64: &str = "te6cckEBBAEARQABFP8A9KQT9LzyyAsBAgEgAwIAWvLT/+1E0NP/0RK68qL0BNH4AH+OFiGAEPR4b6UgmALTB9QwAfsAkTLiAbPmWwAE0jD+omUe";
 const ZERO_RANDOM_SEED_HEX: &str =
     "0000000000000000000000000000000000000000000000000000000000000000";
-
-static TREASURY_CODE_HASH: LazyLock<HashBytes> = LazyLock::new(|| {
-    let code =
-        Boc::decode_base64(TREASURY_CODE_BOC64).expect("testing.treasury code BoC must be valid");
-    code_lookup_hash(&code)
-});
 
 /// Resolve the unix time to use for a get method invocation.
 ///
@@ -418,7 +411,7 @@ pub(crate) fn compilation_result_for_code(
     // match that cell against local project contracts so debug/backtrace and
     // formatter paths can still use their source maps or ABI.
     let target_hash = code_lookup_hash(&code);
-    if target_hash == *TREASURY_CODE_HASH {
+    if is_treasury_code_hash(&target_hash) {
         return None;
     }
 
@@ -3672,6 +3665,7 @@ pub fn register_extensions<T: BaseExecutor>(executor: &mut T, ctx: &mut Context)
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::context::{TREASURY_CODE_BOC64, is_treasury_code};
     use anyhow::anyhow;
     use rustc_hash::FxHashSet;
     use std::sync::Arc;
@@ -3685,7 +3679,7 @@ mod tests {
     fn treasury_code_hash_is_recognized() {
         let code = Boc::decode_base64(TREASURY_CODE_BOC64).expect("treasury code must decode");
 
-        assert_eq!(code_lookup_hash(&code), *TREASURY_CODE_HASH);
+        assert!(is_treasury_code(&code));
     }
 
     #[test]
@@ -3694,7 +3688,7 @@ mod tests {
         builder.store_uint(0xcafe, 16).expect("bits must fit");
         let code = builder.build().expect("cell must build");
 
-        assert_ne!(code_lookup_hash(&code), *TREASURY_CODE_HASH);
+        assert!(!is_treasury_code(&code));
     }
 
     fn test_transaction(lt: u64) -> Transaction {

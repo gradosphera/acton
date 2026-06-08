@@ -107,6 +107,10 @@ const formatSkippedTraceCount = (count: number): string => {
   return count === 1 ? "1 trace skipped" : `${count} traces skipped`
 }
 
+const formatTreasuryDeployTraceCount = (count: number): string => {
+  return count === 1 ? "1 treasury deploy" : `${count} treasury deploys`
+}
+
 const isExternalMessageNotAcceptedError = (error: string): boolean => {
   const normalized = error.toLowerCase()
   const mentionsExternal = normalized.includes("external")
@@ -170,6 +174,7 @@ export const TestDetails: React.FC<TestDetailsProps> = ({
   const [isValueFlowExpanded, setIsValueFlowExpanded] = useState(() => {
     return localStorage.getItem(VALUE_FLOW_EXPANDED_STORAGE_KEY) === "true"
   })
+  const [isTreasuryDeployTracesExpanded, setIsTreasuryDeployTracesExpanded] = useState(false)
   const [selectedIdeName, setSelectedIdeName] = useState<string | null>(() => {
     return localStorage.getItem("selectedIde")
   })
@@ -403,6 +408,22 @@ export const TestDetails: React.FC<TestDetailsProps> = ({
       : `${transactionCount} transactions`
   const skippedTracesCount = trace?.skipped_traces_count ?? 0
   const skippedTraceLabel = formatSkippedTraceCount(skippedTracesCount)
+  const traceEntries = useMemo(() => {
+    return (trace?.traces ?? []).map((traceItem, index) => ({traceItem, index}))
+  }, [trace])
+  const treasuryDeployTraceEntries = useMemo(
+    () => traceEntries.filter(({traceItem}) => traceItem.is_treasury_deploy === true),
+    [traceEntries],
+  )
+  const regularTraceEntries = useMemo(
+    () => traceEntries.filter(({traceItem}) => traceItem.is_treasury_deploy !== true),
+    [traceEntries],
+  )
+  const treasuryDeployTraceLabel = formatTreasuryDeployTraceCount(treasuryDeployTraceEntries.length)
+  const isSelectedTraceTreasuryDeploy =
+    trace?.traces[selectedTraceIndex]?.is_treasury_deploy === true
+  const shouldShowTreasuryDeployTraces =
+    isTreasuryDeployTracesExpanded || isSelectedTraceTreasuryDeploy
   const hasGasProfile = gasProfile !== undefined && gasProfile.total_gas > 0
   const shouldShowTraceSelector =
     activeTab !== "info" &&
@@ -549,6 +570,16 @@ export const TestDetails: React.FC<TestDetailsProps> = ({
       }
     })
   }, [allContracts, backendContracts, parsedTraceTransactionsWithBodies, trace])
+  const treasuryDeployTraceFeeSummaries = useMemo(
+    () =>
+      traceFeeSummaries.filter(summary => trace?.traces[summary.traceIndex]?.is_treasury_deploy),
+    [trace, traceFeeSummaries],
+  )
+  const regularTraceFeeSummaries = useMemo(
+    () =>
+      traceFeeSummaries.filter(summary => !trace?.traces[summary.traceIndex]?.is_treasury_deploy),
+    [trace, traceFeeSummaries],
+  )
 
   const failedTransactions = useMemo(() => {
     if (!test.failed_transactions) return []
@@ -618,17 +649,27 @@ export const TestDetails: React.FC<TestDetailsProps> = ({
     if (trace) {
       const saved = localStorage.getItem(`selectedTraceIndex:${test.suite_name}::${test.name}`)
       const index = saved ? Number.parseInt(saved, 10) : 0
-      if (index < trace.traces.length) {
+      const firstRegularTraceIndex = regularTraceEntries[0]?.index ?? 0
+      if (saved && Number.isInteger(index) && index >= 0 && index < trace.traces.length) {
         setSelectedTraceIndex(index)
       } else {
-        setSelectedTraceIndex(0)
+        setSelectedTraceIndex(firstRegularTraceIndex)
       }
     }
-  }, [trace, test.suite_name, test.name])
+  }, [regularTraceEntries, trace, test.suite_name, test.name])
 
   const handleSelectTraceIndex = (index: number) => {
     setSelectedTraceIndex(index)
     localStorage.setItem(`selectedTraceIndex:${test.suite_name}::${test.name}`, index.toString())
+  }
+
+  const handleToggleTreasuryDeployTraces = () => {
+    const nextExpanded = !shouldShowTreasuryDeployTraces
+    setIsTreasuryDeployTracesExpanded(nextExpanded)
+
+    if (!nextExpanded && isSelectedTraceTreasuryDeploy && regularTraceEntries.length > 0) {
+      handleSelectTraceIndex(regularTraceEntries[0].index)
+    }
   }
 
   const handleToggleValueFlow = () => {
@@ -767,6 +808,46 @@ export const TestDetails: React.FC<TestDetailsProps> = ({
           </div>
         )}
       </details>
+    )
+  }
+
+  const renderTraceFeeSummaryRow = (summary: TraceFeeSummary) => {
+    const isTreasuryDeploy = trace?.traces[summary.traceIndex]?.is_treasury_deploy === true
+
+    return (
+      <TableRow
+        key={`${test.suite_name}:${test.name}:trace-fee:${summary.traceIndex}`}
+        className={isTreasuryDeploy ? styles.treasuryDeployTraceFeeRow : undefined}
+      >
+        <TableCell>
+          <button
+            type="button"
+            className={styles.traceLinkButton}
+            onClick={() => handleOpenTraceTransactions(summary.traceIndex)}
+            title={`Open ${summary.traceName} (${summary.firstMessageName}) in Transactions`}
+          >
+            <span>
+              {summary.traceName}
+              <span className={styles.traceMessageSeparator} aria-hidden="true">
+                {" · "}
+              </span>
+              <span className={styles.traceMessageName}>{summary.firstMessageName}</span>
+            </span>
+            <FiArrowUpRight className={styles.traceLinkIcon} aria-hidden="true" />
+          </button>
+        </TableCell>
+        <TableCell className={styles.numericCell}>{summary.transactionCount.toString()}</TableCell>
+        <TableCell className={styles.numericCell}>{summary.totalGasUsed.toString()}</TableCell>
+        <TableCell className={styles.numericCell}>
+          {fmt.formatCurrency(summary.totalGasFees)}
+        </TableCell>
+        <TableCell className={styles.numericCell}>
+          {fmt.formatCurrency(summary.totalForwardFees)}
+        </TableCell>
+        <TableCell className={styles.numericCell}>
+          {fmt.formatCurrency(summary.totalFees)}
+        </TableCell>
+      </TableRow>
     )
   }
 
@@ -959,46 +1040,28 @@ export const TestDetails: React.FC<TestDetailsProps> = ({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {traceFeeSummaries.map(summary => (
-                      <TableRow
-                        key={`${test.suite_name}:${test.name}:trace-fee:${summary.traceIndex}`}
-                      >
-                        <TableCell>
+                    {treasuryDeployTraceFeeSummaries.length > 0 && (
+                      <TableRow className={styles.treasuryDeploySummaryRow}>
+                        <TableCell colSpan={6}>
                           <button
                             type="button"
-                            className={styles.traceLinkButton}
-                            onClick={() => handleOpenTraceTransactions(summary.traceIndex)}
-                            title={`Open ${summary.traceName} (${summary.firstMessageName}) in Transactions`}
+                            className={styles.treasuryDeploySummaryToggle}
+                            onClick={handleToggleTreasuryDeployTraces}
+                            aria-expanded={shouldShowTreasuryDeployTraces}
                           >
-                            <span>
-                              {summary.traceName}
-                              <span className={styles.traceMessageSeparator} aria-hidden="true">
-                                {" · "}
-                              </span>
-                              <span className={styles.traceMessageName}>
-                                {summary.firstMessageName}
-                              </span>
-                            </span>
-                            <FiArrowUpRight className={styles.traceLinkIcon} aria-hidden="true" />
+                            {shouldShowTreasuryDeployTraces ? (
+                              <FiChevronUp aria-hidden="true" />
+                            ) : (
+                              <FiChevronDown aria-hidden="true" />
+                            )}
+                            <span>{treasuryDeployTraceLabel}</span>
                           </button>
                         </TableCell>
-                        <TableCell className={styles.numericCell}>
-                          {summary.transactionCount.toString()}
-                        </TableCell>
-                        <TableCell className={styles.numericCell}>
-                          {summary.totalGasUsed.toString()}
-                        </TableCell>
-                        <TableCell className={styles.numericCell}>
-                          {fmt.formatCurrency(summary.totalGasFees)}
-                        </TableCell>
-                        <TableCell className={styles.numericCell}>
-                          {fmt.formatCurrency(summary.totalForwardFees)}
-                        </TableCell>
-                        <TableCell className={styles.numericCell}>
-                          {fmt.formatCurrency(summary.totalFees)}
-                        </TableCell>
                       </TableRow>
-                    ))}
+                    )}
+                    {shouldShowTreasuryDeployTraces &&
+                      treasuryDeployTraceFeeSummaries.map(renderTraceFeeSummaryRow)}
+                    {regularTraceFeeSummaries.map(renderTraceFeeSummaryRow)}
                   </TableBody>
                 </Table>
               </div>
@@ -1241,7 +1304,33 @@ export const TestDetails: React.FC<TestDetailsProps> = ({
         <div className={styles.traceSelector}>
           {shouldShowTraceSelector && (
             <div className={styles.traceTabs}>
-              {trace.traces.map((traceItem, index) => (
+              {treasuryDeployTraceEntries.length > 0 && (
+                <button
+                  type="button"
+                  className={`${styles.traceTab} ${styles.treasuryDeployTraceToggle}`}
+                  onClick={handleToggleTreasuryDeployTraces}
+                  aria-expanded={shouldShowTreasuryDeployTraces}
+                >
+                  {shouldShowTreasuryDeployTraces ? (
+                    <FiChevronUp aria-hidden="true" />
+                  ) : (
+                    <FiChevronDown aria-hidden="true" />
+                  )}
+                  <span>{treasuryDeployTraceLabel}</span>
+                </button>
+              )}
+              {shouldShowTreasuryDeployTraces &&
+                treasuryDeployTraceEntries.map(({traceItem, index}) => (
+                  <button
+                    key={`${trace.name}-${index}`}
+                    type="button"
+                    className={`${styles.traceTab} ${styles.treasuryDeployTraceTab} ${selectedTraceIndex === index ? styles.activeTraceTab : ""}`}
+                    onClick={() => handleSelectTraceIndex(index)}
+                  >
+                    {formatTraceName(traceItem.name, index)}
+                  </button>
+                ))}
+              {regularTraceEntries.map(({traceItem, index}) => (
                 <button
                   key={`${trace.name}-${index}`}
                   type="button"

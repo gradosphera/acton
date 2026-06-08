@@ -251,6 +251,25 @@
   outline: 1px solid var(--border-color);
 }
 
+.treasuryDeployTraceToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-muted);
+  background-color: var(--bg-secondary-color);
+}
+
+.treasuryDeployTraceToggle svg {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
+}
+
+.treasuryDeployTraceTab {
+  color: var(--text-muted);
+  background-color: color-mix(in srgb, var(--bg-secondary-color) 72%, var(--bg-color));
+}
+
 .skippedTraceTab,
 .skippedTraceTab:hover {
   color: var(--text-muted);
@@ -583,6 +602,45 @@
 
 .traceLinkButton:hover {
   color: var(--text-primary);
+}
+
+.treasuryDeploySummaryRow {
+  background-color: var(--bg-secondary-color);
+}
+
+.treasuryDeploySummaryRow td {
+  padding-top: 12px;
+  padding-bottom: 8px;
+}
+
+.treasuryDeploySummaryToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.2;
+  padding: 0;
+  transition: color 0.2s;
+}
+
+.treasuryDeploySummaryToggle:hover {
+  color: var(--text-primary);
+}
+
+.treasuryDeploySummaryToggle svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+}
+
+.treasuryDeployTraceFeeRow {
+  background-color: color-mix(in srgb, var(--bg-secondary-color) 58%, var(--bg-color));
 }
 
 .traceLinkIcon {
