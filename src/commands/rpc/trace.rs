@@ -68,13 +68,22 @@ pub(super) fn rpc_trace_cmd(
         .collect();
     let formatted_tree = formatter.format_transaction_list(&send_result_list);
     println!("{}", formatted_tree.trim_end());
-
     println!();
+
     print_rpc_trace_summary(hash, &trace);
 
     if verbose {
         println!();
         print_rpc_trace_details(&trace_txs, Some(&formatter), &network);
+    }
+
+    if !show_bodies {
+        println!();
+        println!(
+            "{}",
+            "Hint: pass --show-bodies to include decoded message bodies when local ABI matches."
+                .dimmed()
+        );
     }
 
     Ok(())

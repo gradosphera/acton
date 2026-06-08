@@ -8,3 +8,5 @@ N/A -> system
   Trace Complete:    true
   Total Txs:         1
   Total Messages:    0
+
+Hint: pass --show-bodies to include decoded message bodies when local ABI matches.

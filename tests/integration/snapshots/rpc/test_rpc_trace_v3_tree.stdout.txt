@@ -10,3 +10,5 @@ N/A -> EQAzMz..MzM7SN A
   Trace Complete:    true
   Total Txs:         3
   Total Messages:    3
+
+Hint: pass --show-bodies to include decoded message bodies when local ABI matches.
