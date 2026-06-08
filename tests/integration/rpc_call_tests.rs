@@ -911,6 +911,49 @@ fn test_rpc_call_resolves_nonzero_exit_code_from_abi() {
 }
 
 #[test]
+fn test_rpc_call_json_reports_nonzero_exit_code_without_stderr() {
+    let (project, log_dir, code_boc64) =
+        build_rpc_call_project("rpc-call-json-exit-code", RPC_CALL_EXIT_CODE_CONTRACT);
+    let (mock_url, mock_handle) = spawn_toncenter_v2_mock(vec![
+        toncenter_v2_account_info_with_code_ok_response(
+            1_234_000_000,
+            &code_boc64,
+            &counter_storage_boc64(7, MATCHED_INFO_OWNER_ADDRESS, 42),
+            "active",
+            "",
+            "999",
+            "c0ffee",
+        ),
+        toncenter_v2_run_get_method_ok_response(vec![TupleItem::Int(0.into())], 133),
+    ]);
+    append_custom_network(project.path(), "mock", &format!("{mock_url}/api/v2"));
+
+    let output = project
+        .acton()
+        .current_dir(project.path())
+        .arg("rpc")
+        .arg("call")
+        .arg(MATCHED_INFO_ADDRESS)
+        .arg("listVoters")
+        .arg("--net")
+        .arg("custom:mock")
+        .arg("--json")
+        .arg("1")
+        .env("ACTON_LOG_DIR", &log_dir)
+        .run()
+        .failure();
+    assert!(
+        output.get_stderr().is_empty(),
+        "json rpc call errors must not print a second human-readable error to stderr"
+    );
+    output.assert_snapshot_matches(
+        "integration/snapshots/rpc/test_rpc_call_json_nonzero_exit_code.stdout.txt",
+    );
+
+    mock_handle.join().expect("mock server thread must finish");
+}
+
+#[test]
 fn test_rpc_call_falls_back_to_raw_stack_when_abi_result_width_mismatches() {
     let (project, log_dir, code_boc64) =
         build_rpc_call_project("rpc-call-result-width-mismatch", RPC_CALL_COUNTER_CONTRACT);

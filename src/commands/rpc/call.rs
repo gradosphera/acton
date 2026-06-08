@@ -72,6 +72,24 @@ pub(super) fn rpc_call_cmd(
         .with_context(|| {
             format!("Failed to run get method {method} on {address} from {network}")
         })?;
+    if json && result.exit_code != 0 {
+        let output = serde_json::json!({
+            "network": network.to_string(),
+            "address": format_std_address(&address, &network),
+            "rawAddress": address.to_string(),
+            "contract": contract_match.as_ref().map(|matched| matched.contract_name.as_str()),
+            "method": method,
+            "signature": abi.zip(get_method).map(|(abi, method)| format_get_method_signature(abi, method)),
+            "exitCode": result.exit_code,
+            "error": get_method_exit_error_json(method, result.exit_code, abi),
+            "result": serde_json::Value::Null,
+            "rawStack": &result.stack,
+        });
+        println!("{}", serde_json::to_string_pretty(&output)?);
+        let _ = stdout().flush();
+        let _ = stderr().flush();
+        process::exit(1);
+    }
     if !json && result.exit_code != 0 {
         println!(
             "{} {}",
@@ -444,32 +462,91 @@ fn format_raw_stack_tuple(tuple: &Tuple, network: &Network) -> String {
     format!("[{items}]")
 }
 
-fn get_method_exit_error(method: &str, exit_code: i32, abi: Option<&ContractABI>) -> String {
+#[derive(Debug, Clone)]
+enum GetMethodExitErrorInfo {
+    MethodNotFound,
+    Abi(crate::formatter::AbiExitCodeInfo),
+    Unknown,
+}
+
+fn get_method_exit_error_info(exit_code: i32, abi: Option<&ContractABI>) -> GetMethodExitErrorInfo {
     if exit_code == 11 {
-        return format!(
-            "Get method {} not found (exit code {exit_code})",
-            method.yellow()
-        );
+        return GetMethodExitErrorInfo::MethodNotFound;
     }
 
-    let Some(info) = FormatterContext::find_custom_exit_code_info(exit_code, abi) else {
-        return format!(
+    FormatterContext::find_custom_exit_code_info(exit_code, abi)
+        .map(GetMethodExitErrorInfo::Abi)
+        .unwrap_or(GetMethodExitErrorInfo::Unknown)
+}
+
+fn get_method_exit_error_plain(
+    method: &str,
+    exit_code: i32,
+    info: &GetMethodExitErrorInfo,
+) -> String {
+    match info {
+        GetMethodExitErrorInfo::MethodNotFound => {
+            format!("Get method {method} not found (exit code {exit_code})")
+        }
+        GetMethodExitErrorInfo::Abi(info) if info.description != info.symbolic_name => format!(
+            "Get method {method} failed: {}: {} (exit code {exit_code})",
+            info.symbolic_name, info.description
+        ),
+        GetMethodExitErrorInfo::Abi(info) => format!(
+            "Get method {method} failed: {} (exit code {exit_code})",
+            info.symbolic_name
+        ),
+        GetMethodExitErrorInfo::Unknown => {
+            format!("Get method {method} failed (exit code {exit_code})")
+        }
+    }
+}
+
+fn get_method_exit_error_json(
+    method: &str,
+    exit_code: i32,
+    abi: Option<&ContractABI>,
+) -> serde_json::Value {
+    let info = get_method_exit_error_info(exit_code, abi);
+    let mut error = serde_json::json!({
+        "message": get_method_exit_error_plain(method, exit_code, &info),
+    });
+
+    if let GetMethodExitErrorInfo::Abi(info) = info {
+        let description = (info.description != info.symbolic_name).then_some(info.description);
+        error["name"] = serde_json::Value::String(info.symbolic_name);
+        if let Some(description) = description {
+            error["description"] = serde_json::Value::String(description);
+        }
+    }
+
+    error
+}
+
+fn get_method_exit_error(method: &str, exit_code: i32, abi: Option<&ContractABI>) -> String {
+    match get_method_exit_error_info(exit_code, abi) {
+        GetMethodExitErrorInfo::MethodNotFound => format!(
+            "Get method {} not found (exit code {exit_code})",
+            method.yellow()
+        ),
+        GetMethodExitErrorInfo::Abi(info) => {
+            let exit_name = info.symbolic_name.yellow();
+            let exit_info = if info.description == info.symbolic_name {
+                exit_name.to_string()
+            } else {
+                format!("{}: {}", exit_name, info.description.dimmed())
+            };
+
+            format!(
+                "Get method {} failed: {exit_info} (exit code {exit_code})",
+                method.yellow()
+            )
+        }
+        GetMethodExitErrorInfo::Unknown => format!(
             "Get method {} failed (exit code {exit_code})",
             method.yellow()
-        );
-    };
-
-    let exit_name = info.symbolic_name.yellow();
-    let exit_info = if info.description == info.symbolic_name {
-        exit_name.to_string()
-    } else {
-        format!("{}: {}", exit_name, info.description.dimmed())
-    };
-
-    format!(
-        "Get method {} failed: {exit_info} (exit code {exit_code})",
-        method.yellow()
-    )
+        ),
+    }
 }
 
 #[cfg(test)]
