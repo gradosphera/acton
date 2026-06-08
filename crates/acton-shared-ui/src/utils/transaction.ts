@@ -56,6 +56,9 @@ export function resolveTransactionOpcodeName(
   if (opcode === undefined) {
     return undefined
   }
+  if (opcode === 0) {
+    return "Text Comment"
+  }
 
   const inMessage = tx.transaction.inMessage
   const targetContract = tx.address ? contracts.get(tx.address.toString()) : undefined

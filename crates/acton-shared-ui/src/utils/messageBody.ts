@@ -1,10 +1,10 @@
-import {Address, Builder, Cell, Dictionary, Slice, loadShardAccount} from "@ton/core"
 import type {Message, MessageRelaxed} from "@ton/core"
+import {Address, Builder, Cell, Dictionary, loadShardAccount, Slice} from "@ton/core"
 import type {ContractABI, SymTable, Ty} from "@ton/tolk-abi-to-typescript"
 import {
   DynamicCtx,
-  SymTable as CompilerSymTable,
   renderTy,
+  SymTable as CompilerSymTable,
   unpackFromSliceDynamic,
 } from "@ton/tolk-abi-to-typescript"
 
@@ -187,6 +187,9 @@ const getDeclarationCandidates = (
     switch (declaration.kind) {
       case "struct": {
         if (declaration.type_params && declaration.type_params.length > 0) {
+          continue
+        }
+        if (declaration.prefix && declaration.prefix.prefix_len !== 32) {
           continue
         }
 
@@ -576,6 +579,46 @@ export const getMessageOpcode = (message: ParsableMessage): number | undefined =
   return Number(slice.preloadUint(32))
 }
 
+const tryReadTextCommentString = (slice: Slice): string | undefined => {
+  const parser = slice.clone()
+  try {
+    const text = parser.loadStringTail()
+    return parser.remainingBits === 0 && parser.remainingRefs === 0 ? text : undefined
+  } catch {
+    return undefined
+  }
+}
+
+const textCommentTailValue = (slice: Slice): ParsedValue => {
+  const text = tryReadTextCommentString(slice)
+  if (text !== undefined) {
+    return {kind: "scalar", value: text}
+  }
+
+  return toSerializedCellScalar("Slice", slice.asCell())
+}
+
+const tryDecodeTextCommentBody = (message: ParsableMessage): ParsedTransactionBody | undefined => {
+  const baseSlice = createBodyParser(message)
+  if (!baseSlice || baseSlice.remainingBits < 32) {
+    return undefined
+  }
+
+  const parser = baseSlice.clone()
+  if (parser.loadUint(32) !== 0) {
+    return undefined
+  }
+
+  return {
+    name: "Text Comment",
+    value: {
+      kind: "object",
+      typeName: "Text Comment",
+      entries: [{key: "text", value: textCommentTailValue(parser)}],
+    },
+  }
+}
+
 const tryDecodeMessageWithCandidates = (
   message: ParsableMessage,
   abi: ContractABI,
@@ -743,6 +786,9 @@ export const resolveMessageOpcodeName = (
   if (opcode === undefined) {
     return undefined
   }
+  if (opcode === 0) {
+    return "Text Comment"
+  }
 
   const destinationContract =
     message.info.type === "internal" ? contracts.get(message.info.dest.toString()) : undefined
@@ -773,6 +819,11 @@ export const decodeMessageBody = (
   contracts: Map<string, ContractData>,
   sourceAddress?: string,
 ): ParsedTransactionBody | undefined => {
+  const textCommentBody = tryDecodeTextCommentBody(message)
+  if (textCommentBody) {
+    return textCommentBody
+  }
+
   const sourceContract = sourceAddress ? contracts.get(sourceAddress) : undefined
   const destinationContract =
     message.info.type === "internal" ? contracts.get(message.info.dest.toString()) : undefined
@@ -872,6 +923,11 @@ const tryDecodeTransactionBodyWithAbi = (
   const inMessage = tx.transaction.inMessage
   if (!inMessage) {
     return undefined
+  }
+
+  const textCommentBody = tryDecodeTextCommentBody(inMessage)
+  if (textCommentBody) {
+    return textCommentBody
   }
 
   if (inMessage.info.type === "internal" && inMessage.info.bounced) {
