@@ -41,10 +41,10 @@ use ton_api::{
 use ton_emulator::emulator::{Emulator, SendMessageResult, SendMessageResultSuccess};
 use ton_emulator::world_state::WorldState;
 use ton_emulator::{extension, register_ext_methods};
-use ton_executor::BaseExecutor;
 use ton_executor::get::step::StepGetExecutor;
-use ton_executor::get::{GetExecutor, GetMethodResult, RunGetMethodArgs};
+use ton_executor::get::{GetExecutor, GetMethodResult, GetMethodResultSuccess, RunGetMethodArgs};
 use ton_executor::message::step::StepExecutor;
+use ton_executor::{BaseExecutor, ExecutorVerbosity};
 use ton_executor::{MissingLibrariesContext, missing_library_callback};
 use tvm_ffi::serde::serialize_tuple;
 use tvm_ffi::stack::{ContData, Tuple, TupleItem};
@@ -3453,14 +3453,13 @@ fn set_shard_account_impl(
     Ok(())
 }
 
-extension!(call_tolk_function in (Context) with (addr: StdAddr, arg: TupleItem, function: TupleItem) using call_tolk_function_impl);
-fn call_tolk_function_impl(
+pub(super) fn run_tolk_continuation(
     ctx: &mut Context,
-    stack: &mut Tuple,
     addr: StdAddr,
     args: TupleItem,
     function: TupleItem,
-) -> anyhow::Result<()> {
+    verbosity: ExecutorVerbosity,
+) -> anyhow::Result<GetMethodResultSuccess> {
     let TupleItem::Cont(cont) = function else {
         anyhow::bail!("Expected Cont, got {function:?}");
     };
@@ -3518,7 +3517,7 @@ fn call_tolk_function_impl(
     let params = RunGetMethodArgs {
         code,
         data,
-        verbosity: ctx.env.default_log_level,
+        verbosity,
         libs: libs_root.map(Boc::encode_base64).unwrap_or_default(),
         address: addr_str,
         unixtime,
@@ -3537,32 +3536,43 @@ fn call_tolk_function_impl(
         .context("Cannot run continuation")?;
 
     match result {
-        GetMethodResult::Success(result) => {
-            // NOTE: Intentionally not saving this result into `emulations.get_methods`.
-            // `GetMethodResultSuccess.code` is `#[serde(skip)]` and is only populated by
-            // `run_get_method` (which has the contract code at hand). `run_continuation`
-            // cannot fill it, so stored continuation results would have an empty `code`
-            // and break downstream consumers that look it up (coverage + failed-get-method
-            // exception source-map resolution in `src/formatter.rs`). Continuation
-            // executions are out of scope for coverage anyway.
-            let cell =
-                Boc::decode_base64(result.stack.as_ref()).context("Failed to decode stack BoC")?;
-            let tuple = Tuple::deserialize(&cell).context("Failed to deserialize tuple")?;
-
-            if result.vm_exit_code != 0 && result.vm_exit_code != 1 {
-                anyhow::bail!(
-                    "Continuation execution failed with exit code {}",
-                    result.vm_exit_code
-                );
-            }
-
-            stack.push(TupleItem::Tuple(tuple));
-            Ok(())
-        }
+        GetMethodResult::Success(result) => Ok(result),
         GetMethodResult::Error(err) => {
             anyhow::bail!("Continuation execution error: {}", err.error);
         }
     }
+}
+
+extension!(call_tolk_function in (Context) with (addr: StdAddr, arg: TupleItem, function: TupleItem) using call_tolk_function_impl);
+fn call_tolk_function_impl(
+    ctx: &mut Context,
+    stack: &mut Tuple,
+    addr: StdAddr,
+    args: TupleItem,
+    function: TupleItem,
+) -> anyhow::Result<()> {
+    let verbosity = ctx.env.default_log_level;
+    let result = run_tolk_continuation(ctx, addr, args, function, verbosity)?;
+
+    // NOTE: Intentionally not saving this result into `emulations.get_methods`.
+    // `GetMethodResultSuccess.code` is `#[serde(skip)]` and is only populated by
+    // `run_get_method` (which has the contract code at hand). `run_continuation`
+    // cannot fill it, so stored continuation results would have an empty `code`
+    // and break downstream consumers that look it up (coverage + failed-get-method
+    // exception source-map resolution in `src/formatter.rs`). Continuation
+    // executions are out of scope for coverage anyway.
+    let cell = Boc::decode_base64(result.stack.as_ref()).context("Failed to decode stack BoC")?;
+    let tuple = Tuple::deserialize(&cell).context("Failed to deserialize tuple")?;
+
+    if result.vm_exit_code != 0 && result.vm_exit_code != 1 {
+        anyhow::bail!(
+            "Continuation execution failed with exit code {}",
+            result.vm_exit_code
+        );
+    }
+
+    stack.push(TupleItem::Tuple(tuple));
+    Ok(())
 }
 
 extension!(save_world_state_snapshot in (Context) with (path: String) using save_world_state_snapshot_impl);
