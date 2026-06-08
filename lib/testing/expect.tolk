@@ -173,6 +173,42 @@ fun Expectation<T>.toBeGreaterOrEqual<U>(self, expected: U): void {
     );
 }
 
+/// Asserts that actual value is in the inclusive range `[min, max]`.
+///
+/// Example:
+/// ```tolk
+/// expect(7).toBeInRange(5, 10);
+/// expect(5).toBeInRange(5, 10);
+/// expect(10).toBeInRange(5, 10);
+/// ```
+fun Expectation<T>.toBeInRange<U, V>(self, min: U, max: V): void {
+    val isAtLeastMin = ffi.assertBin(
+        ">=",
+        reflect.typeUniqueIdxOfObject(self.value),
+        self.value.toTuple(),
+        reflect.typeUniqueIdxOfObject(min),
+        min.toTuple(),
+        "",
+        self.location,
+    );
+    if (!isAtLeastMin) {
+        self.fail(format("{} is not in range [{}, {}]", self.value, min, max));
+    }
+
+    val isAtMostMax = ffi.assertBin(
+        "<=",
+        reflect.typeUniqueIdxOfObject(self.value),
+        self.value.toTuple(),
+        reflect.typeUniqueIdxOfObject(max),
+        max.toTuple(),
+        "",
+        self.location,
+    );
+    if (!isAtMostMax) {
+        self.fail(format("{} is not in range [{}, {}]", self.value, min, max));
+    }
+}
+
 /// Asserts that actual value is approximately equal to expected value using absolute difference.
 ///
 /// Example:
