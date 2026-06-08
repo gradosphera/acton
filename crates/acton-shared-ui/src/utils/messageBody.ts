@@ -311,6 +311,18 @@ interface ParsedValueTypeContext {
   readonly tyIdx: number
 }
 
+function renderTypeName(context: ParsedValueTypeContext | undefined): string | undefined {
+  if (!context) {
+    return undefined
+  }
+
+  try {
+    return renderTy(context.symbols, context.tyIdx)
+  } catch {
+    return undefined
+  }
+}
+
 function tryGetTy(symbols: SymTable, tyIdx: number): Ty | undefined {
   try {
     return symbols.tyByIdx(tyIdx)
@@ -452,7 +464,7 @@ const toParsedValue = (value: unknown, typeContext?: ParsedValueTypeContext): Pa
   }
 
   if (typeof value === "bigint" || typeof value === "number" || typeof value === "string") {
-    return {kind: "scalar", value: value.toString()}
+    return {kind: "scalar", value: value.toString(), typeName: renderTypeName(typeContext)}
   }
 
   if (value instanceof Address) {
