@@ -60,7 +60,7 @@ pub(super) fn rpc_call_cmd(
         .flatten();
 
     let stack = if let (Some(abi), Some(get_method)) = (abi, get_method) {
-        parse_abi_parameters(abi, &get_method.parameters, args)?
+        parse_get_method_parameters(abi, get_method, args)?
     } else {
         parse_raw_stack_args(args)?
     };
@@ -187,6 +187,24 @@ fn resolve_get_method<'a>(
 
 fn parse_get_method_id(method: &str) -> Option<i32> {
     parse_number(method)?.to_i32()
+}
+
+fn parse_get_method_parameters(
+    abi: &ContractABI,
+    get_method: &ABIGetMethod,
+    args: &[String],
+) -> anyhow::Result<Tuple> {
+    let expected_count = get_method.parameters.len();
+    if args.len() != expected_count {
+        anyhow::bail!(
+            "Wrong number of arguments for {}: expected {}, got {}",
+            format_get_method_signature_colored(abi, get_method),
+            expected_count,
+            args.len()
+        );
+    }
+
+    parse_abi_parameters(abi, &get_method.parameters, args)
 }
 
 struct DecodedResult {
