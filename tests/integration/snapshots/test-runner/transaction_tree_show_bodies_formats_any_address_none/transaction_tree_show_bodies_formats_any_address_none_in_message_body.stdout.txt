@@ -15,7 +15,7 @@
             queryId: 1, maybeDest: addr_none
             └── account created
         
-        Cannot find transaction from <any> to EQAAAA..AAqtv8
+        Cannot find transaction from <any> to kQAAAA..AAqmB2
         with:
       └─ at tests/show_bodies_any_address_none.test[LINE]
 

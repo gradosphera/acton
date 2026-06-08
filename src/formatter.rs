@@ -2366,7 +2366,7 @@ See https://ton-blockchain.github.io/acton/docs/wallets for more information
                 let mut result = if let Some(contract_type) = contract_type {
                     format!("{}", contract_type.cyan())
                 } else {
-                    Self::format_addr_hash(addr).dimmed().to_string()
+                    self.format_addr_hash(addr).dimmed().to_string()
                 };
                 let _ = write!(result, " {} ", letter.bold());
                 result
@@ -2379,7 +2379,7 @@ See https://ton-blockchain.github.io/acton/docs/wallets for more information
             if let Some(contract_type) = contract_type {
                 format!("{}", contract_type.cyan())
             } else {
-                Self::format_addr_hash(addr).dimmed().to_string()
+                self.format_addr_hash(addr).dimmed().to_string()
             }
         }
     }
@@ -2727,11 +2727,12 @@ See https://ton-blockchain.github.io/acton/docs/wallets for more information
     }
 
     /// Show address in short format
-    fn format_addr_hash(addr: &IntAddr) -> String {
-        let Some(std_addr) = addr.as_std() else {
+    fn format_addr_hash(&self, addr: &IntAddr) -> String {
+        if !matches!(addr, IntAddr::Std(_)) {
             return addr.to_string();
-        };
-        let raw = std_addr.display_base64(true).to_string();
+        }
+
+        let raw = self.address_to_string(addr);
         raw[..6].to_string() + ".." + &raw[raw.len() - 6..]
     }
 
@@ -2757,7 +2758,7 @@ See https://ton-blockchain.github.io/acton/docs/wallets for more information
             builder += format!("{} ", letter.bold()).as_str();
         }
 
-        builder += Self::format_addr_hash(addr).dimmed().to_string().as_str();
+        builder += self.format_addr_hash(addr).dimmed().to_string().as_str();
 
         builder
     }
