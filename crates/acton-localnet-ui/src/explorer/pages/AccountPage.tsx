@@ -559,7 +559,7 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
           address: toRawAddress(jettonMaster.address),
           ...jettonMaster.jetton_content,
         },
-        null,
+        undefined,
         2,
       )
     : undefined
@@ -867,14 +867,17 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
             <div
               className={styles.metadataOverlay}
               role="presentation"
-              onClick={() => setJettonMetadataOpen(false)}
+              onClick={event => {
+                if (event.target === event.currentTarget) {
+                  setJettonMetadataOpen(false)
+                }
+              }}
             >
               <section
                 className={styles.metadataDialog}
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="jetton-metadata-title"
-                onClick={event => event.stopPropagation()}
               >
                 <button
                   type="button"

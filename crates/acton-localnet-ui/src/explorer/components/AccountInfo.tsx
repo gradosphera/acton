@@ -536,9 +536,7 @@ function getContractTypeLabels(
   interfaces?: readonly string[],
 ): string[] {
   const abiContractName = compilerAbi?.contract_name?.trim()
-  const interfaceLabels = (interfaces ?? [])
-    .map(getInterfaceLabel)
-    .filter((label): label is string => Boolean(label))
+  const interfaceLabels = (interfaces ?? []).map(value => getInterfaceLabel(value)).filter(Boolean)
 
   const labels = abiContractName ? [abiContractName, ...interfaceLabels] : interfaceLabels
   return labels.length > 0 ? [...new Set(labels)] : ["Unknown"]
@@ -583,9 +581,11 @@ function getStatusInfo(state?: FullAccountState["state"]): {
     case "nonexist": {
       return {label: "Nonexist", className: "statusNonexist"}
     }
-    case "uninitialized":
+    case "uninitialized": {
+      return {label: "Uninit", className: "statusUninit"}
+    }
     default: {
-      return {label: state ? "Uninit" : "-", className: "statusUninit"}
+      return {label: "-", className: "statusUninit"}
     }
   }
 }

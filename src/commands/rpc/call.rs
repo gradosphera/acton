@@ -31,6 +31,7 @@ pub(super) fn rpc_call_cmd(
     method: &str,
     args: &[String],
     net: Option<String>,
+    block_number: Option<u64>,
     json: bool,
     raw: bool,
 ) -> anyhow::Result<()> {
@@ -43,7 +44,7 @@ pub(super) fn rpc_call_cmd(
     let client = TonApiClient::new(network.clone(), config.custom_networks())?;
 
     let remote = client
-        .get_account_info(None, &address.to_string())
+        .get_account_info(block_number, &address.to_string())
         .with_context(|| format!("Failed to fetch account info for {address} from {network}"))?;
     let code = TonApiClient::decode_optional_cell(&remote.code)?;
     let contract_match = code
@@ -68,12 +69,12 @@ pub(super) fn rpc_call_cmd(
     let stack_json = legacy_stack_to_json(&stack).context("Failed to encode get-method stack")?;
 
     let result = client
-        .run_get_method(&address.to_string(), method, &stack_json)
+        .run_get_method_at_block(&address.to_string(), method, &stack_json, block_number)
         .with_context(|| {
             format!("Failed to run get method {method} on {address} from {network}")
         })?;
     if json && result.exit_code != 0 {
-        let output = serde_json::json!({
+        let mut output = serde_json::json!({
             "network": network.to_string(),
             "address": format_std_address(&address, &network),
             "rawAddress": address.to_string(),
@@ -85,6 +86,9 @@ pub(super) fn rpc_call_cmd(
             "result": serde_json::Value::Null,
             "rawStack": &result.stack,
         });
+        if let Some(block_number) = block_number {
+            output["block"] = serde_json::json!(block_number);
+        }
         println!("{}", serde_json::to_string_pretty(&output)?);
         let _ = stdout().flush();
         let _ = stderr().flush();
@@ -115,7 +119,7 @@ pub(super) fn rpc_call_cmd(
     };
 
     if json {
-        let output = serde_json::json!({
+        let mut output = serde_json::json!({
             "network": network.to_string(),
             "address": format_std_address(&address, &network),
             "rawAddress": address.to_string(),
@@ -126,6 +130,9 @@ pub(super) fn rpc_call_cmd(
             "result": decoded_result.as_ref().map(|result| result.json.clone()),
             "rawStack": &result.stack,
         });
+        if let Some(block_number) = block_number {
+            output["block"] = serde_json::json!(block_number);
+        }
         println!("{}", serde_json::to_string_pretty(&output)?);
     } else {
         match decoded_result {
@@ -475,8 +482,7 @@ fn get_method_exit_error_info(exit_code: i32, abi: Option<&ContractABI>) -> GetM
     }
 
     FormatterContext::find_custom_exit_code_info(exit_code, abi)
-        .map(GetMethodExitErrorInfo::Abi)
-        .unwrap_or(GetMethodExitErrorInfo::Unknown)
+        .map_or(GetMethodExitErrorInfo::Unknown, GetMethodExitErrorInfo::Abi)
 }
 
 fn get_method_exit_error_plain(

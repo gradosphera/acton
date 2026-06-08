@@ -667,6 +667,59 @@ fn test_rpc_call_parses_basic_abi_argument_types_and_sends_stack() {
 
 #[allow(clippy::significant_drop_tightening)]
 #[test]
+fn test_rpc_call_forwards_block_number_to_account_info_and_run_get_method() {
+    let (project, log_dir, code_boc64) =
+        build_rpc_call_project("rpc-call-block-number", RPC_CALL_COUNTER_CONTRACT);
+    let (mock_url, mock_handle, captured) = spawn_toncenter_v2_mock_with_capture(vec![
+        toncenter_v2_account_info_with_code_ok_response(
+            1_234_000_000,
+            &code_boc64,
+            &counter_storage_boc64(7, MATCHED_INFO_OWNER_ADDRESS, 42),
+            "active",
+            "",
+            "999",
+            "c0ffee",
+        ),
+        toncenter_v2_run_get_method_ok_response(vec![TupleItem::Int(42.into())], 0),
+    ]);
+    append_custom_network(project.path(), "mock", &format!("{mock_url}/api/v2"));
+
+    project
+        .acton()
+        .current_dir(project.path())
+        .arg("rpc")
+        .arg("call")
+        .arg(MATCHED_INFO_ADDRESS)
+        .arg("currentCounter")
+        .arg("--net")
+        .arg("custom:mock")
+        .arg("--block-number")
+        .arg("123456")
+        .env("ACTON_LOG_DIR", &log_dir)
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/rpc/test_rpc_call_zero_arg_local_abi.stdout.txt",
+        );
+
+    mock_handle.join().expect("mock server thread must finish");
+
+    let captured = captured
+        .lock()
+        .expect("captured requests mutex should not be poisoned");
+    assert_eq!(captured.len(), 2, "expected account info and runGetMethod");
+    assert_request_path_snapshot(
+        &captured[0],
+        "integration/snapshots/rpc/test_rpc_call_block_number.account.request.txt",
+    );
+    assert_json_request_body_snapshot(
+        &captured[1],
+        "integration/snapshots/rpc/test_rpc_call_block_number.run_get_method.request.json",
+    );
+}
+
+#[allow(clippy::significant_drop_tightening)]
+#[test]
 fn test_rpc_call_custom_network_sends_api_key() {
     let (project, log_dir, code_boc64) =
         build_rpc_call_project("rpc-call-custom-network-api-key", RPC_CALL_COUNTER_CONTRACT);
@@ -1427,6 +1480,19 @@ fn assert_json_request_body_snapshot(request: &CapturedToncenterRequest, snapsho
     let expected = fs::read_to_string(&expected_path).unwrap_or_else(|err| {
         panic!(
             "request body snapshot {} must exist: {err}\n\nactual:\n{normalized}",
+            expected_path.display()
+        )
+    });
+    assertion().eq(normalized, expected);
+}
+
+fn assert_request_path_snapshot(request: &CapturedToncenterRequest, snapshot_path: &str) {
+    let normalized = format!("{} {}\n", request.method, request.path);
+
+    let expected_path = Path::new("tests").join(snapshot_path);
+    let expected = fs::read_to_string(&expected_path).unwrap_or_else(|err| {
+        panic!(
+            "request path snapshot {} must exist: {err}\n\nactual:\n{normalized}",
             expected_path.display()
         )
     });

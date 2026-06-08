@@ -32,6 +32,8 @@ pub enum RpcCommand {
     Info {
         #[arg(help = "Contract address in friendly or raw format")]
         address: String,
+        #[arg(long, help = "Masterchain block seqno to query account state at")]
+        block_number: Option<u64>,
         #[arg(
             long,
             help = "Network to query (defaults to testnet). Supported values: mainnet, testnet, localnet, custom:<name>"
@@ -54,6 +56,11 @@ pub enum RpcCommand {
             help = "Network to query (defaults to testnet). Supported values: mainnet, testnet, localnet, custom:<name>"
         )]
         net: Option<String>,
+        #[arg(
+            long,
+            help = "Masterchain block seqno to query account state and run get-method at"
+        )]
+        block_number: Option<u64>,
         #[arg(long, help = "Print machine-readable JSON output")]
         json: bool,
         #[arg(long, help = "Print the raw TonCenter stack without ABI decoding")]
@@ -109,15 +116,20 @@ pub enum RpcCommand {
 
 pub fn rpc_cmd(command: RpcCommand) -> anyhow::Result<()> {
     match command {
-        RpcCommand::Info { address, net } => rpc_info_cmd(&address, net),
+        RpcCommand::Info {
+            address,
+            block_number,
+            net,
+        } => rpc_info_cmd(&address, net, block_number),
         RpcCommand::Call {
             address,
             method,
             args,
             net,
+            block_number,
             json,
             raw,
-        } => call::rpc_call_cmd(&address, &method, &args, net, json, raw),
+        } => call::rpc_call_cmd(&address, &method, &args, net, block_number, json, raw),
         RpcCommand::Block { net } => rpc_block_cmd(net),
         RpcCommand::BlockNumber { net } => rpc_block_number_cmd(net),
         RpcCommand::Trace {
@@ -131,7 +143,11 @@ pub fn rpc_cmd(command: RpcCommand) -> anyhow::Result<()> {
     }
 }
 
-fn rpc_info_cmd(address_input: &str, net: Option<String>) -> anyhow::Result<()> {
+fn rpc_info_cmd(
+    address_input: &str,
+    net: Option<String>,
+    block_number: Option<u64>,
+) -> anyhow::Result<()> {
     let (address, _) = StdAddr::from_str_ext(address_input, StdAddrFormat::any())
         .map_err(|_| anyhow!("Invalid address"))
         .with_context(|| error_fmt::invalid_address(address_input))?;
@@ -141,7 +157,7 @@ fn rpc_info_cmd(address_input: &str, net: Option<String>) -> anyhow::Result<()> 
     let client = TonApiClient::new(network.clone(), config.custom_networks())?;
 
     let remote = client
-        .get_account_info(None, &address.to_string())
+        .get_account_info(block_number, &address.to_string())
         .with_context(|| format!("Failed to fetch account info for {address} from {network}"))?;
 
     let balance = remote.balance.to_bigint()?;
@@ -185,6 +201,9 @@ fn rpc_info_cmd(address_input: &str, net: Option<String>) -> anyhow::Result<()> 
 
     print_section_title("Remote Account");
     print_kv("Network", network.to_string());
+    if let Some(block_number) = block_number {
+        print_kv("Block", block_number.to_string().yellow().to_string());
+    }
     print_kv("Raw Address", address.to_string().cyan().to_string());
     print_kv("Status", format_account_status(&remote.state));
     print_kv("Contract", contract_name);
@@ -234,7 +253,7 @@ fn rpc_info_cmd(address_input: &str, net: Option<String>) -> anyhow::Result<()> 
         print_get_methods(abi);
     }
 
-    print_get_method_hint(address_input, &network);
+    print_get_method_hint(address_input, &network, block_number);
 
     Ok(())
 }
@@ -513,9 +532,12 @@ fn print_get_methods(abi: &ContractABI) {
     }
 }
 
-fn print_get_method_hint(address: &str, network: &Network) {
+fn print_get_method_hint(address: &str, network: &Network, block_number: Option<u64>) {
     let net_arg = format_rpc_network_arg(network);
-    let command = format!("acton rpc call --net {net_arg} {address} <METHOD> [ARGS...]");
+    let block_arg = block_number
+        .map(|block_number| format!(" --block-number {block_number}"))
+        .unwrap_or_default();
+    let command = format!("acton rpc call --net {net_arg}{block_arg} {address} <METHOD> [ARGS...]");
 
     println!(
         "\n{}",
