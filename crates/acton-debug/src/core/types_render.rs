@@ -15,8 +15,8 @@ use tycho_types::boc::Boc;
 use tycho_types::cell::{Cell, CellBuilder, CellSlice as TyCellSlice, Load};
 use tycho_types::dict;
 use tycho_types::models::{
-    Base64StdAddrFlags, ChangeLibraryMode, CurrencyCollection, DisplayBase64StdAddr, IntAddr,
-    LibRef, OutAction, OutActionsRevIter, OwnedRelaxedMessage, RelaxedMsgInfo,
+    AnyAddr, Base64StdAddrFlags, ChangeLibraryMode, CurrencyCollection, DisplayBase64StdAddr,
+    IntAddr, LibRef, OutAction, OutActionsRevIter, OwnedRelaxedMessage, RelaxedMsgInfo,
     ReserveCurrencyFlags, SendMsgFlags, StateInit, StdAddr,
 };
 
@@ -1083,7 +1083,7 @@ fn get_bits_u8(nibbles: &[u8], start: usize, count: usize) -> u8 {
     v
 }
 
-/// Try to parse `addr_std` from a `CellSlice`.
+/// Try to parse `addr_none` or `addr_std` from a `CellSlice`.
 /// Cell{hex} starts with 2 descriptor bytes (4 hex chars); cell data follows.
 /// `bits: start..end` are positions within cell data.
 /// `addr_std` = `10` (2b) + `0` (1b anycast) + workchain (8b) + hash (256b) = 267 bits.
@@ -1095,9 +1095,7 @@ fn try_parse_address(cs: &CellSlice) -> Option<String> {
     let (start_s, end_s) = cs.bits.as_ref()?;
     let start: usize = start_s.parse().ok()?;
     let end: usize = end_s.parse().ok()?;
-    if end - start != 267 {
-        return None;
-    }
+    let bit_len = end.checked_sub(start)?;
 
     let data_hex = cs.value.get(4..)?; // skip d1, d2
     let nibbles: Vec<u8> = data_hex
@@ -1108,23 +1106,32 @@ fn try_parse_address(cs: &CellSlice) -> Option<String> {
         return None;
     }
 
-    if get_bits_u8(&nibbles, start, 3) != 0b100 {
-        return None;
-    } // addr_std prefix no anycast
+    match bit_len {
+        2 if get_bits_u8(&nibbles, start, 2) == 0b00 => Some("addr_none".to_owned()),
+        267 => {
+            if get_bits_u8(&nibbles, start, 3) != 0b100 {
+                return None;
+            } // addr_std prefix no anycast
 
-    let wc = get_bits_u8(&nibbles, start + 3, 8) as i8;
-    let mut hash = String::with_capacity(64);
-    for i in 0..32 {
-        write!(hash, "{:02x}", get_bits_u8(&nibbles, start + 11 + i * 8, 8)).ok()?;
+            let wc = get_bits_u8(&nibbles, start + 3, 8) as i8;
+            let mut hash = String::with_capacity(64);
+            for i in 0..32 {
+                write!(hash, "{:02x}", get_bits_u8(&nibbles, start + 11 + i * 8, 8)).ok()?;
+            }
+            Some(format!("{wc}:{hash}"))
+        }
+        _ => None,
     }
-    Some(format!("{wc}:{hash}"))
 }
 
 fn try_parse_full_address_hex(hex: &str) -> Option<String> {
     let cell = Boc::decode_hex(hex).ok()?;
-    StdAddr::from_item(TupleItem::Slice(cell))
-        .ok()
-        .map(|addr| addr.to_string())
+    match cell.bit_len() {
+        2 if matches!(cell.parse::<AnyAddr>().ok()?, AnyAddr::None) => Some("addr_none".to_owned()),
+        _ => StdAddr::from_item(TupleItem::Slice(cell))
+            .ok()
+            .map(|addr| addr.to_string()),
+    }
 }
 
 fn render_std_address(type_name: String, legacy_value: String, addr: &StdAddr) -> RenderedValue {
@@ -1790,6 +1797,7 @@ fn render_abi_data(
         UnpackedValue::Bits((bytes, bit_len)) => {
             typed_leaf(type_name, format_abi_bits(&bytes, bit_len))
         }
+        UnpackedValue::AddressNone => typed_leaf(type_name, "addr_none"),
         UnpackedValue::Null => typed_leaf(type_name, "null"),
         UnpackedValue::Void => typed_leaf(type_name, "(void)"),
         UnpackedValue::Number(value) => typed_leaf(type_name, value.to_string()),
@@ -1899,6 +1907,7 @@ fn format_abi_map_key(
         UnpackedValue::Object { name, .. } if abi_object_is_enum(symbols, key_ty_idx) => {
             name.clone()
         }
+        UnpackedValue::AddressNone => "addr_none".to_owned(),
         UnpackedValue::Address(value) => value.to_string(),
         UnpackedValue::ExtAddress(value) => value.to_string(),
         UnpackedValue::Cell(value) | UnpackedValue::RemainingBitsAndRefs(value) => {
@@ -4645,6 +4654,29 @@ mod tests {
         assert_eq!(type_name, "address");
         assert_eq!(value, addr.to_string());
         assert_eq!(legacy_value, addr.to_string());
+    }
+
+    #[test]
+    fn render_address_any_none_from_slice_uses_addr_none() {
+        let mut builder = CellBuilder::new();
+        AnyAddr::None
+            .store_into(&mut builder, Cell::empty_context())
+            .unwrap();
+        let none_cell = builder.build().unwrap();
+        let stack_values = [VmStackValue::CellSlice(CellSlice {
+            value: Boc::encode_hex(&none_cell),
+            bits: None,
+            refs: None,
+        })];
+        let slots = [SlotValue::Live(&stack_values[0])];
+
+        let rendered =
+            debug_print_from_stack(&source_map_with_types(vec![Ty::AddressAny]), &slots, 0);
+
+        assert_eq!(
+            rendered.dap_parts(),
+            ("addr_none".to_owned(), Some("any_address".to_owned()))
+        );
     }
 
     #[test]

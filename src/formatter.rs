@@ -1673,6 +1673,7 @@ See https://ton-blockchain.github.io/acton/docs/wallets for more information
             UnpackedValue::Number(value) => value.to_string(),
             UnpackedValue::Bool(value) => value.to_string(),
             UnpackedValue::String(value) => format!("{value:?}"),
+            UnpackedValue::AddressNone => "addr_none".to_owned(),
             UnpackedValue::Address(value) => self.format_annotation_address(value),
             UnpackedValue::ExtAddress(value) => value.to_string(),
             UnpackedValue::Cell(value) | UnpackedValue::RemainingBitsAndRefs(value) => {
