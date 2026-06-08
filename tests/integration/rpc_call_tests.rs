@@ -2,8 +2,8 @@ use crate::common::{assertion, strip_ansi};
 use crate::support::TestOutputExt;
 use crate::support::project::{ActonCommand, Project, ProjectBuilder};
 use crate::support::toncenter::{
-    CapturedToncenterRequest, append_custom_network, append_localnet_network,
-    spawn_toncenter_v2_mock, spawn_toncenter_v2_mock_with_capture,
+    CapturedToncenterRequest, ToncenterV2MockResponse, append_custom_network,
+    append_localnet_network, spawn_toncenter_v2_mock, spawn_toncenter_v2_mock_with_capture,
     toncenter_v2_account_info_with_code_ok_response, toncenter_v2_run_get_method_ok_response,
 };
 use serde_json::Value as JsonValue;
@@ -942,6 +942,99 @@ fn test_rpc_call_without_abi_allows_zero_arg_raw_call() {
         .success()
         .assert_snapshot_matches(
             "integration/snapshots/rpc/test_rpc_call_raw_without_abi.stdout.txt",
+        );
+
+    mock_handle.join().expect("mock server thread must finish");
+}
+
+#[test]
+fn test_rpc_call_parses_toncenter_mixed_list_stack() {
+    let project = ProjectBuilder::new("rpc-call-toncenter-mixed-list-stack").build();
+    let log_dir = prepare_log_dir(project.path());
+    let mixed_list_stack = serde_json::json!([
+        [
+            "list",
+            {
+                "@type": "tvm.list",
+                "elements": [
+                    {
+                        "@type": "tvm.stackEntryTuple",
+                        "tuple": {
+                            "@type": "tvm.tuple",
+                            "elements": [
+                                {
+                                    "@type": "tvm.stackEntryNumber",
+                                    "number": {
+                                        "@type": "tvm.numberDecimal",
+                                        "number": "19123499196349203144881710059315280281118210915578934841508745247790120558268"
+                                    }
+                                },
+                                {
+                                    "@type": "tvm.stackEntryNumber",
+                                    "number": {
+                                        "@type": "tvm.numberDecimal",
+                                        "number": "2316586422404042"
+                                    }
+                                },
+                                {
+                                    "@type": "tvm.stackEntryNumber",
+                                    "number": {
+                                        "@type": "tvm.numberDecimal",
+                                        "number": "0"
+                                    }
+                                },
+                                {
+                                    "@type": "tvm.stackEntryNumber",
+                                    "number": {
+                                        "@type": "tvm.numberDecimal",
+                                        "number": "0"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        ]
+    ]);
+    let (mock_url, mock_handle) = spawn_toncenter_v2_mock(vec![
+        toncenter_v2_account_info_with_code_ok_response(
+            777_000_000,
+            &test_cell_boc64(0xdead_beef),
+            &test_cell_boc64(0x1234_5678),
+            "active",
+            "",
+            "17",
+            "deadbeef",
+        ),
+        ToncenterV2MockResponse {
+            status: 200,
+            body: serde_json::json!({
+                "result": {
+                    "stack": mixed_list_stack,
+                    "exit_code": 0
+                }
+            })
+            .to_string(),
+        },
+    ]);
+    append_custom_network(project.path(), "mock", &format!("{mock_url}/api/v2"));
+
+    project
+        .acton()
+        .current_dir(project.path())
+        .arg("rpc")
+        .arg("call")
+        .arg(RAW_INFO_ADDRESS)
+        .arg("list_nominators")
+        .arg("--net")
+        .arg("custom:mock")
+        .arg("--raw")
+        .env("ACTON_LOG_DIR", &log_dir)
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/rpc/test_rpc_call_toncenter_mixed_list_stack.stdout.txt",
         );
 
     mock_handle.join().expect("mock server thread must finish");

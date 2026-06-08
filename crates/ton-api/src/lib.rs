@@ -938,6 +938,8 @@ pub struct V3TransactionSummary {
     #[serde(default)]
     pub now: u32,
     #[serde(default)]
+    pub mc_block_seqno: Option<u32>,
+    #[serde(default)]
     pub prev_trans_hash: Option<String>,
     #[serde(default)]
     pub prev_trans_lt: Option<String>,

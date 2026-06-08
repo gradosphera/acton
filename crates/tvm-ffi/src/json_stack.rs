@@ -21,6 +21,8 @@ pub enum JsonStackEntry {
     Builder { builder: String },
     #[serde(rename = "tvm.stackEntryTuple")]
     Tuple { tuple: JsonTuple },
+    #[serde(rename = "tvm.stackEntryList", alias = "list")]
+    List { list: JsonList },
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -30,6 +32,11 @@ pub struct JsonNumber {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct JsonTuple {
+    pub elements: Vec<JsonStackEntry>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct JsonList {
     pub elements: Vec<JsonStackEntry>,
 }
 
@@ -156,6 +163,24 @@ fn json_to_item(entry: JsonStackEntry) -> anyhow::Result<TupleItem> {
             }
             Ok(TupleItem::Tuple(Tuple(elements)))
         }
+        JsonStackEntry::List { list } => {
+            let mut elements = Vec::new();
+            for el in list.elements {
+                elements.push(json_to_item(el)?);
+            }
+            Ok(TupleItem::Tuple(Tuple(elements)))
+        }
+    }
+}
+
+fn json_to_mixed_item(value: Value) -> anyhow::Result<TupleItem> {
+    match json_to_legacy_item(value.clone()) {
+        Ok(item) => Ok(item),
+        Err(legacy_err) => {
+            let entry: JsonStackEntry = serde_json::from_value(value)
+                .with_context(|| format!("Failed to parse stack entry as legacy or std format. Legacy error: {legacy_err}"))?;
+            json_to_item(entry)
+        }
     }
 }
 
@@ -240,7 +265,7 @@ pub fn json_to_legacy_item(value: Value) -> anyhow::Result<TupleItem> {
                 .context("list must have elements")?;
             let items = elements
                 .iter()
-                .map(|v| json_to_legacy_item(v.clone()))
+                .map(|v| json_to_mixed_item(v.clone()))
                 .collect::<anyhow::Result<Vec<_>>>()?;
             Ok(TupleItem::Tuple(Tuple(items)))
         }
@@ -304,6 +329,74 @@ mod tests {
         assert_eq!(
             json_to_legacy_item(serde_json::json!(["num", "-0x2a"])).unwrap(),
             TupleItem::Int(BigInt::from(-42))
+        );
+    }
+
+    #[test]
+    fn test_std_stack_accepts_list_entries() {
+        assert_eq!(
+            json_to_stack(vec![serde_json::json!({
+                "@type": "tvm.stackEntryList",
+                "list": {
+                    "@type": "tvm.list",
+                    "elements": [
+                        {
+                            "@type": "tvm.stackEntryNumber",
+                            "number": {
+                                "@type": "tvm.numberDecimal",
+                                "number": "7"
+                            }
+                        }
+                    ]
+                }
+            })])
+            .unwrap(),
+            Tuple(vec![TupleItem::Tuple(Tuple(vec![TupleItem::Int(
+                BigInt::from(7)
+            )]))])
+        );
+    }
+
+    #[test]
+    fn test_legacy_stack_accepts_toncenter_mixed_list_entries() {
+        assert_eq!(
+            json_to_legacy_stack(vec![serde_json::json!([
+                "list",
+                {
+                    "@type": "tvm.list",
+                    "elements": [
+                        {
+                            "@type": "tvm.stackEntryTuple",
+                            "tuple": {
+                                "@type": "tvm.tuple",
+                                "elements": [
+                                    {
+                                        "@type": "tvm.stackEntryNumber",
+                                        "number": {
+                                            "@type": "tvm.numberDecimal",
+                                            "number": "11"
+                                        }
+                                    },
+                                    {
+                                        "@type": "tvm.stackEntryNumber",
+                                        "number": {
+                                            "@type": "tvm.numberDecimal",
+                                            "number": "22"
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+            ])])
+            .unwrap(),
+            Tuple(vec![TupleItem::Tuple(Tuple(vec![TupleItem::Tuple(
+                Tuple(vec![
+                    TupleItem::Int(BigInt::from(11)),
+                    TupleItem::Int(BigInt::from(22))
+                ])
+            )]))])
         );
     }
 }

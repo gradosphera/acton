@@ -1,15 +1,16 @@
 use super::{
-    LocalContractMatch, find_local_contract_match, format_int_address, format_std_address,
-    load_rpc_config, resolve_rpc_network,
+    LocalContractMatch, find_local_contract_match, format_get_method_signature,
+    format_get_method_signature_colored, format_int_address, format_std_address, load_rpc_config,
+    pretty_address_format, resolve_rpc_network,
 };
 use crate::commands::abi_args::{parse_abi_parameters, parse_number, parse_raw_stack_args};
 use crate::commands::common::error_fmt;
 use crate::context::code_lookup_hash;
-use acton_config::color::OwoColorize;
+use acton_config::color::{OwoColorize, colors_enabled};
 use acton_config::config::ActonConfig;
-use acton_debug::{
-    PrettyAddressFormat, PrettyRenderOptions, RenderedValue, render_tuple_as_tolk_type,
-};
+#[cfg(test)]
+use acton_debug::PrettyAddressFormat;
+use acton_debug::{PrettyRenderOptions, RenderedValue, render_tuple_as_tolk_type};
 use anyhow::{Context, anyhow};
 use log::warn;
 use num_traits::ToPrimitive;
@@ -168,7 +169,7 @@ fn resolve_get_method<'a>(
     let available = abi
         .get_methods
         .iter()
-        .map(|method| format!(" {}", method.name.yellow()))
+        .map(|method| format!(" {}", format_get_method_signature_colored(abi, method)))
         .collect::<Vec<_>>()
         .join("\n");
 
@@ -220,7 +221,7 @@ fn decode_get_method_result(
     let options = PrettyRenderOptions {
         address_format: pretty_address_format(network),
         address_labels: Default::default(),
-        colorize: false,
+        colorize: colors_enabled(),
     };
     Ok(DecodedResult {
         json: rendered_value_to_json(&rendered, network),
@@ -332,14 +333,6 @@ fn rendered_address_value(
         .unwrap_or_else(|| fallback.to_owned())
 }
 
-const fn pretty_address_format(network: &Network) -> PrettyAddressFormat {
-    if network.uses_testnet_address_format() {
-        PrettyAddressFormat::Testnet
-    } else {
-        PrettyAddressFormat::Mainnet
-    }
-}
-
 fn print_pretty_result(value: &str) {
     for line in value.lines() {
         println!("{line}");
@@ -441,21 +434,6 @@ fn get_method_exit_error(method: &str, exit_code: i32) -> String {
     }
 
     format!("Get method {method} exited with code {exit_code}")
-}
-
-fn format_get_method_signature(abi: &ContractABI, method: &ABIGetMethod) -> String {
-    let params = method
-        .parameters
-        .iter()
-        .map(|param| format!("{}: {}", param.name, abi.render_type(param.ty_idx)))
-        .collect::<Vec<_>>()
-        .join(", ");
-    format!(
-        "{}({}): {}",
-        method.name,
-        params,
-        abi.render_type(method.return_ty_idx)
-    )
 }
 
 #[cfg(test)]

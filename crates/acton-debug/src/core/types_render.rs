@@ -1798,6 +1798,15 @@ fn render_abi_data(
     }
 }
 
+#[must_use]
+pub fn render_unpacked_value_as_tolk_type(
+    symbols: &dyn UnpackSchema,
+    data: UnpackedValue,
+    ty_idx: TyIdx,
+) -> RenderedValue {
+    render_abi_data(symbols, data, ty_idx)
+}
+
 fn render_abi_enum_data(
     symbols: &dyn UnpackSchema,
     data: UnpackedValue,

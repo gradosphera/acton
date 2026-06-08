@@ -827,13 +827,8 @@ See https://ton-blockchain.github.io/acton/docs/wallets for more information
         if let Some(in_msg) = &tx.in_msg
             && let Ok(in_msg) = in_msg.parse::<RelaxedMessage>()
         {
-            let resolved_body = self.resolve_incoming_message_body(&in_msg);
-            let message_part = self.format_single_message(
-                &in_msg,
-                contract_letters,
-                show_full_names,
-                resolved_body.as_ref(),
-            );
+            let message_part =
+                self.format_single_message(&in_msg, contract_letters, show_full_names);
             if !message_part.is_empty() {
                 return message_part;
             }
@@ -842,15 +837,9 @@ See https://ton-blockchain.github.io/acton/docs/wallets for more information
         if let Ok(Some(in_msg)) = tx.load_in_msg()
             && let MsgInfo::ExtIn(info) = &in_msg.info
         {
-            let resolved_body = self.resolve_external_incoming_message_body(tx, &in_msg);
-            let message_name = resolved_body.as_ref().map_or_else(
-                || {
-                    self.format_external_incoming_message_name(
-                        tx,
-                        Self::opcode_from_body(in_msg.body, false),
-                    )
-                },
-                |body| Self::color_message_name(&body.name),
+            let message_name = self.format_external_incoming_message_name(
+                tx,
+                Self::opcode_from_body(in_msg.body, false),
             );
             let destination = self.format_address_with_letter(&info.dst, contract_letters, true);
 
@@ -877,7 +866,6 @@ See https://ton-blockchain.github.io/acton/docs/wallets for more information
         in_msg: &RelaxedMessage,
         contract_letters: &HashMap<IntAddr, String>,
         show_full_names: bool,
-        resolved_body: Option<&DecodedMessageBody>,
     ) -> String {
         let RelaxedMsgInfo::Int(info) = &in_msg.info else {
             if let RelaxedMsgInfo::ExtOut(_) = &in_msg.info {
@@ -903,10 +891,7 @@ See https://ton-blockchain.github.io/acton/docs/wallets for more information
             result += " -> ".dimmed().to_string().as_str();
         }
 
-        let message_name = resolved_body.map_or_else(
-            || self.format_incoming_message_name(in_msg),
-            |body| Self::color_message_name(&body.name),
-        );
+        let message_name = self.format_incoming_message_name(in_msg);
         result += &message_name;
         result += " ";
 
@@ -938,14 +923,22 @@ See https://ton-blockchain.github.io/acton/docs/wallets for more information
     }
 
     pub(crate) fn transaction_inbound_message_name(&self, tx: &Transaction) -> Option<String> {
-        self.resolve_transaction_inbound_message_body(tx)
-            .map(|body| body.name)
-            .or_else(|| {
-                tx.in_msg
-                    .as_ref()
-                    .and_then(|in_msg| in_msg.parse::<RelaxedMessage>().ok())
-                    .and_then(|in_msg| self.incoming_message_name(&in_msg))
-            })
+        if let Some(name) = tx
+            .in_msg
+            .as_ref()
+            .and_then(|in_msg| in_msg.parse::<RelaxedMessage>().ok())
+            .and_then(|in_msg| self.incoming_message_name(&in_msg))
+        {
+            return Some(name);
+        }
+
+        let in_msg = tx.load_in_msg().ok()??;
+        let MsgInfo::ExtIn(_) = &in_msg.info else {
+            return None;
+        };
+        let opcode = Self::opcode_from_body(in_msg.body, false)?;
+        self.external_incoming_message_name(tx, opcode)
+            .or_else(|| Self::generic_message_name(Some(opcode)))
     }
 
     fn resolve_transaction_inbound_message_body(
@@ -1206,11 +1199,11 @@ See https://ton-blockchain.github.io/acton/docs/wallets for more information
             abis
         };
         for abi in abis {
-            let candidates = Self::compiler_message_candidates(&abi, direction, opcode);
+            let body_candidates = Self::compiler_message_candidates(&abi, direction, opcode);
             if let Some(decoded) = self.try_decode_message_body_types(
                 body,
                 &abi,
-                candidates,
+                body_candidates,
                 if bounced { 32 } else { 0 },
             ) {
                 return Some(decoded);
@@ -1243,7 +1236,9 @@ See https://ton-blockchain.github.io/acton/docs/wallets for more information
         match direction {
             MessageBodyDirection::Incoming => {
                 for message in &abi.incoming_messages {
-                    Self::push_compiler_message_candidate(
+                    Self::push_opcode_message_candidate(
+                        abi,
+                        opcode,
                         &mut candidates,
                         &mut seen,
                         message.body_ty_idx,
@@ -1252,7 +1247,9 @@ See https://ton-blockchain.github.io/acton/docs/wallets for more information
             }
             MessageBodyDirection::ExternalIncoming => {
                 for message in &abi.incoming_external {
-                    Self::push_compiler_message_candidate(
+                    Self::push_opcode_message_candidate(
+                        abi,
+                        opcode,
                         &mut candidates,
                         &mut seen,
                         message.body_ty_idx,
@@ -1261,7 +1258,9 @@ See https://ton-blockchain.github.io/acton/docs/wallets for more information
             }
             MessageBodyDirection::Outgoing => {
                 for message in &abi.outgoing_messages {
-                    Self::push_compiler_message_candidate(
+                    Self::push_opcode_message_candidate(
+                        abi,
+                        opcode,
                         &mut candidates,
                         &mut seen,
                         message.body_ty_idx,
@@ -1270,14 +1269,18 @@ See https://ton-blockchain.github.io/acton/docs/wallets for more information
             }
             MessageBodyDirection::ExternalOutgoing => {
                 for message in &abi.emitted_events {
-                    Self::push_compiler_message_candidate(
+                    Self::push_opcode_message_candidate(
+                        abi,
+                        opcode,
                         &mut candidates,
                         &mut seen,
                         message.body_ty_idx,
                     );
                 }
                 for message in &abi.outgoing_messages {
-                    Self::push_compiler_message_candidate(
+                    Self::push_opcode_message_candidate(
+                        abi,
+                        opcode,
                         &mut candidates,
                         &mut seen,
                         message.body_ty_idx,
@@ -1291,6 +1294,18 @@ See https://ton-blockchain.github.io/acton/docs/wallets for more information
         }
 
         candidates
+    }
+
+    fn push_opcode_message_candidate(
+        abi: &ContractABI,
+        opcode: Option<u32>,
+        candidates: &mut Vec<TyIdx>,
+        seen: &mut HashSet<TyIdx>,
+        candidate: TyIdx,
+    ) {
+        if Self::compiler_type_matches_opcode(abi, candidate, opcode) {
+            Self::push_compiler_message_candidate(candidates, seen, candidate);
+        }
     }
 
     fn push_compiler_message_candidate(
@@ -1326,17 +1341,13 @@ See https://ton-blockchain.github.io/acton/docs/wallets for more information
                             prefix.prefix_len == 32 && prefix.prefix_num == u64::from(opcode)
                         })
                     });
-                    let priority = if matches_opcode {
-                        0
-                    } else if prefix.is_some() {
-                        1
-                    } else {
-                        2
-                    };
-                    candidates.push((priority, *ty_idx));
+                    if matches_opcode {
+                        candidates.push((0, *ty_idx));
+                    }
                 }
                 ABIDeclaration::Alias {
                     ty_idx,
+                    target_ty_idx,
                     type_params,
                     ..
                 } => {
@@ -1347,15 +1358,85 @@ See https://ton-blockchain.github.io/acton/docs/wallets for more information
                         continue;
                     }
 
-                    candidates.push((3, *ty_idx));
+                    if Self::compiler_type_matches_opcode(abi, *target_ty_idx, opcode) {
+                        candidates.push((1, *ty_idx));
+                    }
                 }
-                ABIDeclaration::Enum { ty_idx, .. } => {
-                    candidates.push((4, *ty_idx));
-                }
+                ABIDeclaration::Enum { .. } => {}
             }
         }
         candidates.sort_by_key(|(priority, _)| *priority);
         candidates
+    }
+
+    fn compiler_type_matches_opcode(abi: &ContractABI, ty_idx: TyIdx, opcode: Option<u32>) -> bool {
+        let Some(opcode) = opcode else {
+            return false;
+        };
+        Self::compiler_type_matches_opcode_inner(abi, ty_idx, opcode, &mut HashSet::new())
+    }
+
+    fn compiler_type_matches_opcode_inner(
+        abi: &ContractABI,
+        ty_idx: TyIdx,
+        opcode: u32,
+        seen: &mut HashSet<TyIdx>,
+    ) -> bool {
+        if !seen.insert(ty_idx) {
+            return false;
+        }
+
+        match abi.ty_by_idx(ty_idx) {
+            Some(Ty::StructRef { struct_name, .. }) => {
+                Self::struct_declaration_matches_opcode(abi, struct_name, opcode)
+            }
+            Some(Ty::AliasRef { alias_name, .. }) => Self::alias_target_ty_idx(abi, alias_name)
+                .is_some_and(|target_ty_idx| {
+                    Self::compiler_type_matches_opcode_inner(abi, target_ty_idx, opcode, seen)
+                }),
+            _ => false,
+        }
+    }
+
+    fn struct_declaration_matches_opcode(
+        abi: &ContractABI,
+        struct_name: &str,
+        opcode: u32,
+    ) -> bool {
+        abi.declarations.iter().any(|declaration| {
+            let ABIDeclaration::Struct {
+                name,
+                type_params,
+                prefix,
+                ..
+            } = declaration
+            else {
+                return false;
+            };
+
+            name == struct_name
+                && type_params.as_ref().is_none_or(Vec::is_empty)
+                && prefix.as_ref().is_some_and(|prefix| {
+                    prefix.prefix_len == 32 && prefix.prefix_num == u64::from(opcode)
+                })
+        })
+    }
+
+    fn alias_target_ty_idx(abi: &ContractABI, alias_name: &str) -> Option<TyIdx> {
+        abi.declarations.iter().find_map(|declaration| {
+            let ABIDeclaration::Alias {
+                name,
+                target_ty_idx,
+                type_params,
+                ..
+            } = declaration
+            else {
+                return None;
+            };
+
+            (name == alias_name && type_params.as_ref().is_none_or(Vec::is_empty))
+                .then_some(*target_ty_idx)
+        })
     }
 
     fn opcode_after_bounce_prefix(body: CellSlice<'_>, bounced: bool) -> Option<u32> {
@@ -2060,7 +2141,7 @@ See https://ton-blockchain.github.io/acton/docs/wallets for more information
                     let message_part = match installed {
                         Some(InstalledAction::Message(message)) => message.message().map_or_else(
                             || message.msg_hash.clone(),
-                            |msg| self.format_single_message(&msg, contract_letters, false, None),
+                            |msg| self.format_single_message(&msg, contract_letters, false),
                         ),
                         _ => "msg: ".to_owned() + hash,
                     };
@@ -2337,10 +2418,18 @@ See https://ton-blockchain.github.io/acton/docs/wallets for more information
             .src
             .as_ref()
             .and_then(|src| self.build_result_for_address(Some(src)));
+        let destination_abi = self.catalog_abi_for_address(Some(&info.dst));
+        let source_abi = self.catalog_abi_for_address(info.src.as_ref());
 
         opcode
             .and_then(|opcode| {
-                self.message_name_from_endpoint_builds(opcode, destination_build, source_build)
+                self.message_name_from_endpoints(
+                    opcode,
+                    destination_build,
+                    source_build,
+                    destination_abi,
+                    source_abi,
+                )
             })
             .or_else(|| Self::generic_message_name(opcode))
     }
@@ -2429,6 +2518,46 @@ See https://ton-blockchain.github.io/acton/docs/wallets for more information
             opcode,
             [destination_build, source_build].into_iter().flatten(),
         )
+    }
+
+    fn message_name_from_endpoints(
+        &self,
+        opcode: u32,
+        destination_build: Option<context::CompilationResult>,
+        source_build: Option<context::CompilationResult>,
+        destination_abi: Option<Arc<ContractABI>>,
+        source_abi: Option<Arc<ContractABI>>,
+    ) -> Option<String> {
+        if let Some(name) = self.message_name_from_endpoint_builds(
+            opcode,
+            destination_build.clone(),
+            source_build.clone(),
+        ) {
+            return Some(name);
+        }
+
+        let mut abis = self.prioritized_abis(
+            self.build_cache
+                .prioritized_results([destination_build, source_build].into_iter().flatten()),
+            None,
+        );
+        Self::push_unique_abi(&mut abis, destination_abi);
+        Self::push_unique_abi(&mut abis, source_abi);
+        let abis = self.with_opcode_fallback_abis(abis, Some(opcode));
+        Self::message_name_from_abis(opcode, abis)
+    }
+
+    fn push_unique_abi(abis: &mut Vec<Arc<ContractABI>>, abi: Option<Arc<ContractABI>>) {
+        let Some(abi) = abi else {
+            return;
+        };
+        if abis
+            .iter()
+            .any(|existing| existing.contract_name == abi.contract_name)
+        {
+            return;
+        }
+        abis.push(abi);
     }
 
     fn message_name_from_search_params(

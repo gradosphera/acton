@@ -4,8 +4,9 @@ use crate::contract_interface::{
     compile_optional_contract_interface_with_cache, is_boc_path, read_precompiled_boc,
 };
 use crate::file_build_cache::FileBuildCache;
-use acton_config::color::OwoColorize;
+use acton_config::color::{OwoColorize, colors_enabled};
 use acton_config::config::{ActonConfig, ContractConfig, project_root as configured_project_root};
+use acton_debug::{PrettyAddressFormat, PrettyRenderOptions, render_unpacked_value_as_tolk_type};
 use anyhow::{Context, anyhow};
 use clap::Subcommand;
 use log::warn;
@@ -13,8 +14,8 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 use tolk_compiler::SourceMap;
-use tolk_compiler::abi::ContractABI;
-use tolk_compiler::dynamic_unpack::{self, UnpackedValue};
+use tolk_compiler::abi::{ABIGetMethod, ContractABI};
+use tolk_compiler::dynamic_unpack;
 use ton_api::{Network, TonApiClient};
 use tycho_types::boc::Boc;
 use tycho_types::cell::{Cell, HashBytes};
@@ -130,10 +131,10 @@ pub fn rpc_cmd(command: RpcCommand) -> anyhow::Result<()> {
     }
 }
 
-fn rpc_info_cmd(address: &str, net: Option<String>) -> anyhow::Result<()> {
-    let (address, _) = StdAddr::from_str_ext(address, StdAddrFormat::any())
+fn rpc_info_cmd(address_input: &str, net: Option<String>) -> anyhow::Result<()> {
+    let (address, _) = StdAddr::from_str_ext(address_input, StdAddrFormat::any())
         .map_err(|_| anyhow!("Invalid address"))
-        .with_context(|| error_fmt::invalid_address(address))?;
+        .with_context(|| error_fmt::invalid_address(address_input))?;
 
     let network = resolve_rpc_network(net)?;
     let config = load_rpc_config()?;
@@ -155,18 +156,24 @@ fn rpc_info_cmd(address: &str, net: Option<String>) -> anyhow::Result<()> {
     let catalog_contract = code.as_ref().and_then(|code| {
         acton_abi_catalog::find_contract_by_code_hash(&code_lookup_hash(code).to_string())
     });
-    let local_storage_abi = matched_contract
+    let local_abi = matched_contract
         .as_ref()
         .and_then(|contract| contract.abi.clone());
-    let catalog_storage_abi = catalog_contract.map(acton_abi_catalog::CatalogContract::abi);
-
-    let decoded_storage = match (
-        &data,
-        local_storage_abi.as_deref(),
-        catalog_storage_abi.as_deref(),
+    let catalog_abi = catalog_contract.map(acton_abi_catalog::CatalogContract::abi);
+    let contract_name = match (
+        matched_contract.as_ref(),
+        local_abi.is_some(),
+        catalog_contract,
     ) {
-        (Some(data), Some(abi), _) => Some(decode_storage_json(data, abi, &network)?),
-        (Some(data), None, Some(abi)) => match decode_storage_json(data, abi, &network) {
+        (Some(contract), true, _) => contract.contract_name.green().to_string(),
+        (_, _, Some(contract)) => contract.display_name.green().to_string(),
+        _ => "unknown".dimmed().to_string(),
+    };
+    let has_abi = local_abi.is_some() || catalog_abi.is_some();
+
+    let decoded_storage = match (&data, local_abi.as_deref(), catalog_abi.as_deref()) {
+        (Some(data), Some(abi), _) => Some(decode_storage(data, abi, &network)?),
+        (Some(data), None, Some(abi)) => match decode_storage(data, abi, &network) {
             Ok(decoded_storage) => Some(decoded_storage),
             Err(err) => {
                 warn!("Skipping bundled ABI storage decode: {err:#}");
@@ -176,14 +183,11 @@ fn rpc_info_cmd(address: &str, net: Option<String>) -> anyhow::Result<()> {
         _ => None,
     };
 
-    print_section("Remote Account");
+    print_section_title("Remote Account");
     print_kv("Network", network.to_string());
-    print_kv(
-        "Address",
-        format_std_address(&address, &network).cyan().to_string(),
-    );
     print_kv("Raw Address", address.to_string().cyan().to_string());
     print_kv("Status", format_account_status(&remote.state));
+    print_kv("Contract", contract_name);
     print_kv("Balance", format_nanotons(&balance).white().to_string());
     print_kv("Last Tx LT", remote.last_transaction_id.lt.as_str());
     print_kv(
@@ -209,23 +213,12 @@ fn rpc_info_cmd(address: &str, net: Option<String>) -> anyhow::Result<()> {
         );
     }
 
-    if code.is_some() {
-        print_section("ABI Match");
-        if let Some(contract) = &matched_contract {
-            print_kv("Contract", contract.contract_name.green().to_string());
-        } else if let Some(contract) = catalog_contract {
-            print_kv("Contract", contract.display_name.green().to_string());
-        } else {
-            print_kv("Contract", "<none>".dimmed().to_string());
-        }
-    }
-
     match decoded_storage {
         Some(decoded_storage) => {
             print_section("Decoded Storage");
-            print_yaml_value(None, &decoded_storage, 2);
+            print_indented_block(&decoded_storage, 2);
         }
-        None if data.is_some() && (matched_contract.is_some() || catalog_contract.is_some()) => {
+        None if data.is_some() && has_abi => {
             print_section("Decoded Storage");
             println!("  {}", "<unavailable>".dimmed());
         }
@@ -235,6 +228,13 @@ fn rpc_info_cmd(address: &str, net: Option<String>) -> anyhow::Result<()> {
         }
         None => {}
     }
+
+    if let Some(abi) = local_abi.as_deref().or(catalog_abi.as_deref()) {
+        print_section("Get Methods");
+        print_get_methods(abi);
+    }
+
+    print_get_method_hint(address_input, &network);
 
     Ok(())
 }
@@ -424,11 +424,7 @@ fn load_local_contract_candidate(
     })
 }
 
-fn decode_storage_json(
-    data: &Cell,
-    abi: &ContractABI,
-    network: &Network,
-) -> anyhow::Result<serde_json::Value> {
+fn decode_storage(data: &Cell, abi: &ContractABI, network: &Network) -> anyhow::Result<String> {
     let storage_ty_idx = abi
         .storage
         .storage_at_deployment_ty_idx
@@ -444,55 +440,20 @@ fn decode_storage_json(
             parser.size_refs()
         );
     }
-    Ok(compiler_data_to_json(&decoded, network))
+    let rendered = render_unpacked_value_as_tolk_type(abi, decoded, storage_ty_idx);
+    let options = PrettyRenderOptions {
+        address_format: pretty_address_format(network),
+        address_labels: Default::default(),
+        colorize: colors_enabled(),
+    };
+    Ok(rendered.to_pretty_string(options))
 }
 
-fn compiler_data_to_json(data: &UnpackedValue, network: &Network) -> serde_json::Value {
-    match data {
-        UnpackedValue::Null | UnpackedValue::Void => serde_json::Value::Null,
-        UnpackedValue::Number(value) => serde_json::Value::String(value.to_string()),
-        UnpackedValue::Bool(value) => serde_json::Value::Bool(*value),
-        UnpackedValue::String(value) => serde_json::Value::String(value.clone()),
-        UnpackedValue::Address(value) => {
-            serde_json::Value::String(format_int_address(value, network))
-        }
-        UnpackedValue::ExtAddress(value) => serde_json::json!({
-            "bits": value.data_bit_len,
-            "hex": hex::encode(&value.data),
-        }),
-        UnpackedValue::Cell(value) | UnpackedValue::RemainingBitsAndRefs(value) => {
-            serde_json::json!({
-                "boc64": Boc::encode_base64(value.clone()),
-            })
-        }
-        UnpackedValue::Bits((bytes, bit_len)) => serde_json::json!({
-            "bits": bit_len,
-            "hex": hex::encode(bytes),
-        }),
-        UnpackedValue::Array(values) => serde_json::Value::Array(
-            values
-                .iter()
-                .map(|value| compiler_data_to_json(value, network))
-                .collect(),
-        ),
-        UnpackedValue::Map(values) => serde_json::Value::Array(
-            values
-                .iter()
-                .map(|(key, value)| {
-                    serde_json::json!({
-                        "key": compiler_data_to_json(key, network),
-                        "value": compiler_data_to_json(value, network),
-                    })
-                })
-                .collect(),
-        ),
-        UnpackedValue::Object { fields, .. } => {
-            let mut result = serde_json::Map::new();
-            for (name, value) in fields {
-                result.insert(name.clone(), compiler_data_to_json(value, network));
-            }
-            serde_json::Value::Object(result)
-        }
+const fn pretty_address_format(network: &Network) -> PrettyAddressFormat {
+    if network.uses_testnet_address_format() {
+        PrettyAddressFormat::Testnet
+    } else {
+        PrettyAddressFormat::Mainnet
     }
 }
 
@@ -517,6 +478,10 @@ pub(super) fn format_std_address(address: &StdAddr, network: &Network) -> String
 
 const LABEL_WIDTH: usize = 18;
 
+fn print_section_title(title: &str) {
+    println!("{}", title.bold().cyan());
+}
+
 pub(super) fn print_section(title: &str) {
     println!("\n{}", title.bold().cyan());
 }
@@ -528,6 +493,41 @@ pub(super) fn print_kv(label: &str, value: impl AsRef<str>) {
         format!("{key:<LABEL_WIDTH$}").dimmed(),
         value.as_ref()
     );
+}
+
+fn print_indented_block(value: &str, indent: usize) {
+    let prefix = " ".repeat(indent);
+    for line in value.lines() {
+        println!("{prefix}{line}");
+    }
+}
+
+fn print_get_methods(abi: &ContractABI) {
+    if abi.get_methods.is_empty() {
+        println!("  {}", "none".dimmed());
+        return;
+    }
+
+    for method in &abi.get_methods {
+        println!("  {}", format_get_method_signature_colored(abi, method));
+    }
+}
+
+fn print_get_method_hint(address: &str, network: &Network) {
+    let net_arg = format_rpc_network_arg(network);
+    let command = format!("acton rpc call --net {net_arg} {address} <METHOD> [ARGS...]");
+
+    println!(
+        "\n{}",
+        format!("hint: To run get method: {command}").dimmed()
+    );
+}
+
+fn format_rpc_network_arg(network: &Network) -> String {
+    match network {
+        Network::Custom(name) => format!("custom:{name}"),
+        Network::Mainnet | Network::Testnet | Network::Localnet => network.to_string(),
+    }
 }
 
 fn format_account_status(status: &str) -> String {
@@ -543,116 +543,41 @@ fn format_hash(hash: &HashBytes) -> String {
     format!("0x{hash}").yellow().to_string()
 }
 
-pub(super) fn print_yaml_value(key: Option<&str>, value: &serde_json::Value, indent: usize) {
-    let prefix = " ".repeat(indent);
-    match value {
-        serde_json::Value::Null
-        | serde_json::Value::Bool(_)
-        | serde_json::Value::Number(_)
-        | serde_json::Value::String(_) => {
-            let scalar = format_yaml_scalar(value);
-            match key {
-                Some(key) => println!("{prefix}{} {scalar}", format!("{key}:").dimmed()),
-                None => println!("{prefix}{scalar}"),
-            }
-        }
-        serde_json::Value::Array(values) => {
-            if let Some(key) = key {
-                if values.is_empty() {
-                    println!("{prefix}{} []", format!("{key}:").dimmed());
-                } else {
-                    println!("{prefix}{}", format!("{key}:").dimmed());
-                }
-            } else if values.is_empty() {
-                println!("{prefix}[]");
-            }
-
-            let next_indent = indent + usize::from(key.is_some()) * 2;
-            for item in values {
-                print_yaml_array_item(item, next_indent);
-            }
-        }
-        serde_json::Value::Object(map) => {
-            if let Some(key) = key {
-                if map.is_empty() {
-                    println!("{prefix}{} {{}}", format!("{key}:").dimmed());
-                } else {
-                    println!("{prefix}{}", format!("{key}:").dimmed());
-                }
-            } else if map.is_empty() {
-                println!("{prefix}{{}}");
-            }
-
-            let next_indent = indent + usize::from(key.is_some()) * 2;
-            for (child_key, child_value) in map {
-                print_yaml_value(Some(child_key), child_value, next_indent);
-            }
-        }
-    }
+pub(super) fn format_get_method_signature(abi: &ContractABI, method: &ABIGetMethod) -> String {
+    format_get_method_signature_with_name(
+        method.name.to_owned(),
+        format_get_method_signature_suffix(abi, method),
+    )
 }
 
-fn print_yaml_array_item(value: &serde_json::Value, indent: usize) {
-    let prefix = " ".repeat(indent);
-    match value {
-        serde_json::Value::Null
-        | serde_json::Value::Bool(_)
-        | serde_json::Value::Number(_)
-        | serde_json::Value::String(_) => {
-            println!("{prefix}- {}", format_yaml_scalar(value));
-        }
-        serde_json::Value::Array(values) => {
-            if values.is_empty() {
-                println!("{prefix}- []");
-            } else {
-                println!("{prefix}-");
-                for child in values {
-                    print_yaml_array_item(child, indent + 2);
-                }
-            }
-        }
-        serde_json::Value::Object(map) => {
-            if map.is_empty() {
-                println!("{prefix}- {{}}");
-            } else {
-                println!("{prefix}-");
-                for (child_key, child_value) in map {
-                    print_yaml_value(Some(child_key), child_value, indent + 2);
-                }
-            }
-        }
-    }
+pub(super) fn format_get_method_signature_colored(
+    abi: &ContractABI,
+    method: &ABIGetMethod,
+) -> String {
+    format_get_method_signature_with_name(
+        method.name.yellow().to_string(),
+        format_get_method_signature_suffix(abi, method)
+            .dimmed()
+            .to_string(),
+    )
 }
 
-fn format_yaml_scalar(value: &serde_json::Value) -> String {
-    match value {
-        serde_json::Value::Null => "null".dimmed().to_string(),
-        serde_json::Value::Bool(true) => "true".green().to_string(),
-        serde_json::Value::Bool(false) => "false".bright_red().to_string(),
-        serde_json::Value::Number(value) => value.to_string().white().to_string(),
-        serde_json::Value::String(value) => colorize_scalar_string(value),
-        serde_json::Value::Array(_) | serde_json::Value::Object(_) => unreachable!(),
-    }
+pub(super) fn format_get_method_signature_with_name(
+    method_name: String,
+    signature_suffix: String,
+) -> String {
+    format!("{method_name}{signature_suffix}")
 }
 
-fn colorize_scalar_string(value: &str) -> String {
-    if looks_like_address(value) {
-        value.cyan().to_string()
-    } else if looks_like_hash(value) {
-        value.yellow().to_string()
-    } else {
-        value.to_string()
-    }
-}
-
-fn looks_like_address(value: &str) -> bool {
-    value.starts_with("EQ")
-        || value.starts_with("UQ")
-        || value.starts_with("kQ")
-        || value.starts_with("0:")
-        || value.starts_with("-1:")
-}
-
-fn looks_like_hash(value: &str) -> bool {
-    let stripped = value.strip_prefix("0x").unwrap_or(value);
-    stripped.len() == 64 && stripped.bytes().all(|byte| byte.is_ascii_hexdigit())
+pub(super) fn format_get_method_signature_suffix(
+    abi: &ContractABI,
+    method: &ABIGetMethod,
+) -> String {
+    let params = method
+        .parameters
+        .iter()
+        .map(|param| format!("{}: {}", param.name, abi.render_type(param.ty_idx)))
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!("({}): {}", params, abi.render_type(method.return_ty_idx))
 }
