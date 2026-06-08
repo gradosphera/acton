@@ -139,6 +139,7 @@ export function TransactionDetails({
       accumulator + (message.info.type === "internal" ? message.info.value.coins : 0n),
     0n,
   )
+  const actionFee = actionPhase?.totalActionFees ?? undefined
   const endBalance = tx.accountBalanceAfter ?? getShardAccountBalance(tx.shardAccountAfter)
   const tickTockStorageFeesDue = tickTockDescription?.storagePhase.storageFeesDue
   const hasAccountStatusChange = tx.transaction.oldStatus !== tx.transaction.endStatus
@@ -414,12 +415,14 @@ export function TransactionDetails({
                 {fmt.formatCurrency(tx.transaction.totalFees.coins)}
               </div>
             </div>
-            <div className={styles.multiColumnItem}>
-              <div className={styles.multiColumnItemTitle}>Gas Fee</div>
-              <div className={`${styles.multiColumnItemValue}`}>
-                {computePhase.type === "skipped" ? "N/A" : fmt.formatCurrency(computePhase.gasFees)}
+            {actionPhase && (
+              <div className={styles.multiColumnItem}>
+                <div className={styles.multiColumnItemTitle}>Action Fee</div>
+                <div className={`${styles.multiColumnItemValue}`}>
+                  {actionFee === undefined ? "—" : fmt.formatCurrency(actionFee)}
+                </div>
               </div>
-            </div>
+            )}
             {tx.transaction.inMessage?.info.type === "internal" && (
               <div className={styles.multiColumnItem}>
                 <div className={styles.multiColumnItemTitle}>Forward Fee</div>

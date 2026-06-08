@@ -536,7 +536,9 @@ function getContractTypeLabels(
   interfaces?: readonly string[],
 ): string[] {
   const abiContractName = compilerAbi?.contract_name?.trim()
-  const interfaceLabels = (interfaces ?? []).map(value => getInterfaceLabel(value)).filter(Boolean)
+  const interfaceLabels = (interfaces ?? [])
+    .map(value => getInterfaceLabel(value))
+    .filter((value): value is string => value !== undefined)
 
   const labels = abiContractName ? [abiContractName, ...interfaceLabels] : interfaceLabels
   return labels.length > 0 ? [...new Set(labels)] : ["Unknown"]
