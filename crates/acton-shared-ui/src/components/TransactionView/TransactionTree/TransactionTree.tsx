@@ -658,6 +658,7 @@ export function TransactionTree({
               width={1.9}
               height={4.4}
               rx={0.95}
+              strokeWidth={0}
               fill="var(--transaction-tree-failed-badge-text)"
               stroke="var(--transaction-tree-failed-badge-mark-stroke)"
             />
@@ -665,6 +666,7 @@ export function TransactionTree({
               cx={10}
               cy={12.7}
               r={0.9}
+              strokeWidth={0}
               fill="var(--transaction-tree-failed-badge-text)"
               stroke="var(--transaction-tree-failed-badge-mark-stroke)"
             />
