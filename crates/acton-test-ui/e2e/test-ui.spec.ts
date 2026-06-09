@@ -72,6 +72,11 @@ const expectStableScreenshot = async (
   }
 }
 
+const openOwnerCanSendJettons = async (page: Page) => {
+  await page.getByRole("button", {name: /owner can send jettons/}).click()
+  await expect(page.getByTestId("test-details-title")).toContainText("owner can send jettons")
+}
+
 const openTrace4BodyAndActions = async (page: Page) => {
   await page.getByRole("button", {name: "Trace 4"}).click()
   await expect(page.getByRole("button", {name: "Trace 4"})).toBeVisible()
@@ -117,6 +122,69 @@ const openTrace4SendMessageAction = async (page: Page) => {
   await expect(page.getByText("Message Data", {exact: true}).last()).toBeVisible()
   await expect(page.getByText("Mode:", {exact: true})).toBeVisible()
   await expect(page.getByText("To:", {exact: true})).toBeVisible()
+}
+
+const openOwnerCanSendJettonsValueFlow = async (page: Page) => {
+  await openOwnerCanSendJettons(page)
+
+  await page.getByRole("tab", {name: "Transactions"}).click()
+  await expect(page.getByRole("tab", {name: "Transactions"})).toHaveAttribute(
+    "aria-selected",
+    "true",
+  )
+
+  await page.getByRole("button", {name: "Trace 4"}).click()
+  await expect(page.getByRole("button", {name: "Trace 4"})).toBeVisible()
+  await page.getByRole("button", {name: "Show Value Flow"}).click()
+  await expect(page.getByRole("button", {name: "Hide Value Flow"})).toBeVisible()
+
+  const valueFlow = page.getByTestId("value-flow-section")
+  await expect(valueFlow).toBeVisible()
+  return valueFlow
+}
+
+const openOwnerCanSendJettonsTreasuryDeploys = async (page: Page) => {
+  await openOwnerCanSendJettons(page)
+
+  await page.getByRole("tab", {name: "Transactions"}).click()
+  await expect(page.getByRole("tab", {name: "Transactions"})).toHaveAttribute(
+    "aria-selected",
+    "true",
+  )
+
+  const treasuryDeployToggle = page.getByRole("button", {name: /\d+ treasury deploys?/}).first()
+  await expect(treasuryDeployToggle).toBeVisible()
+  await treasuryDeployToggle.click()
+  await expect(treasuryDeployToggle).toHaveAttribute("aria-expanded", "true")
+  await expect(page.getByRole("button", {name: "Trace 1"})).toBeVisible()
+  await expect(page.getByRole("button", {name: "Trace 4"})).toBeVisible()
+}
+
+const openOwnerCanSendJettonsFeeSummaryTreasuryDeploys = async (page: Page) => {
+  await openOwnerCanSendJettons(page)
+  await expect(page.getByRole("tab", {name: "Info"})).toHaveAttribute("aria-selected", "true")
+  await expect(page.getByText("Fee Summary", {exact: true})).toBeVisible()
+
+  const treasuryDeployToggle = page.getByRole("button", {name: /\d+ treasury deploys?/}).first()
+  await expect(treasuryDeployToggle).toBeVisible()
+  await treasuryDeployToggle.click()
+  await expect(treasuryDeployToggle).toHaveAttribute("aria-expanded", "true")
+  await expect(page.getByRole("button", {name: /Trace 1/})).toBeVisible()
+  await expect(page.getByRole("button", {name: /Trace 4/})).toBeVisible()
+}
+
+const collapseNavigation = async (page: Page) => {
+  await page.getByRole("button", {name: /Collapse Sidebar/i}).click()
+  await expect(page.getByTestId("sidebar-slot")).toHaveAttribute("aria-hidden", "true")
+  await expect(page.getByRole("button", {name: "Expand sidebar"})).toBeVisible()
+}
+
+const openNavigationHoverPreview = async (page: Page) => {
+  await collapseNavigation(page)
+  await page.getByTestId("sidebar-peek-target").hover()
+  await expect(page.getByTestId("sidebar-slot")).toHaveAttribute("aria-hidden", "false")
+  await expect(page.getByPlaceholder("Filter tests...")).toBeVisible()
+  await expect(page.getByRole("button", {name: /owner can send jettons/})).toBeVisible()
 }
 
 const openUnionStorageDiff = async (page: Page) => {
@@ -213,6 +281,47 @@ test.describe("Test UI", () => {
       page.getByRole("region", {name: "Coverage source"}).getByText(/JettonWallet\.tolk/),
     ).toBeVisible()
     await expect(page.getByText(/Score \d+\.\d%/)).toBeVisible()
+  })
+
+  test("opens value flow for a jetton transfer trace", async ({actonUi, page}) => {
+    await page.goto(actonUi.baseUrl)
+
+    const valueFlow = await openOwnerCanSendJettonsValueFlow(page)
+
+    await expect(valueFlow.getByText("Account", {exact: true})).toBeVisible()
+    await expect(valueFlow.getByText("Balance Change", {exact: true})).toBeVisible()
+    await expect(valueFlow.getByText("Network Fee", {exact: true})).toBeVisible()
+    await expect(valueFlow.getByText(/TON/).first()).toBeVisible()
+  })
+
+  test("opens treasury deploy traces for a jetton transfer trace", async ({actonUi, page}) => {
+    await page.goto(actonUi.baseUrl)
+
+    await openOwnerCanSendJettonsTreasuryDeploys(page)
+  })
+
+  test("opens treasury deploy fee rows for a jetton transfer trace", async ({actonUi, page}) => {
+    await page.goto(actonUi.baseUrl)
+
+    await openOwnerCanSendJettonsFeeSummaryTreasuryDeploys(page)
+  })
+
+  test("collapses and expands navigation from a selected test", async ({actonUi, page}) => {
+    await page.goto(actonUi.baseUrl)
+
+    await openOwnerCanSendJettons(page)
+    await collapseNavigation(page)
+
+    await page.getByRole("button", {name: "Expand sidebar"}).click()
+    await expect(page.getByTestId("sidebar-slot")).toHaveAttribute("aria-hidden", "false")
+    await expect(page.getByRole("button", {name: /Collapse Sidebar/i})).toBeVisible()
+  })
+
+  test("opens navigation preview from the left edge hover target", async ({actonUi, page}) => {
+    await page.goto(actonUi.baseUrl)
+
+    await openOwnerCanSendJettons(page)
+    await openNavigationHoverPreview(page)
   })
 
   test("shows storage diff for a union storage variant switch", async ({actonUi, page}) => {
@@ -320,6 +429,44 @@ test.describe("Test UI", () => {
         fitTestDetailsContent: true,
         fullPage: true,
       })
+    })
+
+    test("matches jetton value flow", async ({actonUi, page}) => {
+      await page.goto(actonUi.baseUrl)
+
+      await openOwnerCanSendJettonsValueFlow(page)
+      await expectStableScreenshot(page, "test-ui-jetton-value-flow.png", {
+        fitTestDetailsContent: true,
+        fullPage: true,
+      })
+    })
+
+    test("matches expanded treasury deploy traces", async ({actonUi, page}) => {
+      await page.goto(actonUi.baseUrl)
+
+      await openOwnerCanSendJettonsTreasuryDeploys(page)
+      await expectStableScreenshot(page, "test-ui-expanded-treasury-deploys.png", {
+        fitTestDetailsContent: true,
+        fullPage: true,
+      })
+    })
+
+    test("matches fee summary expanded treasury deploys", async ({actonUi, page}) => {
+      await page.goto(actonUi.baseUrl)
+
+      await openOwnerCanSendJettonsFeeSummaryTreasuryDeploys(page)
+      await expectStableScreenshot(page, "test-ui-fee-summary-expanded-treasury-deploys.png", {
+        fitTestDetailsContent: true,
+        fullPage: true,
+      })
+    })
+
+    test("matches navigation hover preview", async ({actonUi, page}) => {
+      await page.goto(actonUi.baseUrl)
+
+      await openOwnerCanSendJettons(page)
+      await openNavigationHoverPreview(page)
+      await expectStableScreenshot(page, "test-ui-navigation-hover-preview.png")
     })
   })
 })

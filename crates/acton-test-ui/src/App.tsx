@@ -534,12 +534,14 @@ export const App: React.FC = () => {
         ].join(" ")}
         style={sidebarSlotStyle}
         aria-hidden={isSidebarCollapsed && !isSidebarPreviewOpen}
+        data-testid="sidebar-slot"
       >
         {isSidebarCollapsed && (
           <div
             className={styles.sidebarPeekTarget}
             onPointerEnter={showSidebarPreview}
             aria-hidden="true"
+            data-testid="sidebar-peek-target"
           />
         )}
         <div className={styles.sidebarViewport} onPointerLeave={hideSidebarPreview}>

@@ -1211,7 +1211,7 @@ export const TestDetails: React.FC<TestDetailsProps> = ({
       return (
         <>
           {isValueFlowExpanded && valueFlowItems.length > 0 && (
-            <div className={styles.valueFlowSection}>
+            <div className={styles.valueFlowSection} data-testid="value-flow-section">
               <ValueFlowTable items={valueFlowItems} contracts={contracts} />
             </div>
           )}

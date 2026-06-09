@@ -40,3 +40,6 @@ libraries.toml
 AGENTS.md
 block.tlb
 debug.entitlements
+.codegraph/
+.playwright-mcp/
+.mcp.json
