@@ -562,6 +562,7 @@ export const App: React.FC = () => {
           type="button"
           onClick={expandSidebar}
           className={styles.expandButton}
+          aria-label="Expand sidebar"
           title="Expand sidebar"
         >
           <DocsSidebarIcon />
@@ -585,9 +586,11 @@ export const App: React.FC = () => {
 
       <div className={styles.mainContent}>
         {(coverageLcov !== undefined || gasProfile !== undefined) && (
-          <div className={styles.viewTabs}>
+          <div className={styles.viewTabs} role="tablist" aria-label="Main view">
             <button
               type="button"
+              role="tab"
+              aria-selected={activeView === "tests"}
               className={`${styles.viewTab} ${activeView === "tests" ? styles.viewTabActive : ""}`}
               onClick={() => handleActiveViewChange("tests")}
             >
@@ -596,6 +599,8 @@ export const App: React.FC = () => {
             {coverageLcov !== undefined && (
               <button
                 type="button"
+                role="tab"
+                aria-selected={activeView === "coverage"}
                 className={`${styles.viewTab} ${
                   activeView === "coverage" ? styles.viewTabActive : ""
                 }`}
@@ -607,6 +612,8 @@ export const App: React.FC = () => {
             {gasProfile !== undefined && (
               <button
                 type="button"
+                role="tab"
+                aria-selected={activeView === "profile"}
                 className={`${styles.viewTab} ${
                   activeView === "profile" ? styles.viewTabActive : ""
                 }`}

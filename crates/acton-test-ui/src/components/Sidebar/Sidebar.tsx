@@ -195,6 +195,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
               type="button"
               className={`${styles.filterButton} ${statusFilter.has(status) ? styles.activeFilter : ""} ${styles[status.toLowerCase()]}`}
               onClick={() => toggleStatusFilter(status)}
+              aria-label={`Show ${status} tests`}
+              aria-pressed={statusFilter.has(status)}
               title={`Show ${status} tests`}
             >
               {getStatusIcon(status)}
@@ -214,6 +216,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 type="button"
                 className={`${styles.suiteHeader} ${hasFailed ? styles.suiteFailed : ""}`}
                 onClick={() => toggleSuite(suiteName)}
+                aria-expanded={!isCollapsed}
               >
                 <span className={styles.suiteToggle}>
                   {isCollapsed ? <FiChevronRight /> : <FiChevronDown />}
@@ -242,6 +245,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         type="button"
                         className={`${styles.testItem} ${isSelected ? styles.selected : ""} ${isFailed ? styles.testFailed : ""}`}
                         onClick={() => onSelectTest(report)}
+                        aria-current={isSelected ? "true" : undefined}
                       >
                         <span className={styles.testStatusIcon}>
                           {getStatusIcon(report.status)}
@@ -273,6 +277,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             theme={currentTheme}
             onToggleTheme={onToggleTheme}
             title={`Switch to ${currentTheme === "light" ? "dark" : "light"} theme`}
+            aria-label={`Switch to ${currentTheme === "light" ? "dark" : "light"} theme`}
           />
         </div>
       )}
