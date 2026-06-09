@@ -16,6 +16,18 @@ interface StableScreenshotOptions extends VisualSnapshotOptions {
   readonly fullPage?: boolean
 }
 
+interface GasProfileReport {
+  readonly total_gas: number
+  readonly contracts: readonly unknown[]
+  readonly tests?: readonly GasProfileTestReport[]
+}
+
+interface GasProfileTestReport {
+  readonly name: string
+  readonly total_gas: number
+  readonly contracts: readonly unknown[]
+}
+
 const waitForNextFrame = async (page: Page) => {
   await page.evaluate(async () => {
     await new Promise<void>(resolve => {
@@ -75,6 +87,150 @@ const expectStableScreenshot = async (
 const openOwnerCanSendJettons = async (page: Page) => {
   await page.getByRole("button", {name: /owner can send jettons/}).click()
   await expect(page.getByTestId("test-details-title")).toContainText("owner can send jettons")
+}
+
+const readGasProfile = async (page: Page, baseUrl: string): Promise<GasProfileReport> => {
+  const response = await page.request.get(`${baseUrl}/api/gas-profile`)
+  expect(response.ok()).toBeTruthy()
+  return (await response.json()) as GasProfileReport
+}
+
+const expectGasProfileViewer = async (page: Page) => {
+  const contractSelector = page.getByLabel("Contract gas profiles")
+  const flamegraph = page.getByRole("img", {name: /Gas flamegraph for/})
+  await expect(contractSelector).toBeVisible()
+  await expect(contractSelector.getByRole("button").first()).toBeVisible()
+  await expect(flamegraph).toBeVisible()
+  await expect(flamegraph.locator("svg").first()).toBeVisible()
+}
+
+const openGlobalGasProfile = async (page: Page) => {
+  const profileTab = page
+    .getByRole("tablist", {name: "Main view"})
+    .getByRole("tab", {name: "Profile"})
+  await expect(profileTab).toBeVisible()
+  await profileTab.click()
+  await expect(profileTab).toHaveAttribute("aria-selected", "true")
+  await expectGasProfileViewer(page)
+}
+
+const openSelectedTestGasProfile = async (page: Page) => {
+  await openOwnerCanSendJettons(page)
+
+  const profileTab = page
+    .getByRole("tablist", {name: "Test details"})
+    .getByRole("tab", {name: "Profile"})
+  await expect(profileTab).toBeVisible()
+  await profileTab.click()
+  await expect(profileTab).toHaveAttribute("aria-selected", "true")
+  await expectGasProfileViewer(page)
+}
+
+const openSelectedTestContractGasProfile = async (page: Page) => {
+  await openSelectedTestGasProfile(page)
+
+  const contractSelector = page.getByLabel("Contract gas profiles")
+  await expect(contractSelector.getByRole("button", {name: "Tests"})).toBeVisible()
+
+  const contractButton = contractSelector.getByRole("button", {name: "JettonWallet"})
+  await expect(contractButton).toBeVisible()
+  await contractButton.click()
+  await expect(page.getByRole("img", {name: "Gas flamegraph for JettonWallet"})).toBeVisible()
+}
+
+const findGasProfileFrameIndex = async (page: Page): Promise<number> => {
+  const flamegraph = page.getByTestId("gas-profile-flamegraph")
+  return await flamegraph.evaluate(element => {
+    const frames = [...element.querySelectorAll<SVGGElement>(".d3-flame-graph g.frame")].map(
+      (frame, index) => {
+        const datum = (
+          frame as Readonly<{
+            readonly __data__?: Readonly<{readonly data?: Record<string, unknown>}>
+          }>
+        ).__data__?.data
+        const rect = frame.querySelector<SVGRectElement>("rect")
+
+        return {
+          index,
+          name: typeof datum?.name === "string" ? datum.name : "",
+          selfGas: typeof datum?.selfGas === "number" ? datum.selfGas : 0,
+          width: rect?.getBoundingClientRect().width ?? 0,
+        }
+      },
+    )
+    if (frames.length === 0) {
+      throw new Error("Expected gas profile flamegraph to render at least one frame")
+    }
+
+    const recvInternalFrame = frames.find(
+      frame => frame.selfGas > 0 && frame.name === "recvInternal",
+    )
+
+    if (recvInternalFrame !== undefined) {
+      return recvInternalFrame.index
+    }
+
+    const selfFrame = frames.find(frame => frame.index > 0 && frame.selfGas > 0 && frame.width > 24)
+
+    return selfFrame?.index ?? frames.find(frame => frame.index > 0)?.index ?? 0
+  })
+}
+
+const openSelectedTestContractGasProfileFrameHover = async (page: Page) => {
+  await openSelectedTestContractGasProfile(page)
+
+  const flamegraph = page.getByTestId("gas-profile-flamegraph")
+  const frameIndex = await findGasProfileFrameIndex(page)
+  const targetFrame = flamegraph.locator(".d3-flame-graph g.frame").nth(frameIndex)
+  await expect(targetFrame).toBeVisible()
+  await targetFrame.locator("rect").hover()
+  await expect(page.locator(".d3-flame-graph-tip")).toBeVisible()
+}
+
+const openSelectedTestContractGasProfileInstructions = async (page: Page) => {
+  await openSelectedTestContractGasProfile(page)
+
+  const flamegraph = page.getByTestId("gas-profile-flamegraph")
+  const frameIndex = await findGasProfileFrameIndex(page)
+  const targetFrame = flamegraph.locator(".d3-flame-graph g.frame").nth(frameIndex)
+  await expect(targetFrame).toBeVisible()
+  await targetFrame.locator("rect").click()
+
+  const frameDetails = page.getByTestId("gas-profile-frame-details")
+  await expect(frameDetails).toBeVisible()
+  await expect(frameDetails.getByText("Total", {exact: true})).toBeVisible()
+  await frameDetails.getByRole("button", {name: "Show instruction statistics"}).click()
+
+  const instructionTable = page.getByTestId("gas-profile-instruction-stats-table")
+  await expect(instructionTable).toBeVisible()
+  await expect(instructionTable.getByRole("columnheader", {name: "Instruction"})).toBeVisible()
+  await expect(instructionTable.getByRole("columnheader", {name: "Gas"})).toBeVisible()
+  await expect(instructionTable.getByRole("columnheader", {name: "Samples"})).toBeVisible()
+}
+
+const openSelectedTestContractGasProfileSelfInstructions = async (page: Page) => {
+  await openSelectedTestContractGasProfileInstructions(page)
+
+  const scopeControls = page.getByRole("group", {name: "Instruction statistics scope"})
+  const selfButton = scopeControls.getByRole("button", {name: "Self"})
+  await expect(selfButton).toBeVisible()
+  await selfButton.click()
+  await expect(selfButton).toHaveAttribute("aria-pressed", "true")
+  await expect(
+    page.getByTestId("gas-profile-instruction-stats-table").getByRole("columnheader", {
+      name: "Share of Self",
+    }),
+  ).toBeVisible()
+}
+
+const openSelectedTestContractGasProfileStackOnlyInstructions = async (page: Page) => {
+  await openSelectedTestContractGasProfileInstructions(page)
+
+  const stackOnly = page.getByLabel("Stack only")
+  await expect(stackOnly).toBeVisible()
+  await stackOnly.check()
+  await expect(stackOnly).toBeChecked()
+  await expect(page.getByTestId("gas-profile-instruction-stats-table")).toBeVisible()
 }
 
 const openTrace4BodyAndActions = async (page: Page) => {
@@ -171,6 +327,20 @@ const openOwnerCanSendJettonsFeeSummaryTreasuryDeploys = async (page: Page) => {
   await expect(treasuryDeployToggle).toHaveAttribute("aria-expanded", "true")
   await expect(page.getByRole("button", {name: /Trace 1/})).toBeVisible()
   await expect(page.getByRole("button", {name: /Trace 4/})).toBeVisible()
+}
+
+const openTrace4FromFeeSummary = async (page: Page) => {
+  await openOwnerCanSendJettons(page)
+  await expect(page.getByRole("tab", {name: "Info"})).toHaveAttribute("aria-selected", "true")
+  await expect(page.getByText("Fee Summary", {exact: true})).toBeVisible()
+
+  await page.getByRole("button", {name: /Trace 4/}).click()
+  await expect(page.getByRole("tab", {name: "Transactions"})).toHaveAttribute(
+    "aria-selected",
+    "true",
+  )
+  await expect(page.getByRole("button", {name: "Trace 4"})).toHaveAttribute("aria-current", "true")
+  await expect(page.getByRole("button", {name: /^Transaction /}).first()).toBeVisible()
 }
 
 const collapseNavigation = async (page: Page) => {
@@ -283,6 +453,74 @@ test.describe("Test UI", () => {
     await expect(page.getByText(/Score \d+\.\d%/)).toBeVisible()
   })
 
+  test("opens global gas profile for a profiled jetton run", async ({profiledActonUi, page}) => {
+    await page.goto(profiledActonUi.baseUrl)
+
+    const gasProfile = await readGasProfile(page, profiledActonUi.baseUrl)
+    expect(gasProfile.total_gas).toBeGreaterThan(0)
+    expect(gasProfile.contracts.length).toBeGreaterThan(0)
+
+    await openGlobalGasProfile(page)
+  })
+
+  test("opens test gas profile tab when test execution profiling is enabled", async ({
+    profiledActonUi,
+    page,
+  }) => {
+    await page.goto(profiledActonUi.baseUrl)
+
+    const gasProfile = await readGasProfile(page, profiledActonUi.baseUrl)
+    const ownerTestProfile = gasProfile.tests?.find(profile =>
+      profile.name.includes("owner can send jettons"),
+    )
+    expect(ownerTestProfile?.total_gas ?? 0).toBeGreaterThan(0)
+    expect(ownerTestProfile?.contracts.length ?? 0).toBeGreaterThan(0)
+
+    await openSelectedTestGasProfile(page)
+  })
+
+  test("switches selected test gas profile from test execution to contract", async ({
+    profiledActonUi,
+    page,
+  }) => {
+    await page.goto(profiledActonUi.baseUrl)
+
+    await openSelectedTestContractGasProfile(page)
+  })
+
+  test("shows selected contract gas profile frame hover tooltip", async ({
+    profiledActonUi,
+    page,
+  }) => {
+    await page.goto(profiledActonUi.baseUrl)
+
+    await openSelectedTestContractGasProfileFrameHover(page)
+  })
+
+  test("opens selected contract gas profile instruction table", async ({profiledActonUi, page}) => {
+    await page.goto(profiledActonUi.baseUrl)
+
+    await openSelectedTestContractGasProfileInstructions(page)
+  })
+
+  test("switches selected contract gas profile instructions to self scope", async ({
+    profiledActonUi,
+    page,
+  }) => {
+    await page.goto(profiledActonUi.baseUrl)
+
+    await openSelectedTestContractGasProfileSelfInstructions(page)
+  })
+
+  test("switches selected contract gas profile instructions to stack only", async ({
+    profiledActonUi,
+    page,
+  }) => {
+    await page.goto(profiledActonUi.baseUrl)
+
+    await openSelectedTestContractGasProfileStackOnlyInstructions(page)
+  })
+
   test("opens value flow for a jetton transfer trace", async ({actonUi, page}) => {
     await page.goto(actonUi.baseUrl)
 
@@ -304,6 +542,12 @@ test.describe("Test UI", () => {
     await page.goto(actonUi.baseUrl)
 
     await openOwnerCanSendJettonsFeeSummaryTreasuryDeploys(page)
+  })
+
+  test("opens a trace from the fee summary table", async ({actonUi, page}) => {
+    await page.goto(actonUi.baseUrl)
+
+    await openTrace4FromFeeSummary(page)
   })
 
   test("collapses and expands navigation from a selected test", async ({actonUi, page}) => {
@@ -467,6 +711,101 @@ test.describe("Test UI", () => {
       await openOwnerCanSendJettons(page)
       await openNavigationHoverPreview(page)
       await expectStableScreenshot(page, "test-ui-navigation-hover-preview.png")
+    })
+
+    test("matches global gas profile", async ({profiledActonUi, page}) => {
+      await page.goto(profiledActonUi.baseUrl)
+
+      await openGlobalGasProfile(page)
+      await expectStableScreenshot(page, "test-ui-global-gas-profile.png")
+    })
+
+    test("matches selected test gas profile", async ({profiledActonUi, page}) => {
+      await page.goto(profiledActonUi.baseUrl)
+
+      await openSelectedTestGasProfile(page)
+      await expectStableScreenshot(page, "test-ui-selected-test-gas-profile.png", {
+        fitTestDetailsContent: true,
+        fullPage: true,
+      })
+    })
+
+    test("matches selected test contract gas profile", async ({profiledActonUi, page}) => {
+      await page.goto(profiledActonUi.baseUrl)
+
+      await openSelectedTestContractGasProfile(page)
+      await expectStableScreenshot(page, "test-ui-selected-test-contract-gas-profile.png", {
+        fitTestDetailsContent: true,
+        fullPage: true,
+      })
+    })
+
+    test("matches selected test contract gas profile frame hover", async ({
+      profiledActonUi,
+      page,
+    }) => {
+      await page.goto(profiledActonUi.baseUrl)
+
+      await openSelectedTestContractGasProfileFrameHover(page)
+      await expectStableScreenshot(
+        page,
+        "test-ui-selected-test-contract-gas-profile-frame-hover.png",
+        {
+          fitTestDetailsContent: true,
+          fullPage: true,
+        },
+      )
+    })
+
+    test("matches selected test contract gas profile instruction table", async ({
+      profiledActonUi,
+      page,
+    }) => {
+      await page.goto(profiledActonUi.baseUrl)
+
+      await openSelectedTestContractGasProfileInstructions(page)
+      await expectStableScreenshot(
+        page,
+        "test-ui-selected-test-contract-gas-profile-instructions.png",
+        {
+          fitTestDetailsContent: true,
+          fullPage: true,
+        },
+      )
+    })
+
+    test("matches selected test contract gas profile self instructions", async ({
+      profiledActonUi,
+      page,
+    }) => {
+      await page.goto(profiledActonUi.baseUrl)
+
+      await openSelectedTestContractGasProfileSelfInstructions(page)
+      await expectStableScreenshot(
+        page,
+        "test-ui-selected-test-contract-gas-profile-self-instructions.png",
+        {
+          fitTestDetailsContent: true,
+          fullPage: true,
+        },
+      )
+    })
+
+    test("matches selected test contract gas profile stack-only instructions", async ({
+      profiledActonUi,
+      page,
+    }) => {
+      await page.goto(profiledActonUi.baseUrl)
+
+      await openSelectedTestContractGasProfileStackOnlyInstructions(page)
+      await expectStableScreenshot(
+        page,
+        "test-ui-selected-test-contract-gas-profile-stack-only-instructions.png",
+        {
+          fitTestDetailsContent: true,
+          fullPage: true,
+        },
+      )
     })
   })
 })

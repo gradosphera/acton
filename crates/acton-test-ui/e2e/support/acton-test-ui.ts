@@ -28,12 +28,21 @@ interface RunningActonUi {
   readonly stop: () => Promise<void>
 }
 
+interface StartActonTestUiOptions {
+  readonly coverage?: boolean
+  readonly filter?: string
+  readonly gasProfile?: boolean
+  readonly gasProfileIncludeTests?: boolean
+}
+
 interface TestFixtures {
   readonly actonUi: RunningActonUi
+  readonly profiledActonUi: RunningActonUi
 }
 
 interface WorkerFixtures {
   readonly startedActonUi: RunningActonUi
+  readonly startedProfiledActonUi: RunningActonUi
 }
 
 export interface VisualSnapshotOptions {
@@ -56,6 +65,7 @@ const jettonSmokeFilter = [
   "transfer minimal value edge",
   unionStorageTestName,
 ].join("|")
+const profiledJettonFilter = "owner can send jettons"
 
 const unionStorageContractSource = `contract UnionStorage {
     author: "Acton"
@@ -403,7 +413,7 @@ const stopProcess = async (child: ChildProcess): Promise<void> => {
   })
 }
 
-const startActonTestUi = async (): Promise<RunningActonUi> => {
+const startActonTestUi = async (options: StartActonTestUiOptions = {}): Promise<RunningActonUi> => {
   const fixture = await createFixtureProject()
   let child: ChildProcess | undefined
 
@@ -416,15 +426,32 @@ const startActonTestUi = async (): Promise<RunningActonUi> => {
     await addUnionStorageFixture(fixture)
 
     const output = new ProcessOutput()
-    child = spawn(
-      actonBinary,
-      ["test", "--ui", "--ui-port", "0", "--coverage", "--filter", jettonSmokeFilter],
-      {
-        cwd: fixture.projectDir,
-        env: actonEnv(fixture),
-        stdio: ["ignore", "pipe", "pipe"],
-      },
-    )
+    const testArgs = [
+      "test",
+      "--ui",
+      "--ui-port",
+      "0",
+      "--filter",
+      options.filter ?? jettonSmokeFilter,
+    ]
+
+    if (options.coverage ?? true) {
+      testArgs.push("--coverage")
+    }
+
+    if (options.gasProfile === true) {
+      testArgs.push("--gas-profile", ".acton/test-ui-gas.cpuprofile")
+
+      if (options.gasProfileIncludeTests === true) {
+        testArgs.push("--gas-profile-include-tests")
+      }
+    }
+
+    child = spawn(actonBinary, testArgs, {
+      cwd: fixture.projectDir,
+      env: actonEnv(fixture),
+      stdio: ["ignore", "pipe", "pipe"],
+    })
 
     const baseUrl = await waitForServerUrl(child, output)
     await waitForHealth(baseUrl)
@@ -466,8 +493,31 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
     {scope: "worker", timeout: startupTimeoutMs + shutdownTimeoutMs},
   ],
 
+  startedProfiledActonUi: [
+    // Playwright requires fixture functions to receive an object destructuring pattern.
+    // eslint-disable-next-line no-empty-pattern
+    async ({}, use) => {
+      const running = await startActonTestUi({
+        coverage: false,
+        filter: profiledJettonFilter,
+        gasProfile: true,
+        gasProfileIncludeTests: true,
+      })
+      try {
+        await use(running)
+      } finally {
+        await running.stop()
+      }
+    },
+    {scope: "worker", timeout: startupTimeoutMs + shutdownTimeoutMs},
+  ],
+
   actonUi: async ({startedActonUi}, use) => {
     await use(startedActonUi)
+  },
+
+  profiledActonUi: async ({startedProfiledActonUi}, use) => {
+    await use(startedProfiledActonUi)
   },
 })
 

@@ -1316,6 +1316,8 @@ export const TestDetails: React.FC<TestDetailsProps> = ({
           {hasGasProfile && (
             <button
               type="button"
+              role="tab"
+              aria-selected={activeTab === "profile"}
               className={`${styles.tabTrigger} ${activeTab === "profile" ? styles.activeTabTrigger : ""}`}
               onClick={() => handleTabChange("profile")}
             >
@@ -1351,6 +1353,7 @@ export const TestDetails: React.FC<TestDetailsProps> = ({
                     type="button"
                     className={`${styles.traceTab} ${styles.treasuryDeployTraceTab} ${selectedTraceIndex === index ? styles.activeTraceTab : ""}`}
                     onClick={() => handleSelectTraceIndex(index)}
+                    aria-current={selectedTraceIndex === index ? "true" : undefined}
                   >
                     {formatTraceName(traceItem.name, index)}
                   </button>
@@ -1361,6 +1364,7 @@ export const TestDetails: React.FC<TestDetailsProps> = ({
                   type="button"
                   className={`${styles.traceTab} ${selectedTraceIndex === index ? styles.activeTraceTab : ""}`}
                   onClick={() => handleSelectTraceIndex(index)}
+                  aria-current={selectedTraceIndex === index ? "true" : undefined}
                 >
                   {formatTraceName(traceItem.name, index)}
                 </button>
