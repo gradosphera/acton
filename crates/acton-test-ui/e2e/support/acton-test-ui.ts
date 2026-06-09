@@ -37,11 +37,13 @@ interface StartActonTestUiOptions {
 
 interface TestFixtures {
   readonly actonUi: RunningActonUi
+  readonly fanoutGraphUi: RunningActonUi
   readonly profiledActonUi: RunningActonUi
 }
 
 interface WorkerFixtures {
   readonly startedActonUi: RunningActonUi
+  readonly startedFanoutGraphUi: RunningActonUi
   readonly startedProfiledActonUi: RunningActonUi
 }
 
@@ -51,6 +53,7 @@ export interface VisualSnapshotOptions {
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url))
 const repositoryRoot = path.resolve(currentDir, "../../../..")
+const fanoutGraphFixtureDir = path.resolve(currentDir, "../fixtures/fanout-graph")
 const actonBinary = process.env.ACTON_E2E_BIN ?? path.join(repositoryRoot, "target/debug/acton")
 const tempParent = process.env.ACTON_E2E_TMPDIR ?? "/tmp"
 const keepTemp = process.env.ACTON_E2E_KEEP_TEMP === "1"
@@ -59,6 +62,73 @@ const startupTimeoutMs = 45_000
 const shutdownTimeoutMs = 2000
 export const unionStorageTestName =
   "storage diff: union variant switch keeps overlapping fields visible"
+export const fanoutGraphVisualScenarios = [
+  {
+    testName: "single transaction graph has no outgoing messages",
+    traceName: "single node",
+    snapshotName: "test-ui-fanout-single-node.png",
+  },
+  {
+    testName: "fanout graph has three outgoing messages",
+    traceName: "fanout 3 leaves",
+    snapshotName: "test-ui-fanout-three-leaves.png",
+  },
+  {
+    testName: "short chain graph has one self call",
+    traceName: "short chain 1",
+    snapshotName: "test-ui-fanout-short-chain.png",
+  },
+  {
+    testName: "chain graph has four sequential self calls",
+    traceName: "chain 4",
+    snapshotName: "test-ui-fanout-chain-four.png",
+  },
+  {
+    testName: "tall chain graph has eight sequential self calls",
+    traceName: "tall chain 8",
+    snapshotName: "test-ui-fanout-tall-chain.png",
+  },
+  {
+    testName: "wide fanout graph has six outgoing messages",
+    traceName: "wide fanout 6",
+    snapshotName: "test-ui-fanout-wide-six.png",
+  },
+  {
+    testName: "binary graph branches and joins into leaves",
+    traceName: "binary depth 2",
+    snapshotName: "test-ui-fanout-binary-depth-two.png",
+  },
+  {
+    testName: "asymmetric graph mixes shallow leaves and tall branch",
+    traceName: "asymmetric shallow plus deep",
+    snapshotName: "test-ui-fanout-asymmetric.png",
+  },
+  {
+    testName: "dense branching graph has many internal nodes",
+    traceName: "dense branching depth 2",
+    snapshotName: "test-ui-fanout-dense-branching.png",
+  },
+  {
+    testName: "tall dense branching graph stresses internal levels",
+    traceName: "dense branching depth 3",
+    snapshotName: "test-ui-fanout-tall-dense-branching.png",
+  },
+  {
+    testName: "graph has internal and external out children",
+    traceName: "internal plus external-out",
+    snapshotName: "test-ui-fanout-external-out.png",
+  },
+  {
+    testName: "root transaction fails without children",
+    traceName: "failed root",
+    snapshotName: "test-ui-fanout-failed-root.png",
+  },
+  {
+    testName: "child transaction fails next to successful branch",
+    traceName: "successful and failed children",
+    snapshotName: "test-ui-fanout-mixed-failure.png",
+  },
+] as const
 const jettonSmokeFilter = [
   "deploy should create minter without bounce",
   "owner can send jettons",
@@ -66,6 +136,7 @@ const jettonSmokeFilter = [
   unionStorageTestName,
 ].join("|")
 const profiledJettonFilter = "owner can send jettons"
+const fanoutGraphFilter = fanoutGraphVisualScenarios.map(({testName}) => testName).join("|")
 
 const unionStorageContractSource = `contract UnionStorage {
     author: "Acton"
@@ -201,13 +272,18 @@ export const stabilizeVisualSnapshot = async (
   }, options.theme ?? "light")
 }
 
-const createFixtureProject = async (): Promise<FixtureProject> => {
+const createFixtureProject = async (projectName = "jetton"): Promise<FixtureProject> => {
   const tempDir = await fs.mkdtemp(path.join(tempParent, "acton-test-ui-e2e-"))
-  const projectDir = path.join(tempDir, "jetton")
+  const projectDir = path.join(tempDir, projectName)
   const homeDir = path.join(tempDir, "home")
   await fs.mkdir(homeDir, {recursive: true})
 
   return {tempDir, projectDir, homeDir}
+}
+
+const addFanoutGraphFixture = async (fixture: FixtureProject): Promise<void> => {
+  // The fanout fixture overlays the empty template, keeping generated .acton stdlib files.
+  await fs.cp(fanoutGraphFixtureDir, fixture.projectDir, {force: true, recursive: true})
 }
 
 const addUnionStorageFixture = async (fixture: FixtureProject): Promise<void> => {
@@ -478,12 +554,72 @@ const startActonTestUi = async (options: StartActonTestUiOptions = {}): Promise<
   }
 }
 
+const startFanoutGraphTestUi = async (): Promise<RunningActonUi> => {
+  const fixture = await createFixtureProject("fanout-graph")
+  let child: ChildProcess | undefined
+
+  try {
+    await runCommand(
+      actonBinary,
+      ["new", fixture.projectDir, "--template", "empty", "--name", "fanout-graph-ui-e2e"],
+      {cwd: repositoryRoot, env: actonEnv(fixture)},
+    )
+    await addFanoutGraphFixture(fixture)
+
+    const output = new ProcessOutput()
+    const testArgs = ["test", "--ui", "--ui-port", "0", "--filter", fanoutGraphFilter]
+
+    child = spawn(actonBinary, testArgs, {
+      cwd: fixture.projectDir,
+      env: actonEnv(fixture),
+      stdio: ["ignore", "pipe", "pipe"],
+    })
+
+    const baseUrl = await waitForServerUrl(child, output)
+    await waitForHealth(baseUrl)
+
+    return {
+      baseUrl,
+      stop: async () => {
+        if (child !== undefined) {
+          await stopProcess(child)
+        }
+        if (!keepTemp) {
+          await fs.rm(fixture.tempDir, {force: true, recursive: true})
+        }
+      },
+    }
+  } catch (error) {
+    if (child !== undefined) {
+      await stopProcess(child)
+    }
+    if (!keepTemp) {
+      await fs.rm(fixture.tempDir, {force: true, recursive: true})
+    }
+    throw error
+  }
+}
+
 export const test = base.extend<TestFixtures, WorkerFixtures>({
   startedActonUi: [
     // Playwright requires fixture functions to receive an object destructuring pattern.
     // eslint-disable-next-line no-empty-pattern
     async ({}, use) => {
       const running = await startActonTestUi()
+      try {
+        await use(running)
+      } finally {
+        await running.stop()
+      }
+    },
+    {scope: "worker", timeout: startupTimeoutMs + shutdownTimeoutMs},
+  ],
+
+  startedFanoutGraphUi: [
+    // Playwright requires fixture functions to receive an object destructuring pattern.
+    // eslint-disable-next-line no-empty-pattern
+    async ({}, use) => {
+      const running = await startFanoutGraphTestUi()
       try {
         await use(running)
       } finally {
@@ -514,6 +650,10 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
 
   actonUi: async ({startedActonUi}, use) => {
     await use(startedActonUi)
+  },
+
+  fanoutGraphUi: async ({startedFanoutGraphUi}, use) => {
+    await use(startedFanoutGraphUi)
   },
 
   profiledActonUi: async ({startedProfiledActonUi}, use) => {

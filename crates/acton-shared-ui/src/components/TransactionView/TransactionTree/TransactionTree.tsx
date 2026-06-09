@@ -2,7 +2,7 @@
 
 import type {Address} from "@ton/core"
 import type React from "react"
-import {useEffect, useMemo, useRef, useState} from "react"
+import {useEffect, useLayoutEffect, useMemo, useRef, useState} from "react"
 import {
   type CustomNodeElementProps,
   type RawNodeDatum,
@@ -63,6 +63,30 @@ interface TransactionTreeProps {
   readonly allContracts: readonly BackendContractInfo[]
   readonly onContractClick?: (address: string) => void
   readonly renderSourceLocation?: (location: SourceLocation) => React.ReactNode
+}
+
+interface TreeLayout {
+  readonly height: number
+  readonly width: number
+  readonly translate: {
+    readonly x: number
+    readonly y: number
+  }
+}
+
+const TREE_NODE_SIZE = {x: 200, y: 120} as const
+const TREE_SEPARATION = {siblings: 0.7, nonSiblings: 1} as const
+const TREE_MIN_SIZE = {height: 80, width: 800} as const
+const TREE_PADDING = {top: 8, right: 32, bottom: 8, left: 50} as const
+const TREE_EDGE_LABEL = {width: 150, height: 64, failedHeight: 84, x: -180, y: -40} as const
+
+const INITIAL_TREE_LAYOUT: TreeLayout = {
+  height: TREE_MIN_SIZE.height,
+  width: TREE_MIN_SIZE.width,
+  translate: {
+    x: TREE_PADDING.left,
+    y: TREE_MIN_SIZE.height / 2,
+  },
 }
 
 function EdgeTransactionTooltipContent({
@@ -187,38 +211,14 @@ export function TransactionTree({
 
   const [selectedTransaction, setSelectedTransaction] = useState<TransactionInfo | undefined>()
   const triggerRectReference = useRef<DOMRect | undefined>(undefined)
+  const treeWrapperRef = useRef<HTMLDivElement | null>(null)
+  const [treeLayout, setTreeLayout] = useState<TreeLayout>(INITIAL_TREE_LAYOUT)
 
   const rootTransactions = useMemo(() => {
     return transactions
       .filter(tx => !tx.parent)
       .sort((a, b) => Number(a.transaction.lt - b.transaction.lt))
   }, [transactions])
-
-  const calculateTreeDimensions = (data: RawNodeDatum): {height: number; width: number} => {
-    const getDepth = (node: RawNodeDatum, currentDepth = 0): number => {
-      if (!node.children || node.children.length === 0) {
-        return currentDepth
-      }
-      return Math.max(...node.children.map(child => getDepth(child, currentDepth + 1)))
-    }
-
-    const countNodes = (node: RawNodeDatum): number => {
-      if (!node.children || node.children.length === 0) {
-        return 1
-      }
-      return node.children.reduce((sum: number, child) => sum + countNodes(child), 0)
-    }
-
-    const totalNodes = countNodes(data)
-    const depth = getDepth(data)
-
-    const height = totalNodes <= 2 ? totalNodes * 80 + 20 : totalNodes * 100 + 100
-
-    return {
-      height: Math.max(100, height),
-      width: Math.max(800, depth * 200 + 200),
-    }
-  }
 
   const transactionMap = useMemo(() => {
     const map: Map<string, TransactionInfo> = new Map()
@@ -542,7 +542,12 @@ export function TransactionTree({
             className={styles.nodeCircleDefault}
           />
 
-          <foreignObject width="150" height="100" x="-180" y="-40">
+          <foreignObject
+            width={TREE_EDGE_LABEL.width}
+            height={TREE_EDGE_LABEL.height}
+            x={TREE_EDGE_LABEL.x}
+            y={TREE_EDGE_LABEL.y}
+          >
             <div className={styles.edgeText}>
               <div className={styles.topText}>
                 <p className={styles.edgeTextTitle}>{externalOutDestination}</p>
@@ -561,7 +566,10 @@ export function TransactionTree({
     const isSelected = nodeDatum.attributes?.isSelected as boolean
     const lt = nodeDatum.attributes?.lt as string
     const tx = transactionMap.get(lt)
-    const isFailed = nodeDatum.attributes?.success !== "✓"
+    const exitCode = (nodeDatum.attributes?.exitCode as string | undefined) ?? "0"
+    const hasFailureDetails = exitCode !== "0"
+    const successMark = nodeDatum.attributes?.success as string | undefined
+    const isFailed = successMark !== "✓"
     const nodeCircleClassName = [
       styles.nodeCircle,
       isSelected ? styles.nodeCircleSelected : undefined,
@@ -585,7 +593,7 @@ export function TransactionTree({
             xmlns="http://www.w3.org/2000/svg"
             className={styles.iconSvg}
           >
-            <title>External Out</title>
+            <title>Incoming Message</title>
             <path
               d="M0.400044 0.549983C0.648572 0.218612 1.11867 0.151455 1.45004 0.399983L3.45004 1.89998C3.6389 2.04162 3.75004 2.26392 3.75004 2.49998C3.75004 2.73605 3.6389 2.95834 3.45004 3.09998L1.45004 4.59998C1.11867 4.84851 0.648572 4.78135 0.400044 4.44998C0.151516 4.11861 0.218673 3.64851 0.550044 3.39998L1.75004 2.49998L0.550044 1.59998C0.218673 1.35145 0.151516 0.881354 0.400044 0.549983Z"
               fill="var(--text-muted)"
@@ -672,7 +680,12 @@ export function TransactionTree({
             />
           </g>
         )}
-        <foreignObject width="150" height="100" x="-180" y="-40">
+        <foreignObject
+          width={TREE_EDGE_LABEL.width}
+          height={hasFailureDetails ? TREE_EDGE_LABEL.failedHeight : TREE_EDGE_LABEL.height}
+          x={TREE_EDGE_LABEL.x}
+          y={TREE_EDGE_LABEL.y}
+        >
           <div
             className={styles.edgeText}
             role="note"
@@ -692,10 +705,9 @@ export function TransactionTree({
             </div>
             <div className={styles.bottomText}>
               <p className={styles.edgeTextContent}>{opcode}</p>
-              {nodeDatum.attributes?.exitCode && nodeDatum.attributes.exitCode !== "0" && (
+              {hasFailureDetails && (
                 <p className={styles.edgeTextContent}>
-                  Exit: {nodeDatum.attributes.exitCode as string} | Success:{" "}
-                  {nodeDatum.attributes.success === "✓" ? "true" : "false"}
+                  Exit: {exitCode} | Success: {successMark === "✓" ? "true" : "false"}
                 </p>
               )}
             </div>
@@ -717,8 +729,6 @@ export function TransactionTree({
     return styles.edgeStyle
   }
 
-  const treeDimensions = calculateTreeDimensions(treeData)
-
   useEffect(() => {
     // deselect transaction if we select other transaction details
     if (transactions.length >= 0) {
@@ -726,10 +736,57 @@ export function TransactionTree({
     }
   }, [transactions.length])
 
+  useLayoutEffect(() => {
+    const wrapper = treeWrapperRef.current
+    const treeGroup = wrapper?.querySelector<SVGGElement>(".rd3t-g")
+
+    if (!wrapper || !treeGroup) {
+      return
+    }
+
+    const wrapperRect = wrapper.getBoundingClientRect()
+    const groupRect = treeGroup.getBoundingClientRect()
+
+    if (groupRect.width === 0 || groupRect.height === 0) {
+      return
+    }
+
+    const groupLeft = groupRect.left - wrapperRect.left
+    const groupTop = groupRect.top - wrapperRect.top
+    const nextLayout: TreeLayout = {
+      height: Math.max(
+        TREE_MIN_SIZE.height,
+        Math.ceil(groupRect.height + TREE_PADDING.top + TREE_PADDING.bottom),
+      ),
+      width: Math.max(
+        TREE_MIN_SIZE.width,
+        Math.ceil(groupRect.width + TREE_PADDING.left + TREE_PADDING.right),
+      ),
+      translate: {
+        x: Math.round(treeLayout.translate.x + TREE_PADDING.left - groupLeft),
+        y: Math.round(treeLayout.translate.y + TREE_PADDING.top - groupTop),
+      },
+    }
+
+    const isSameLayout =
+      Math.abs(treeLayout.height - nextLayout.height) <= 1 &&
+      Math.abs(treeLayout.width - nextLayout.width) <= 1 &&
+      Math.abs(treeLayout.translate.x - nextLayout.translate.x) <= 1 &&
+      Math.abs(treeLayout.translate.y - nextLayout.translate.y) <= 1
+
+    if (!isSameLayout) {
+      setTreeLayout(nextLayout)
+    }
+  }, [treeData, treeLayout])
+
   return (
     <div className={styles.container}>
-      <div className={styles.treeContainer} style={{height: `${treeDimensions.height}px`}}>
-        <div className={styles.treeWrapper} style={{width: `${treeDimensions.width}px`}}>
+      <div className={styles.treeContainer} style={{height: `${treeLayout.height}px`}}>
+        <div
+          className={styles.treeWrapper}
+          ref={treeWrapperRef}
+          style={{width: `${treeLayout.width}px`}}
+        >
           <Tree
             data={treeData}
             orientation="horizontal"
@@ -753,11 +810,11 @@ export function TransactionTree({
                       .concat(event.target.x.toString(), "H")
                       .concat((event.target.y - 18).toString())
             }}
-            nodeSize={{x: 200, y: 120}}
-            separation={{siblings: 0.7, nonSiblings: 1}}
+            nodeSize={TREE_NODE_SIZE}
+            separation={TREE_SEPARATION}
             renderCustomNodeElement={renderCustomNodeElement}
             pathClassFunc={getDynamicPathClass}
-            translate={{x: 50, y: treeDimensions.height / 2}}
+            translate={treeLayout.translate}
             zoom={1}
             enableLegacyTransitions={false}
             collapsible={false}
