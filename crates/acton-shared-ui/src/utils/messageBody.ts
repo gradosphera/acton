@@ -561,6 +561,9 @@ const createBodyParser = (message: ParsableMessage): Slice | undefined => {
   return parser
 }
 
+const isBouncedInternalMessage = (message: ParsableMessage): boolean =>
+  message.info.type === "internal" && message.info.bounced
+
 const getOpcodeAfterBouncePrefix = (message: ParsableMessage): number | undefined => {
   const opcodeSlice = createBodyParser(message)
   if (!opcodeSlice || opcodeSlice.remainingBits < 32) {
@@ -619,6 +622,28 @@ const tryDecodeTextCommentBody = (message: ParsableMessage): ParsedTransactionBo
   }
 }
 
+const resolveCandidateOpcodeName = (
+  abi: ContractABI,
+  symbols: SymTable,
+  candidate: MessageCandidate,
+  opcode: number | undefined,
+): string | undefined => {
+  if (opcode === undefined) {
+    return undefined
+  }
+
+  return resolveOpcodeNameFromBodyType(abi, symbols, candidate.body_ty_idx, opcode)
+}
+
+const createBouncedOpcodeBody = (name: string, body: Slice): ParsedTransactionBody => ({
+  name,
+  value: {
+    kind: "object",
+    typeName: name,
+    entries: [{key: "body", value: toSerializedCellScalar("Slice", body.asCell())}],
+  },
+})
+
 const tryDecodeMessageWithCandidates = (
   message: ParsableMessage,
   abi: ContractABI,
@@ -634,22 +659,43 @@ const tryDecodeMessageWithCandidates = (
   }
 
   const ctx = new DynamicCtx(abi)
+  const bouncedInternal = isBouncedInternalMessage(message)
+  const opcode = bouncedInternal ? getOpcodeAfterBouncePrefix(message) : undefined
+  const skipGenericBouncedDecode = bouncedInternal && opcode !== undefined
+  const bouncedOpcodeName = bouncedInternal
+    ? candidates
+        .map(candidate => resolveCandidateOpcodeName(abi, ctx.symbols, candidate, opcode))
+        .find(name => name !== undefined)
+    : undefined
 
   for (const candidate of candidates) {
     const parser = baseSlice.clone()
+    const candidateOpcodeName = skipGenericBouncedDecode
+      ? resolveCandidateOpcodeName(abi, ctx.symbols, candidate, opcode)
+      : undefined
     try {
       const decoded: unknown = unpackFromSliceDynamic(ctx, candidate.body_ty_idx, parser) as unknown
       if (!hasAcceptableMessageDecodeRemainder(baseSlice, parser)) {
         continue
       }
 
-      return {
+      const parsedBody = {
         name: getBodyTypeName(ctx.symbols, candidate.body_ty_idx),
         value: toParsedValue(decoded, {symbols: ctx.symbols, tyIdx: candidate.body_ty_idx}),
       }
+
+      if (skipGenericBouncedDecode && !candidateOpcodeName) {
+        continue
+      }
+
+      return parsedBody
     } catch {
       continue
     }
+  }
+
+  if (bouncedOpcodeName) {
+    return createBouncedOpcodeBody(bouncedOpcodeName, baseSlice)
   }
 
   return undefined
