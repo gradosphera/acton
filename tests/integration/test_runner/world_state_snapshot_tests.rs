@@ -671,6 +671,7 @@ fn world_state_snapshot_helpers_reject_absolute_and_parent_escape_paths() {
         current_lt: 0,
         current_now: 123,
         random_seed: None,
+        ignore_chksig: false,
         config_boc64: DEFAULT_CONFIG.to_owned(),
         libraries_boc64: Vec::new(),
         accounts: Vec::new(),

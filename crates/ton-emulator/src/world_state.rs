@@ -34,6 +34,11 @@ const WORLD_STATE_SNAPSHOT_VERSION: u32 = 1;
 const FORK_ACCOUNT_CACHE_SCHEMA_VERSION: u32 = 1;
 const EXOTIC_LIBRARY_TAG: u8 = 2;
 
+#[allow(clippy::trivially_copy_pass_by_ref)]
+const fn is_false(value: &bool) -> bool {
+    !*value
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct WorldStateSnapshot {
     pub version: u32,
@@ -41,6 +46,8 @@ pub struct WorldStateSnapshot {
     pub current_now: u32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub random_seed: Option<String>,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub ignore_chksig: bool,
     pub config_boc64: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub libraries_boc64: Vec<String>,
@@ -639,6 +646,8 @@ pub struct WorldState {
     current_now: u32,
     /// Optional VM random seed used for future emulated transactions and get-methods.
     random_seed: Option<[u8; 32]>,
+    /// Whether future emulated transactions should bypass VM signature checks.
+    ignore_chksig: bool,
     /// Registered global library cells keyed by representation hash.
     libraries: FxHashMap<HashBytes, Cell>,
     /// Blockchain configuration
@@ -655,6 +664,7 @@ impl WorldState {
                 current_lt: 0,
                 current_now: 0,
                 random_seed: None,
+                ignore_chksig: false,
                 libraries: FxHashMap::default(),
                 config: DEFAULT_CONFIG_DICT.clone(),
             });
@@ -674,6 +684,7 @@ impl WorldState {
             current_lt: 0,
             current_now: 0,
             random_seed: None,
+            ignore_chksig: false,
             libraries: FxHashMap::default(),
             config: Arc::new(config),
         })
@@ -820,6 +831,17 @@ impl WorldState {
         self.random_seed
     }
 
+    /// Controls whether future emulated transactions bypass VM signature checks.
+    pub const fn set_ignore_chksig(&mut self, ignore: bool) {
+        self.ignore_chksig = ignore;
+    }
+
+    /// Returns whether future emulated transactions bypass VM signature checks.
+    #[must_use]
+    pub const fn ignore_chksig(&self) -> bool {
+        self.ignore_chksig
+    }
+
     pub fn snapshot(&self) -> anyhow::Result<WorldStateSnapshot> {
         let mut accounts = self
             .accounts_state
@@ -853,6 +875,7 @@ impl WorldState {
             current_lt: self.current_lt,
             current_now: self.current_now,
             random_seed: self.random_seed.map(hex::encode),
+            ignore_chksig: self.ignore_chksig,
             config_boc64: self.snapshot_config_b64()?.into_owned(),
             libraries_boc64,
             accounts,
@@ -896,6 +919,7 @@ impl WorldState {
                 })
             })
             .transpose()?;
+        state.ignore_chksig = snapshot.ignore_chksig;
 
         for lib_boc64 in snapshot.libraries_boc64 {
             state.register_lib(Boc::decode_base64(&lib_boc64)?);

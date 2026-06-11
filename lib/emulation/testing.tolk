@@ -301,6 +301,29 @@ fun testing.setRandomSeed(seed: uint256? = null): uint256 {
     return resolvedSeed;
 }
 
+/// Controls whether future emulated transactions bypass VM signature checks.
+///
+/// When enabled, the emulator treats TVM signature-checking instructions such as
+/// `CHKSIGNU` and `CHKSIGNS` as successful. This is useful for tests that need to
+/// exercise wallet or external-message flows without constructing a valid
+/// signature.
+///
+/// The setting is scoped to the current emulated world state and affects
+/// subsequent transaction execution paths such as [net.send],
+/// [net.sendExternal], [testing.processSingleTraceStep],
+/// [testing.createTraceIterationCursor], and [testing.runTickTock]. It does not
+/// affect get-method calls or broadcast sends to a real network.
+///
+/// Example:
+/// ```tolk
+/// testing.setChecksigIgnore(true);
+/// val result = net.sendExternal(message);
+/// testing.setChecksigIgnore(false);
+/// ```
+fun testing.setChecksigIgnore(ignore: bool): void {
+    ffi.setChecksigIgnore(ignore);
+}
+
 /// Topup an address with a specified amount of GRAM.
 ///
 /// Example:
@@ -586,6 +609,9 @@ fun ffi.setRandomSeed(seed: uint256): void
 
 fun ffi.generateRandomSeed(): uint256
     asm "60 EXTCALL"
+
+fun ffi.setChecksigIgnore(ignore: bool): void
+    asm "61 EXTCALL"
 
 fun ffi.setConfig(config: dict): bool
     asm "32 EXTCALL"

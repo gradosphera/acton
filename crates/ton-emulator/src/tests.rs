@@ -288,6 +288,31 @@ fn prepare_send_transaction_preserves_valid_remote_previous_lts() -> anyhow::Res
 }
 
 #[test]
+fn prepare_send_transaction_uses_world_state_ignore_chksig() -> anyhow::Result<()> {
+    let account_addr = std_addr(0, 0x45);
+    let account = shard_account(
+        account_addr.clone(),
+        123_456_789,
+        Some(body_with_u32(0x1234_5678)?),
+    )?;
+
+    let mut state = new_world_state()?;
+    state.set_ignore_chksig(true);
+    state.update_account(&account_addr, &account);
+    let message = make_internal_relaxed_message(
+        Some(int_addr(0, 0x11)),
+        IntAddr::Std(account_addr),
+        body_with_u32(0xabcd_ef01)?,
+    );
+    let libs = Default::default();
+
+    let prepared = Emulator::prepare_send_transaction(&mut state, to_cell(&message)?, &libs, None)?;
+
+    assert!(prepared.run_args.ignore_chksig);
+    Ok(())
+}
+
+#[test]
 fn prepare_send_transaction_merges_fresh_world_state_libraries() -> anyhow::Result<()> {
     let account_addr = std_addr(0, 0x46);
     let account = shard_account(
@@ -392,6 +417,37 @@ fn world_state_snapshot_round_trip_preserves_state() -> anyhow::Result<()> {
     let restored_snapshot = restored.snapshot()?;
 
     assert_eq!(restored_snapshot, snapshot);
+    Ok(())
+}
+
+#[test]
+fn world_state_snapshot_round_trip_preserves_ignore_chksig() -> anyhow::Result<()> {
+    let mut state = new_world_state()?;
+    state.set_ignore_chksig(true);
+
+    let snapshot = state.snapshot()?;
+    let json = serde_json::to_string(&snapshot)?;
+    let decoded_snapshot: WorldStateSnapshot = serde_json::from_str(&json)?;
+    let restored = WorldState::from_snapshot(decoded_snapshot)?;
+
+    assert!(snapshot.ignore_chksig);
+    assert!(restored.ignore_chksig());
+    Ok(())
+}
+
+#[test]
+fn world_state_snapshot_missing_ignore_chksig_defaults_false() -> anyhow::Result<()> {
+    let state = new_world_state()?;
+    let mut snapshot_json = serde_json::to_value(state.snapshot()?)?;
+    snapshot_json
+        .as_object_mut()
+        .expect("snapshot must serialize to an object")
+        .remove("ignore_chksig");
+
+    let decoded_snapshot: WorldStateSnapshot = serde_json::from_value(snapshot_json)?;
+    let restored = WorldState::from_snapshot(decoded_snapshot)?;
+
+    assert!(!restored.ignore_chksig());
     Ok(())
 }
 

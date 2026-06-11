@@ -3405,6 +3405,16 @@ fn set_random_seed_impl(ctx: &mut Context, _: &mut Tuple, seed: BigInt) -> anyho
     Ok(())
 }
 
+extension!(set_chksig_ignore in (Context) with (ignore: bool) using set_chksig_ignore_impl);
+const fn set_chksig_ignore_impl(
+    ctx: &mut Context,
+    _: &mut Tuple,
+    ignore: bool,
+) -> anyhow::Result<()> {
+    ctx.chain.world_state.set_ignore_chksig(ignore);
+    Ok(())
+}
+
 extension!(generate_random_seed in (Context) using generate_random_seed_impl);
 fn generate_random_seed_impl(_: &mut Context, stack: &mut Tuple) -> anyhow::Result<()> {
     let mut seed = [0u8; 32];
@@ -3658,6 +3668,7 @@ pub fn register_extensions<T: BaseExecutor>(executor: &mut T, ctx: &mut Context)
         58 => hide_trace_from_ui : 1,
         59 => set_random_seed : 1,
         60 => generate_random_seed : 0,
+        61 => set_chksig_ignore : 1,
         501 => call_tolk_function : 3,
     });
 }
