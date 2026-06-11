@@ -851,14 +851,14 @@ fn generate_from_storage(
     code.push_str("/// Creates a contract wrapper instance from the storage data\n");
     let _ = writeln!(
         code,
-        "fun {contract_name}.fromStorage(storage: {storage_name}, toShard: AddressShardingOptions? = null): {contract_name} {{"
+        "fun {contract_name}.fromStorage(storage: {storage_name}, toShard: AddressShardingOptions? = null, workchain: int8 = BASECHAIN): {contract_name} {{"
     );
     code.push_str("    val stateInit = ContractState {\n");
     let _ = writeln!(code, "        code: build(\"{contract_build_name}\"),");
     code.push_str("        data: storage.toCell(),\n");
     code.push_str("    };\n");
     code.push_str(
-        "    val address = AutoDeployAddress { stateInit, toShard }.calculateAddress();\n",
+        "    val address = AutoDeployAddress { workchain, stateInit, toShard }.calculateAddress();\n",
     );
     let _ = writeln!(code, "    return {contract_name} {{ address, stateInit }}");
     code.push_str("}\n");
@@ -886,14 +886,14 @@ fn generate_empty_from_storage(contract_name: &str, contract_build_name: &str) -
     code.push_str("/// Creates a contract wrapper instance from the storage data\n");
     let _ = writeln!(
         code,
-        "fun {contract_name}.fromStorage(toShard: AddressShardingOptions? = null): {contract_name} {{"
+        "fun {contract_name}.fromStorage(toShard: AddressShardingOptions? = null, workchain: int8 = BASECHAIN): {contract_name} {{"
     );
     code.push_str("    val stateInit = ContractState {\n");
     let _ = writeln!(code, "        code: build(\"{contract_build_name}\"),");
     code.push_str("        data: createEmptyCell(),\n");
     code.push_str("    };\n");
     code.push_str(
-        "    val address = AutoDeployAddress { stateInit, toShard }.calculateAddress();\n",
+        "    val address = AutoDeployAddress { workchain, stateInit, toShard }.calculateAddress();\n",
     );
     let _ = writeln!(code, "    return {contract_name} {{ address, stateInit }}");
     code.push_str("}\n");

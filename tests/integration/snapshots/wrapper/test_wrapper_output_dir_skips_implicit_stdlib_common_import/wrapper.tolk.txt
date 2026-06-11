@@ -15,12 +15,16 @@ struct Config {
 }
 
 /// Creates a contract wrapper instance from the storage data
-fun Config.fromStorage(storage: ConfigStorage, toShard: AddressShardingOptions? = null): Config {
+fun Config.fromStorage(
+    storage: ConfigStorage,
+    toShard: AddressShardingOptions? = null,
+    workchain: int8 = BASECHAIN,
+): Config {
     val stateInit = ContractState {
         code: build("config"),
         data: storage.toCell(),
     };
-    val address = AutoDeployAddress { stateInit, toShard }.calculateAddress();
+    val address = AutoDeployAddress { workchain, stateInit, toShard }.calculateAddress();
     return Config { address, stateInit };
 }
 

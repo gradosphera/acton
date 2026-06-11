@@ -205,11 +205,11 @@ Step 15 (step_in):
 
 Step 16 (step_in):
   Code:
-     22| ): JettonMinter {
-     23|     val stateInit = ContractState {
-     24|         code: build("JettonMinter"),
+     23| ): JettonMinter {
+     24|     val stateInit = ContractState {
+     25|         code: build("JettonMinter"),
                              ^^^^^^^^^^^^^^
-     25|         data: storage.toCell(),
+     26|         data: storage.toCell(),
   Variables:
     storage: MinterStorage
       totalSupply: coins = 0
@@ -217,16 +217,17 @@ Step 16 (step_in):
       nextAdminAddress: address? = null
       metadata: cell = 9 bits, 1 refs, hash: [HASH]
     toShard = <optimized out>
+    workchain: int8 = 0
   Registers:
     c4 (storage): cell = empty cell
 
 Step 17 (step_in):
   Code:
-     23|     val stateInit = ContractState {
-     24|         code: build("JettonMinter"),
-     25|         data: storage.toCell(),
+     24|     val stateInit = ContractState {
+     25|         code: build("JettonMinter"),
+     26|         data: storage.toCell(),
                        ^^^^^^^^^^^^^^^^
-     26|     };
+     27|     };
   Variables:
     storage: MinterStorage
       totalSupply: coins = 0
@@ -234,16 +235,17 @@ Step 17 (step_in):
       nextAdminAddress: address? = null
       metadata: cell = 9 bits, 1 refs, hash: [HASH]
     toShard = <optimized out>
+    workchain: int8 = 0
   Registers:
     c4 (storage): cell = empty cell
 
 Step 18 (step_in):
   Code:
-     21|     toShard: AddressShardingOptions? = null,
-     22| ): JettonMinter {
-     23|     val stateInit = ContractState {
+     22|     workchain: int8 = BASECHAIN,
+     23| ): JettonMinter {
+     24|     val stateInit = ContractState {
                  ^^^^^^^^^
-     24|         code: build("JettonMinter"),
+     25|         code: build("JettonMinter"),
   Variables:
     storage: MinterStorage = (last seen)
       totalSupply: coins = 0
@@ -251,16 +253,17 @@ Step 18 (step_in):
       nextAdminAddress: address? = null
       metadata: cell = 9 bits, 1 refs, hash: [HASH]
     toShard = <optimized out>
+    workchain: int8 = 0
   Registers:
     c4 (storage): cell = empty cell
 
 Step 19 (step_in):
   Code:
-     25|         data: storage.toCell(),
-     26|     };
-     27|     val address = AutoDeployAddress { stateInit, toShard }.calculateAddress();
-                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-     28|     return JettonMinter { address, stateInit };
+     26|         data: storage.toCell(),
+     27|     };
+     28|     val address = AutoDeployAddress { workchain, stateInit, toShard }.calculateAddress();
+                                               ^^^^^^^^^
+     29|     return JettonMinter { address, stateInit };
   Variables:
     storage: MinterStorage = (last seen)
       totalSupply: coins = 0
@@ -268,6 +271,7 @@ Step 19 (step_in):
       nextAdminAddress: address? = null
       metadata: cell = 9 bits, 1 refs, hash: [HASH]
     toShard = <optimized out>
+    workchain: int8 = 0
     stateInit: ContractState
       code: cell = 80 bits, 1 refs, hash: [HASH]
       data: cell = 273 bits, 1 refs, hash: [HASH]
@@ -276,11 +280,11 @@ Step 19 (step_in):
 
 Step 20 (step_in):
   Code:
-     26|     };
-     27|     val address = AutoDeployAddress { stateInit, toShard }.calculateAddress();
-     28|     return JettonMinter { address, stateInit };
+     27|     };
+     28|     val address = AutoDeployAddress { workchain, stateInit, toShard }.calculateAddress();
+     29|     return JettonMinter { address, stateInit };
                                    ^^^^^^^
-     29| }
+     30| }
   Variables:
     storage: MinterStorage = (last seen)
       totalSupply: coins = 0
@@ -288,6 +292,7 @@ Step 20 (step_in):
       nextAdminAddress: address? = null
       metadata: cell = 9 bits, 1 refs, hash: [HASH]
     toShard = <optimized out>
+    workchain: int8 = 0 (last seen)
     stateInit: ContractState
       code: cell = 80 bits, 1 refs, hash: [HASH]
       data: cell = 273 bits, 1 refs, hash: [HASH]
@@ -300,11 +305,11 @@ Step 20 (step_in):
 
 Step 21 (step_in):
   Code:
-     26|     };
-     27|     val address = AutoDeployAddress { stateInit, toShard }.calculateAddress();
-     28|     return JettonMinter { address, stateInit };
+     27|     };
+     28|     val address = AutoDeployAddress { workchain, stateInit, toShard }.calculateAddress();
+     29|     return JettonMinter { address, stateInit };
              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-     29| }
+     30| }
   Variables:
     storage: MinterStorage = (last seen)
       totalSupply: coins = 0
@@ -312,6 +317,7 @@ Step 21 (step_in):
       nextAdminAddress: address? = null
       metadata: cell = 9 bits, 1 refs, hash: [HASH]
     toShard = <optimized out>
+    workchain: int8 = 0 (last seen)
     stateInit: ContractState
       code: cell = 80 bits, 1 refs, hash: [HASH]
       data: cell = 273 bits, 1 refs, hash: [HASH]
@@ -777,11 +783,11 @@ Step 43 (step_in):
 
 Step 44 (step_in):
   Code:
-    206|
-    207| fun JettonMinter.getJettonData(self): JettonDataReply {
-    208|     return net.runGetMethod(self.address, "get_jetton_data");
+    207|
+    208| fun JettonMinter.getJettonData(self): JettonDataReply {
+    209|     return net.runGetMethod(self.address, "get_jetton_data");
                                                    ^^^^^^^^^^^^^^^^^
-    209| }
+    210| }
   Variables:
     self: JettonMinter
       address: address = 0:55260e4c760d080288961590a0da5265d2215aa47c92156cd2c2d6cf907dd588
@@ -1030,11 +1036,11 @@ Step 54 (step_in):
 
 Step 55 (step_in):
   Code:
-    206|
-    207| fun JettonMinter.getJettonData(self): JettonDataReply {
-    208|     return net.runGetMethod(self.address, "get_jetton_data");
+    207|
+    208| fun JettonMinter.getJettonData(self): JettonDataReply {
+    209|     return net.runGetMethod(self.address, "get_jetton_data");
              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    209| }
+    210| }
   Variables:
     self: JettonMinter
       address: address = 0:55260e4c760d080288961590a0da5265d2215aa47c92156cd2c2d6cf907dd588
@@ -1126,11 +1132,11 @@ Step 59 (step_in):
 
 Step 60 (step_in):
   Code:
-    210|
-    211| fun JettonMinter.getWalletAddress(self, ownerAddress: address): address {
-    212|     return net.runGetMethod(self.address, "get_wallet_address", [ownerAddress]);
+    211|
+    212| fun JettonMinter.getWalletAddress(self, ownerAddress: address): address {
+    213|     return net.runGetMethod(self.address, "get_wallet_address", [ownerAddress]);
                                                    ^^^^^^^^^^^^^^^^^^^^
-    213| }
+    214| }
   Variables:
     self: JettonMinter
       address: address = 0:55260e4c760d080288961590a0da5265d2215aa47c92156cd2c2d6cf907dd588
@@ -1643,11 +1649,11 @@ Step 78 (step_in):
 
 Step 79 (step_in):
   Code:
-    210|
-    211| fun JettonMinter.getWalletAddress(self, ownerAddress: address): address {
-    212|     return net.runGetMethod(self.address, "get_wallet_address", [ownerAddress]);
+    211|
+    212| fun JettonMinter.getWalletAddress(self, ownerAddress: address): address {
+    213|     return net.runGetMethod(self.address, "get_wallet_address", [ownerAddress]);
              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    213| }
+    214| }
   Variables:
     self: JettonMinter
       address: address = 0:55260e4c760d080288961590a0da5265d2215aa47c92156cd2c2d6cf907dd588
