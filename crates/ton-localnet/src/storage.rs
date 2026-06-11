@@ -148,7 +148,7 @@ impl AccountMeta {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct JettonMasterMeta {
     pub address: Addr,
-    pub admin_address: Addr,
+    pub admin_address: Option<Addr>,
     pub code_hash: Hash256,
     pub data_hash: Hash256,
     pub jetton_content: Value,

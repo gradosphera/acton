@@ -22,7 +22,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::broadcast;
 use tycho_types::boc::Boc;
 use tycho_types::boc::BocRepr;
@@ -634,13 +634,13 @@ impl Node {
             ton_indexer::jettons::get_jetton_data(addr.to_string(), code, data, libs.as_deref())
         {
             let wallet_code_hash = Hash256(*jetton_data.jetton_wallet_code.repr_hash().as_array());
-            let jetton_content = resolve_offchain_jetton_content(
+            let jetton_content = ton_indexer::jettons::resolve_jetton_content(
                 ton_indexer::jettons::parse_jetton_content(jetton_data.jetton_content),
             );
 
             let master_meta = JettonMasterMeta {
                 address: *addr,
-                admin_address: convert_addr(&jetton_data.admin_address),
+                admin_address: jetton_data.admin_address.as_ref().map(convert_addr),
                 code_hash,
                 data_hash,
                 jetton_content,
@@ -746,7 +746,7 @@ impl Node {
                     return false;
                 }
                 if let Some(addr) = admin_address
-                    && m.admin_address != addr
+                    && m.admin_address.as_ref() != Some(&addr)
                 {
                     return false;
                 }
@@ -2182,74 +2182,6 @@ fn create_dev_block_boc(seqno: Seqno, tx_hash: Hash256) -> anyhow::Result<BocByt
     Ok(Boc::encode(cell).into())
 }
 
-fn resolve_offchain_jetton_content(mut content: Value) -> Value {
-    let Some(uri) = content
-        .get("uri")
-        .and_then(Value::as_str)
-        .filter(|uri| uri.starts_with("https://") || uri.starts_with("http://"))
-        .map(ToOwned::to_owned)
-    else {
-        return content;
-    };
-
-    let Ok(client) = reqwest::blocking::Client::builder()
-        .timeout(Duration::from_secs(3))
-        .build()
-    else {
-        return content;
-    };
-    let Ok(response) = client.get(uri).send() else {
-        return content;
-    };
-    if !response.status().is_success() {
-        return content;
-    }
-    let Ok(remote_content) = response.json::<Value>() else {
-        return content;
-    };
-
-    merge_jetton_content(&mut content, &remote_content);
-    content
-}
-
-fn merge_jetton_content(content: &mut Value, remote_content: &Value) {
-    let Some(content) = content.as_object_mut() else {
-        return;
-    };
-    let Some(remote_content) = remote_content.as_object() else {
-        return;
-    };
-
-    for key in [
-        "name",
-        "description",
-        "image",
-        "image_data",
-        "symbol",
-        "decimals",
-        "amount_style",
-        "render_type",
-    ] {
-        if content
-            .get(key)
-            .and_then(Value::as_str)
-            .is_some_and(|value| !value.is_empty())
-        {
-            continue;
-        }
-
-        match remote_content.get(key) {
-            Some(Value::String(value)) if !value.is_empty() => {
-                content.insert(key.to_string(), Value::String(value.clone()));
-            }
-            Some(Value::Number(value)) => {
-                content.insert(key.to_string(), Value::String(value.to_string()));
-            }
-            _ => {}
-        }
-    }
-}
-
 fn library_ref_hash(cell: &Cell) -> anyhow::Result<Option<Hash256>> {
     if !cell.is_exotic() {
         return Ok(None);
@@ -2448,7 +2380,7 @@ mod tests {
             "decimals": 9
         });
 
-        merge_jetton_content(&mut content, &remote_content);
+        ton_indexer::jettons::merge_jetton_content(&mut content, &remote_content);
 
         assert_eq!(content["uri"], "https://example.test/jetton.json");
         assert_eq!(content["name"], "Tether USD");

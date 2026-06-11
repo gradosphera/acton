@@ -6,7 +6,7 @@ use num_bigint::BigInt;
 use num_traits::ToPrimitive;
 use thiserror::Error;
 use tycho_types::cell::{Cell, HashBytes, Load};
-use tycho_types::models::{IntAddr, ShardAccount, StdAddr};
+use tycho_types::models::{AnyAddr, IntAddr, ShardAccount, StdAddr};
 
 /// An error type for converting `TupleItem` to a Rust type.
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -56,9 +56,21 @@ impl<T: FromStack> FromStack for Option<T> {
     fn from_item(item: TupleItem) -> Result<Self, ArgError> {
         match item {
             TupleItem::Null => Ok(None),
-            other => T::from_item(other).map(Some),
+            other => match T::from_item(other.clone()) {
+                Ok(value) => Ok(Some(value)),
+                Err(_) if tuple_item_is_addr_none(&other) => Ok(None),
+                Err(err) => Err(err),
+            },
         }
     }
+}
+
+fn tuple_item_is_addr_none(item: &TupleItem) -> bool {
+    let (TupleItem::Cell(cell) | TupleItem::Slice(cell)) = item else {
+        return false;
+    };
+
+    matches!(cell.parse::<AnyAddr>().ok(), Some(AnyAddr::None))
 }
 
 /// Convert a `TupleItem` to a String.
@@ -477,6 +489,16 @@ mod tests {
 
         let some_val = Option::<BigInt>::from_item(TupleItem::Int(BigInt::from(7))).unwrap();
         assert_eq!(some_val, Some(BigInt::from(7)));
+    }
+
+    #[test]
+    fn test_option_int_addr_from_addr_none_slice() {
+        let mut builder = CellBuilder::new();
+        builder.store_uint(0, 2).unwrap();
+        let cell = builder.build().unwrap();
+
+        let parsed = Option::<IntAddr>::from_item(TupleItem::Slice(cell)).unwrap();
+        assert_eq!(parsed, None);
     }
 
     #[test]

@@ -1,5 +1,6 @@
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
+use std::time::Duration;
 use tvm_ffi::stack::Tuple;
 use tycho_types::cell::Cell;
 use tycho_types::dict::Dict;
@@ -24,6 +25,68 @@ pub(crate) fn parse_token_content(content_cell: Cell, keys: &[&str]) -> Value {
     }
 
     json!({})
+}
+
+pub(crate) fn resolve_offchain_token_content(mut content: Value, keys: &[&str]) -> Value {
+    let Some(uri) = content
+        .get("uri")
+        .and_then(Value::as_str)
+        .filter(|uri| uri.starts_with("https://") || uri.starts_with("http://"))
+        .map(ToOwned::to_owned)
+    else {
+        return content;
+    };
+
+    let Ok(client) = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(3))
+        .build()
+    else {
+        return content;
+    };
+    let Ok(response) = client.get(uri).send() else {
+        return content;
+    };
+    if !response.status().is_success() {
+        return content;
+    }
+    let Ok(remote_content) = response.json::<Value>() else {
+        return content;
+    };
+
+    merge_token_content(&mut content, &remote_content, keys);
+    content
+}
+
+pub(crate) fn merge_token_content(content: &mut Value, remote_content: &Value, keys: &[&str]) {
+    let Some(content) = content.as_object_mut() else {
+        return;
+    };
+    let Some(remote_content) = remote_content.as_object() else {
+        return;
+    };
+
+    for &key in keys {
+        if key == "uri" {
+            continue;
+        }
+        if content
+            .get(key)
+            .and_then(Value::as_str)
+            .is_some_and(|value| !value.is_empty())
+        {
+            continue;
+        }
+
+        match remote_content.get(key) {
+            Some(Value::String(value)) if !value.is_empty() => {
+                content.insert(key.to_owned(), Value::String(value.clone()));
+            }
+            Some(Value::Number(value)) => {
+                content.insert(key.to_owned(), Value::String(value.to_string()));
+            }
+            _ => {}
+        }
+    }
 }
 
 fn parse_onchain_content(content_cell: Cell, keys: &[&str]) -> Value {

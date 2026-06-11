@@ -1,5 +1,5 @@
 use crate::common::run_get_method;
-use crate::content::parse_token_content;
+use crate::content::{merge_token_content, parse_token_content, resolve_offchain_token_content};
 use num_bigint::BigInt;
 use serde_json::Value;
 use tycho_types::cell::Cell;
@@ -21,7 +21,7 @@ const JETTON_CONTENT_KEYS: &[&str] = &[
 pub struct JettonData {
     pub total_supply: BigInt,
     pub mintable: bool,
-    pub admin_address: IntAddr,
+    pub admin_address: Option<IntAddr>,
     pub jetton_content: Cell,
     pub jetton_wallet_code: Cell,
 }
@@ -57,4 +57,13 @@ pub fn get_jetton_wallet_data(
 #[must_use]
 pub fn parse_jetton_content(content_cell: Cell) -> Value {
     parse_token_content(content_cell, JETTON_CONTENT_KEYS)
+}
+
+#[must_use]
+pub fn resolve_jetton_content(content: Value) -> Value {
+    resolve_offchain_token_content(content, JETTON_CONTENT_KEYS)
+}
+
+pub fn merge_jetton_content(content: &mut Value, remote_content: &Value) {
+    merge_token_content(content, remote_content, JETTON_CONTENT_KEYS);
 }

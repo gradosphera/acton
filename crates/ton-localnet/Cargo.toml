@@ -34,7 +34,6 @@ rusqlite = { workspace = true }
 ton-indexer = { workspace = true }
 url = { workspace = true }
 include_dir = { workspace = true }
-reqwest = { workspace = true }
 
 [lints]
 workspace = true

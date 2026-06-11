@@ -30,7 +30,7 @@ pub fn map_jetton_masters(masters: &Vec<JettonMasterMeta>) -> Value {
 fn map_jetton_master(m: &JettonMasterMeta) -> Value {
     serde_json::json!({
         "address": m.address.to_string(),
-        "admin_address": m.admin_address.to_string(),
+        "admin_address": m.admin_address.map(|address| address.to_string()),
         "code_hash": m.code_hash.to_base64(),
         "data_hash": m.data_hash.to_base64(),
         "jetton_content": m.jetton_content,
