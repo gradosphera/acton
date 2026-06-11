@@ -191,7 +191,7 @@ pub async fn retrace_base_tx(
     };
 
     // retrieve block config to pass it to emulator
-    let block_config = get_block_config(net.clone(), &full_block).await?;
+    let block_config = get_block_config(net.clone(), mc_seqno).await?;
     // load an account snapshot *before* the master‑block N
     let mut shard_account = get_block_account(net.clone(), &base_tx.address, &full_block).await?;
 

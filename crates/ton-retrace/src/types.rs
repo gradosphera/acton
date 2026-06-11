@@ -293,63 +293,6 @@ pub struct TraceResult {
     pub emulated_tx: TraceEmulatedTx,
 }
 
-// --- API State Types ---
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type")]
-pub(crate) enum StateFromAPI {
-    #[serde(rename = "uninit")]
-    Uninit,
-    #[serde(rename = "active")]
-    Active {
-        data: Option<String>,
-        code: Option<String>,
-    },
-    #[serde(rename = "frozen")]
-    Frozen {
-        #[serde(rename = "stateHash")]
-        state_hash: String,
-    },
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub(crate) struct AccountFromAPI {
-    pub balance: AccountBalance,
-    pub state: StateFromAPI,
-    pub last: Option<LastTxRef>,
-    #[serde(rename = "storageStat")]
-    pub storage_stat: Option<StorageStat>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub(crate) struct AccountBalance {
-    pub coins: String,
-    pub currencies: HashMap<String, String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub(crate) struct LastTxRef {
-    pub lt: String,
-    pub hash: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub(crate) struct StorageStat {
-    #[serde(rename = "lastPaid")]
-    pub last_paid: u64,
-    #[serde(rename = "duePayment")]
-    pub due_payment: Option<String>,
-    pub used: StorageUsed,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub(crate) struct StorageUsed {
-    pub bits: u64,
-    pub cells: u64,
-    #[serde(rename = "publicCells")]
-    pub public_cells: Option<u64>,
-}
-
 // --- Blocks API ---
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
