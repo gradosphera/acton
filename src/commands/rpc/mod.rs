@@ -400,21 +400,53 @@ fn load_local_contract_candidate(
 }
 
 fn decode_storage(data: &Cell, abi: &ContractABI, network: &Network) -> anyhow::Result<String> {
-    let storage_ty_idx = abi
-        .storage
-        .storage_at_deployment_ty_idx
-        .or(abi.storage.storage_ty_idx)
-        .ok_or_else(|| anyhow!("Contract ABI does not declare storage"))?;
-    let mut parser = data.as_slice_allow_exotic();
-    let decoded = dynamic_unpack::unpack_from_slice(&mut parser, abi, storage_ty_idx)
-        .context("Failed to decode storage with compiler ABI")?;
-    if parser.size_bits() != 0 || parser.size_refs() != 0 {
-        anyhow::bail!(
-            "Storage cell has {} extra bits and {} extra refs after type decode",
-            parser.size_bits(),
-            parser.size_refs()
-        );
+    let mut storage_candidates = Vec::new();
+    if let Some(storage_ty_idx) = abi.storage.storage_ty_idx {
+        storage_candidates.push(storage_ty_idx);
     }
+    if let Some(storage_ty_idx) = abi.storage.storage_at_deployment_ty_idx
+        && !storage_candidates.contains(&storage_ty_idx)
+    {
+        storage_candidates.push(storage_ty_idx);
+    }
+    if storage_candidates.is_empty() {
+        anyhow::bail!("Contract ABI does not declare storage");
+    }
+
+    let mut errors = Vec::new();
+    let (storage_ty_idx, decoded) = storage_candidates
+        .into_iter()
+        .find_map(|storage_ty_idx| {
+            let mut parser = data.as_slice_allow_exotic();
+            let decoded = match dynamic_unpack::unpack_from_slice(&mut parser, abi, storage_ty_idx)
+            {
+                Ok(decoded) => decoded,
+                Err(err) => {
+                    errors.push(format!(
+                        "{}: failed to decode storage with compiler ABI: {err:#}",
+                        abi.render_param_type(storage_ty_idx)
+                    ));
+                    return None;
+                }
+            };
+            if parser.size_bits() != 0 || parser.size_refs() != 0 {
+                errors.push(format!(
+                    "{}: storage cell has {} extra bits and {} extra refs after type decode",
+                    abi.render_param_type(storage_ty_idx),
+                    parser.size_bits(),
+                    parser.size_refs()
+                ));
+                return None;
+            }
+            Some((storage_ty_idx, decoded))
+        })
+        .ok_or_else(|| {
+            anyhow!(
+                "Failed to decode storage with compiler ABI candidates: {}",
+                errors.join("; ")
+            )
+        })?;
+
     let rendered = render_unpacked_value_as_tolk_type(abi, decoded, storage_ty_idx);
     let options = PrettyRenderOptions {
         address_format: pretty_address_format(network),
