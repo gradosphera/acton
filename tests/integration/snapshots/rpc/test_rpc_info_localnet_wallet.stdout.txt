@@ -25,3 +25,4 @@ Get Methods
   get_subwallet_id(): uint32
 
 hint: To run get method: acton rpc call --net localnet [WALLET_ADDRESS_BASE] <METHOD> [ARGS...]
+hint: To view full ABI: acton doc abi WalletV4r2

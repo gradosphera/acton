@@ -28,3 +28,4 @@ Get Methods
   get_wallet_data(): JettonWalletDataReply
 
 hint: To run get method: acton rpc call --net localnet [WALLET_ADDRESS_BASE] <METHOD> [ARGS...]
+hint: To view full ABI: acton doc abi JettonWallet

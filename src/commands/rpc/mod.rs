@@ -180,7 +180,7 @@ pub(super) fn resolve_rpc_network(net: Option<String>) -> anyhow::Result<Network
         .map(|network| network.unwrap_or(Network::Testnet))
 }
 
-pub(super) fn load_rpc_config() -> anyhow::Result<ActonConfig> {
+pub(crate) fn load_rpc_config() -> anyhow::Result<ActonConfig> {
     let manifest_path = acton_config::config::manifest_path();
     match ActonConfig::load() {
         Ok(config) => Ok(config),
@@ -194,9 +194,9 @@ pub(super) fn load_rpc_config() -> anyhow::Result<ActonConfig> {
     }
 }
 
-pub(super) struct LocalContractMatch {
-    pub(super) contract_name: String,
-    pub(super) abi: Option<Arc<ContractABI>>,
+pub(crate) struct LocalContractMatch {
+    pub(crate) contract_name: String,
+    pub(crate) abi: Option<Arc<ContractABI>>,
 }
 
 pub(super) fn find_local_contract_match(
@@ -205,6 +205,60 @@ pub(super) fn find_local_contract_match(
 ) -> anyhow::Result<Option<LocalContractMatch>> {
     for candidate in load_local_contract_candidates(config)? {
         if &candidate.code_hash == code_hash {
+            return Ok(Some(LocalContractMatch {
+                contract_name: candidate.contract_name,
+                abi: candidate.abi,
+            }));
+        }
+    }
+
+    Ok(None)
+}
+
+pub(crate) fn find_local_contract_by_config_name(
+    contract_name: &str,
+    config: &ActonConfig,
+) -> anyhow::Result<Option<LocalContractMatch>> {
+    let Some(contracts) = config.contracts() else {
+        return Ok(None);
+    };
+    let normalized = normalize_contract_lookup_name(contract_name);
+    if normalized.is_empty() {
+        return Ok(None);
+    }
+
+    let mut file_cache = FileBuildCache::new(None).ok();
+    for (contract_id, contract) in contracts {
+        if !contract_config_matches_name(contract_id, contract, &normalized) {
+            continue;
+        }
+
+        let candidate =
+            load_local_contract_candidate(contract_id, contract, config, file_cache.as_mut())?;
+        return Ok(Some(LocalContractMatch {
+            contract_name: candidate.contract_name,
+            abi: candidate.abi,
+        }));
+    }
+
+    Ok(None)
+}
+
+pub(crate) fn find_local_contract_by_abi_name(
+    contract_name: &str,
+    config: &ActonConfig,
+) -> anyhow::Result<Option<LocalContractMatch>> {
+    let normalized = normalize_contract_lookup_name(contract_name);
+    if normalized.is_empty() {
+        return Ok(None);
+    }
+
+    for candidate in load_local_contract_candidates(config)? {
+        if candidate
+            .abi
+            .as_ref()
+            .is_some_and(|abi| normalize_contract_lookup_name(&abi.contract_name) == normalized)
+        {
             return Ok(Some(LocalContractMatch {
                 contract_name: candidate.contract_name,
                 abi: candidate.abi,
@@ -243,6 +297,19 @@ fn load_local_contract_candidates(
     }
 
     Ok(candidates)
+}
+
+fn contract_config_matches_name(
+    contract_id: &str,
+    contract: &ContractConfig,
+    normalized_name: &str,
+) -> bool {
+    normalize_contract_lookup_name(contract_id) == normalized_name
+        || normalize_contract_lookup_name(contract.display_name(contract_id)) == normalized_name
+}
+
+fn normalize_contract_lookup_name(name: &str) -> String {
+    name.trim().to_ascii_lowercase()
 }
 
 struct LocalContractCandidate {

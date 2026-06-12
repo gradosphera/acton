@@ -88,6 +88,7 @@ pub(super) fn rpc_info_cmd(
         (Some(_), false, _) => "local_code_hash",
         _ => "none",
     };
+    let doc_abi_command = has_abi.then(|| format_doc_abi_command(&contract_name_plain));
 
     let decoded_storage = match (&data, local_abi.as_deref(), catalog_abi.as_deref()) {
         (Some(data), Some(abi), _) => Some(decode_storage(data, abi, &network)?),
@@ -136,6 +137,7 @@ pub(super) fn rpc_info_cmd(
             contract_name: &contract_name_plain,
             contract_source,
             has_abi,
+            doc_abi_command: doc_abi_command.as_deref(),
             decoded_storage: decoded_storage.as_deref(),
             inspections: &inspections,
         })?;
@@ -202,6 +204,9 @@ pub(super) fn rpc_info_cmd(
     }
 
     print_get_method_hint(address_input, &network, block_number);
+    if let Some(command) = &doc_abi_command {
+        print_doc_abi_hint(command);
+    }
 
     Ok(())
 }
@@ -318,6 +323,7 @@ pub(super) struct JsonReportInput<'a> {
     pub(super) contract_name: &'a str,
     pub(super) contract_source: &'a str,
     pub(super) has_abi: bool,
+    pub(super) doc_abi_command: Option<&'a str>,
     pub(super) decoded_storage: Option<&'a str>,
     pub(super) inspections: &'a [InspectionReport],
 }
@@ -453,6 +459,9 @@ pub(super) fn json_report(input: JsonReportInput<'_>) -> anyhow::Result<Value> {
     if let Some(block_number) = input.block_number {
         output["block"] = json!(block_number);
     }
+    if let Some(command) = input.doc_abi_command {
+        output["contract"]["docAbiCommand"] = json!(command);
+    }
     if let Some(code) = input.code {
         output["account"]["codeHash"] = json!(hash_json(code.repr_hash()));
     }
@@ -464,6 +473,26 @@ pub(super) fn json_report(input: JsonReportInput<'_>) -> anyhow::Result<Value> {
     }
 
     Ok(output)
+}
+
+fn format_doc_abi_command(contract_name: &str) -> String {
+    format!("acton doc abi {}", shell_quote_arg(contract_name))
+}
+
+fn print_doc_abi_hint(command: &str) {
+    println!("{}", format!("hint: To view full ABI: {command}").dimmed());
+}
+
+fn shell_quote_arg(arg: &str) -> String {
+    if !arg.is_empty()
+        && arg
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-' | b'.' | b'/'))
+    {
+        return arg.to_owned();
+    }
+
+    format!("'{}'", arg.replace('\'', "'\\''"))
 }
 
 fn print_jetton_master(master: &JettonMasterInspection, warnings: &[String]) {

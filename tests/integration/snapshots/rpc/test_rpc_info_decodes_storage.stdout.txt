@@ -21,3 +21,4 @@ Get Methods
   owner(): address
 
 hint: To run get method: acton rpc call --net custom:mock 0:2222222222222222222222222222222222222222222222222222222222222222 <METHOD> [ARGS...]
+hint: To view full ABI: acton doc abi counter

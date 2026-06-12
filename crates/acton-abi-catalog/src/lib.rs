@@ -45,6 +45,11 @@ pub fn find_contract_by_code_hash(code_hash: &str) -> Option<&'static CatalogCon
 }
 
 #[must_use]
+pub fn find_contract_by_name(name: &str) -> Option<&'static CatalogContract> {
+    catalog().find_contract_by_name(name)
+}
+
+#[must_use]
 pub fn find_abi_by_code_hash(code_hash: &str) -> Option<Arc<ContractABI>> {
     find_contract_by_code_hash(code_hash).map(CatalogContract::abi)
 }
@@ -113,6 +118,19 @@ impl AbiCatalog {
     }
 
     #[must_use]
+    pub fn find_contract_by_name(&self, name: &str) -> Option<&CatalogContract> {
+        let normalized = normalize_contract_name(name);
+        if normalized.is_empty() {
+            return None;
+        }
+
+        self.contracts.iter().find(|contract| {
+            normalize_contract_name(&contract.display_name) == normalized
+                || normalize_contract_name(&contract.abi.contract_name) == normalized
+        })
+    }
+
+    #[must_use]
     pub fn find_abis_by_opcode(&self, opcode: u32) -> Vec<Arc<ContractABI>> {
         self.by_opcode
             .get(&opcode)
@@ -176,6 +194,10 @@ fn normalize_code_hash(code_hash: &str) -> Option<String> {
     Some(code_hash.to_ascii_lowercase())
 }
 
+fn normalize_contract_name(name: &str) -> String {
+    name.trim().to_ascii_lowercase()
+}
+
 fn opcodes_from_abi(abi: &ContractABI) -> Vec<u32> {
     let mut opcodes = Vec::new();
     let mut seen = HashSet::new();
@@ -221,6 +243,24 @@ mod tests {
 
         assert_eq!(contract.display_name, "WalletV1r1");
         assert_eq!(contract.abi().contract_name, "WalletV1r1");
+    }
+
+    #[test]
+    fn finds_contract_by_display_name() {
+        let contract = find_contract_by_name("WalletV1r1")
+            .expect("wallet v1r1 must be present in bundled catalog");
+
+        assert_eq!(contract.display_name, "WalletV1r1");
+        assert_eq!(contract.abi().contract_name, "WalletV1r1");
+    }
+
+    #[test]
+    fn finds_contract_by_compiler_abi_name() {
+        let contract = find_contract_by_name("AffluentAccount")
+            .expect("affluent account must be searchable by compiler ABI name");
+
+        assert_eq!(contract.display_name, "Account");
+        assert_eq!(contract.abi().contract_name, "AffluentAccount");
     }
 
     #[test]

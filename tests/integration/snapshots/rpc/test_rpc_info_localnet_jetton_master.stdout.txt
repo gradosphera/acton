@@ -30,3 +30,4 @@ Get Methods
   get_next_admin_address(): address?
 
 hint: To run get method: acton rpc call --net localnet [WALLET_ADDRESS_BASE] <METHOD> [ARGS...]
+hint: To view full ABI: acton doc abi JettonMinter

@@ -3,7 +3,7 @@ use acton::commands::build::{BuildCommandOptions, build_cmd};
 use acton::commands::check::check_cmd;
 use acton::commands::compile::compile_cmd;
 use acton::commands::disasm::disasm_cmd;
-use acton::commands::doc::doc_tvm_cmd;
+use acton::commands::doc::{doc_abi_cmd, doc_tvm_cmd};
 use acton::commands::docgen::docgen_cmd;
 use acton::commands::doctor::doctor_cmd;
 use acton::commands::fmt::fmt_cmd;
@@ -969,7 +969,7 @@ enum Commands {
         range: Option<String>,
     },
     #[command(
-        about = "Look up TVM reference documentation",
+        about = "Look up reference documentation and contract ABIs",
         after_help = detailed_help_pointer("doc")
     )]
     Doc {
@@ -1282,6 +1282,14 @@ pub enum LibraryCommand {
 
 #[derive(Subcommand, Clone)]
 pub enum DocCommand {
+    #[command(about = "Print compiler ABI for a local or bundled contract")]
+    Abi {
+        #[arg(
+            help = "Contract name, local contract id, or bundled catalog name",
+            add = ArgValueCompleter::new(complete_contracts)
+        )]
+        contract: String,
+    },
     #[command(about = "Lookup an instruction in the TVM specification")]
     Tvm {
         #[arg(
@@ -1484,7 +1492,7 @@ fn root_help(show_global_options: bool) -> StyledStr {
         ("compile", "<PATH>"),
         ("wrapper", "<CONTRACT_NAME>"),
         ("disasm", "[BOC_FILE]"),
-        ("doc", "tvm <QUERY...>"),
+        ("doc", "<COMMAND>"),
     ];
     let support_commands = vec![
         // ("ls", ""),
@@ -2306,6 +2314,7 @@ fn main() {
             range,
         } => fmt_cmd(paths, check, stdin, stdin_filepath, range),
         Commands::Doc { command } => match command {
+            DocCommand::Abi { contract } => doc_abi_cmd(&contract),
             DocCommand::Tvm {
                 instruction,
                 find,
