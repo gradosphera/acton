@@ -20,6 +20,7 @@ use tycho_types::dict::Dict;
 use tycho_types::models::{IntAddr, LibDescr, StdAddr, StdAddrFormat};
 
 mod jetton;
+mod multisig;
 
 const EXOTIC_LIBRARY_TAG: u8 = 2;
 
@@ -232,6 +233,7 @@ pub(super) struct InspectionReport {
 pub(super) enum InspectionDetails {
     JettonMaster(Box<JettonMasterInspection>),
     JettonWallet(Box<JettonWalletInspection>),
+    MultisigWallet(Box<MultisigWalletInspection>),
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -266,6 +268,24 @@ pub(super) struct JettonTokenJson {
     pub(super) mintable: bool,
     pub(super) admin_address: Option<AddressJson>,
     pub(super) wallet_code_hash: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct MultisigWalletInspection {
+    pub(super) address: AddressJson,
+    pub(super) next_order_seqno: String,
+    pub(super) allow_arbitrary_order_seqno: bool,
+    pub(super) threshold: String,
+    pub(super) signers: Vec<IndexedAddressJson>,
+    pub(super) proposers: Vec<IndexedAddressJson>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct IndexedAddressJson {
+    pub(super) index: u8,
+    pub(super) address: AddressJson,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -305,6 +325,7 @@ pub(super) struct JsonReportInput<'a> {
 pub(super) fn inspect_account(ctx: &InspectorContext<'_>) -> Vec<InspectionReport> {
     let mut reports = Vec::new();
     jetton::inspect(ctx, &mut reports);
+    multisig::inspect(ctx, &mut reports);
     reports
 }
 
@@ -400,6 +421,9 @@ fn print_inspection(report: &InspectionReport) {
     match &report.details {
         InspectionDetails::JettonMaster(master) => print_jetton_master(master, &report.warnings),
         InspectionDetails::JettonWallet(wallet) => print_jetton_wallet(wallet, &report.warnings),
+        InspectionDetails::MultisigWallet(wallet) => {
+            print_multisig_wallet(wallet, &report.warnings);
+        }
     }
 }
 
@@ -466,6 +490,46 @@ fn print_jetton_wallet(wallet: &JettonWalletInspection, warnings: &[String]) {
         print_metadata_summary(&token.metadata);
     }
     print_warnings(warnings);
+}
+
+fn print_multisig_wallet(wallet: &MultisigWalletInspection, warnings: &[String]) {
+    print_section("Multisig Wallet");
+    print_kv(
+        "Threshold",
+        format!(
+            "{} of {}",
+            wallet.threshold.green().bold(),
+            wallet.signers.len().to_string().white()
+        ),
+    );
+    print_kv("Next Order Seqno", format_multisig_seqno(wallet));
+    print_indexed_addresses("Signers", &wallet.signers);
+    print_indexed_addresses("Proposers", &wallet.proposers);
+    print_warnings(warnings);
+}
+
+fn format_multisig_seqno(wallet: &MultisigWalletInspection) -> String {
+    if wallet.allow_arbitrary_order_seqno {
+        "Arbitrary".green().to_string()
+    } else {
+        wallet.next_order_seqno.white().to_string()
+    }
+}
+
+fn print_indexed_addresses(label: &str, addresses: &[IndexedAddressJson]) {
+    if addresses.is_empty() {
+        print_kv(label, "<none>".dimmed().to_string());
+        return;
+    }
+
+    print_kv(label, addresses.len().to_string().white().to_string());
+    for entry in addresses {
+        println!(
+            "    {} {}",
+            format!("[{}]", entry.index).dimmed(),
+            format_address_label(&entry.address)
+        );
+    }
 }
 
 fn print_metadata_summary(metadata: &Value) {
