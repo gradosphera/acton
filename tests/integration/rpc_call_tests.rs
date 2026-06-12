@@ -811,6 +811,45 @@ fn test_rpc_call_decodes_address_result_from_cell_stack_item() {
 }
 
 #[test]
+fn test_rpc_call_decodes_any_address_none_result_from_cell_stack_item() {
+    let (project, log_dir, code_boc64) = build_rpc_call_project(
+        "rpc-call-any-address-none-cell-result",
+        RPC_CALL_TYPES_CONTRACT,
+    );
+    let (mock_url, mock_handle) = spawn_toncenter_v2_mock(vec![
+        toncenter_v2_account_info_with_code_ok_response(
+            1_234_000_000,
+            &code_boc64,
+            &counter_storage_boc64(7, MATCHED_INFO_OWNER_ADDRESS, 42),
+            "active",
+            "",
+            "999",
+            "c0ffee",
+        ),
+        toncenter_v2_run_get_method_ok_response(vec![TupleItem::Cell(addr_none_cell())], 0),
+    ]);
+    append_custom_network(project.path(), "mock", &format!("{mock_url}/api/v2"));
+
+    project
+        .acton()
+        .current_dir(project.path())
+        .arg("rpc")
+        .arg("call")
+        .arg(MATCHED_INFO_ADDRESS)
+        .arg("anyAddressReply")
+        .arg("--net")
+        .arg("custom:mock")
+        .env("ACTON_LOG_DIR", &log_dir)
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/rpc/test_rpc_call_any_address_none_cell_result.stdout.txt",
+        );
+
+    mock_handle.join().expect("mock server thread must finish");
+}
+
+#[test]
 fn test_rpc_call_decodes_slice_result_from_cell_stack_item() {
     let (project, log_dir, code_boc64) =
         build_rpc_call_project("rpc-call-slice-cell-result", RPC_CALL_EDGE_RETURN_CONTRACT);

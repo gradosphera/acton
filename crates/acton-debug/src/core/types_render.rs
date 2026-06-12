@@ -774,6 +774,17 @@ fn render_int_address(type_name: String, addr: &IntAddr) -> RenderedValue {
     }
 }
 
+fn render_any_address(type_name: String, addr: &AnyAddr) -> RenderedValue {
+    match addr {
+        AnyAddr::None => RenderedValue::typed_leaf("addr_none", type_name),
+        AnyAddr::Std(addr) => render_std_address(type_name, addr.to_string(), addr),
+        AnyAddr::Var(addr) => {
+            RenderedValue::typed_leaf(IntAddr::Var(addr.clone()).to_string(), type_name)
+        }
+        AnyAddr::Ext(addr) => RenderedValue::typed_leaf(addr.to_string(), type_name),
+    }
+}
+
 fn render_cell_address(
     symbols: &dyn UnpackSchema,
     type_name: String,
@@ -782,7 +793,14 @@ fn render_cell_address(
 ) -> RenderedValue {
     // TonCenter returns address stack values as cells, so ABI address fields
     // need this decode path before falling back to generic cell rendering.
-    if let Some(address) = decode_cell_like(cell).and_then(|cell| cell.parse::<IntAddr>().ok()) {
+    let decoded_cell = decode_cell_like(cell);
+    if matches!(symbols.ty_by_idx(ty_idx), Some(Ty::AddressAny))
+        && let Some(address) = decoded_cell
+            .as_ref()
+            .and_then(|cell| cell.parse::<AnyAddr>().ok())
+    {
+        render_any_address(type_name, &address)
+    } else if let Some(address) = decoded_cell.and_then(|cell| cell.parse::<IntAddr>().ok()) {
         render_int_address(type_name, &address)
     } else {
         typed_leaf_for_ty(symbols, ty_idx, render_cell_like(cell))
@@ -4740,6 +4758,61 @@ mod tests {
             rendered.dap_parts(),
             ("addr_none".to_owned(), Some("any_address".to_owned()))
         );
+    }
+
+    #[test]
+    fn render_address_any_none_from_cell_uses_addr_none() {
+        let mut builder = CellBuilder::new();
+        AnyAddr::None
+            .store_into(&mut builder, Cell::empty_context())
+            .unwrap();
+        let none_cell = builder.build().unwrap();
+        let stack_values = [VmStackValue::Cell(CellLike::Cell(Boc::encode_hex(
+            &none_cell,
+        )))];
+        let slots = [SlotValue::Live(&stack_values[0])];
+
+        let rendered =
+            debug_print_from_stack(&source_map_with_types(vec![Ty::AddressAny]), &slots, 0);
+
+        assert_eq!(
+            rendered.dap_parts(),
+            ("addr_none".to_owned(), Some("any_address".to_owned()))
+        );
+        assert_eq!(
+            rendered.to_pretty_string(PrettyRenderOptions::default()),
+            "addr_none"
+        );
+    }
+
+    #[test]
+    fn render_address_any_internal_from_cell_uses_address_value() {
+        let addr = StdAddr::new(0, HashBytes([0x33; 32]));
+        let mut builder = CellBuilder::new();
+        AnyAddr::Std(addr.clone())
+            .store_into(&mut builder, Cell::empty_context())
+            .unwrap();
+        let addr_cell = builder.build().unwrap();
+        let stack_values = [VmStackValue::Cell(CellLike::Cell(Boc::encode_hex(
+            &addr_cell,
+        )))];
+        let slots = [SlotValue::Live(&stack_values[0])];
+
+        let rendered =
+            debug_print_from_stack(&source_map_with_types(vec![Ty::AddressAny]), &slots, 0);
+
+        let RenderedValue::Address {
+            legacy_value,
+            value,
+            type_name,
+            ..
+        } = rendered
+        else {
+            panic!("expected address");
+        };
+        assert_eq!(type_name, "any_address");
+        assert_eq!(value, addr.to_string());
+        assert_eq!(legacy_value, addr.to_string());
     }
 
     #[test]
