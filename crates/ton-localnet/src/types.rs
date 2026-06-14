@@ -4,6 +4,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt::Display;
 use std::ops::{Deref, DerefMut};
 use std::str::FromStr;
+use tycho_types::boc::Boc;
 use tycho_types::models::{IntAddr, StdAddr};
 use tycho_types::prelude::HashBytes;
 
@@ -19,6 +20,11 @@ impl BocBytes {
     pub fn from_base64(s: &str) -> anyhow::Result<Self> {
         let bytes = base64::engine::general_purpose::STANDARD.decode(s)?;
         Ok(Self(bytes))
+    }
+
+    pub fn hash(&self) -> anyhow::Result<Hash256> {
+        let cell = Boc::decode(self)?;
+        Ok(Hash256(*cell.repr_hash().as_array()))
     }
 }
 
@@ -171,6 +177,30 @@ impl FromStr for Addr {
 impl Display for Addr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}:{}", self.workchain, hex::encode(self.addr))
+    }
+}
+
+impl From<IntAddr> for Addr {
+    fn from(value: IntAddr) -> Self {
+        Self::from(&value)
+    }
+}
+
+impl From<&IntAddr> for Addr {
+    fn from(value: &IntAddr) -> Self {
+        let mut bytes = [0u8; 32];
+        let (workchain, address) = match value {
+            IntAddr::Std(std) => (std.workchain as i32, std.address.0),
+            IntAddr::Var(var) => (var.workchain, {
+                // skipped from TVM 11
+                [0u8; 32]
+            }),
+        };
+        bytes.copy_from_slice(&address);
+        Self {
+            workchain,
+            addr: bytes,
+        }
     }
 }
 

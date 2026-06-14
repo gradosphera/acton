@@ -24,12 +24,6 @@ pub struct GlobalLibraryEntry {
     pub last_seen_lt: Lt,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct GlobalLibraryLookup {
-    pub hash: Hash256,
-    pub entry: Option<GlobalLibraryEntry>,
-}
-
 impl CellStore {
     #[must_use]
     pub fn new() -> Self {

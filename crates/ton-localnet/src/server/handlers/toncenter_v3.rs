@@ -8,7 +8,7 @@ use crate::server::models::{
     GetTransactionsV3Query, RunGetMethodRequest, SendBocRequest,
 };
 use crate::storage::{JettonMasterMeta, TraceNode};
-use crate::types::{Addr, Hash256};
+use crate::types::{Addr, BocBytes, Hash256};
 use axum::{
     Json,
     body::Bytes,
@@ -174,7 +174,7 @@ pub async fn emulate_trace_v1(State(node): State<Arc<Localnet>>, body: Bytes) ->
         return emulate_bad_request("invalid request: boc is required");
     }
 
-    if let Err(e) = base64::engine::general_purpose::STANDARD.decode(&boc) {
+    if let Err(e) = BocBytes::from_base64(&boc) {
         return emulate_bad_request(format!("invalid request: invalid boc: {e}"));
     }
 

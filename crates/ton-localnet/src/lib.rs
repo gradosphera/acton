@@ -1,5 +1,6 @@
 pub mod api;
 pub mod executor;
+mod indexer;
 mod localnet;
 pub mod node;
 mod node_snapshot;

@@ -412,10 +412,7 @@ impl Localnet {
         &self,
         boc_str: String,
     ) -> anyhow::Result<LocalnetAcceptedExternalMessage> {
-        let boc = base64::engine::general_purpose::STANDARD
-            .decode(&boc_str)
-            .context("Invalid BOC base64")?
-            .into();
+        let boc = BocBytes::from_base64(&boc_str).context("Invalid BOC base64")?;
         let (resp, rx) = oneshot::channel();
         self.tx.send(Request::SendBoc { boc, resp }).await?;
         rx.await?
@@ -425,10 +422,7 @@ impl Localnet {
         &self,
         boc_str: String,
     ) -> anyhow::Result<LocalnetAcceptedInternalMessage> {
-        let boc = base64::engine::general_purpose::STANDARD
-            .decode(&boc_str)
-            .context("Invalid BOC base64")?
-            .into();
+        let boc = BocBytes::from_base64(&boc_str).context("Invalid BOC base64")?;
         let (resp, rx) = oneshot::channel();
         self.tx.send(Request::SendInternalBoc { boc, resp }).await?;
         rx.await?
@@ -770,10 +764,7 @@ impl Localnet {
         ignore_chksig: Option<bool>,
         mc_block_seqno: Option<u32>,
     ) -> anyhow::Result<storage::EmulateTraceResult> {
-        let boc = base64::engine::general_purpose::STANDARD
-            .decode(&boc_str)
-            .context("Invalid BOC base64")?
-            .into();
+        let boc = BocBytes::from_base64(&boc_str).context("Invalid BOC base64")?;
         let (resp, rx) = oneshot::channel();
         self.tx
             .send(Request::EmulateTrace {
@@ -964,8 +955,8 @@ fn run_node_loop(
     db_path: Option<String>,
 ) -> anyhow::Result<()> {
     let executor = Box::new(TvmEmulatorAdapter::new()?);
-    let config_bytes = base64::engine::general_purpose::STANDARD.decode(DEFAULT_CONFIG)?;
-    let mut node = Node::with_db_path(executor, config_bytes.into(), state_source, db_path)?;
+    let config_boc = BocBytes::from_base64(DEFAULT_CONFIG)?;
+    let mut node = Node::with_db_path(executor, config_boc, state_source, db_path)?;
     node.streaming_events = Some(events_tx);
 
     tracing::info!("TON localnet started");
@@ -1750,10 +1741,10 @@ fn handle_get_consensus_block(node: &Node) -> anyhow::Result<LocalnetConsensusBl
 fn handle_get_libraries(node: &Node, hashes: &[Hash256]) -> anyhow::Result<Vec<LocalnetLibrary>> {
     let entries = node.get_libraries(hashes);
     let mut result = Vec::with_capacity(entries.len());
-    for lookup in entries {
-        if let Some(entry) = lookup.entry {
+    for (hash, entry) in hashes.iter().copied().zip(entries) {
+        if let Some(entry) = entry {
             result.push(LocalnetLibrary {
-                hash: lookup.hash,
+                hash: entry.hash,
                 found: true,
                 data: Some(entry.lib_boc),
                 publishers_count: entry.publishers.len(),
@@ -1761,7 +1752,7 @@ fn handle_get_libraries(node: &Node, hashes: &[Hash256]) -> anyhow::Result<Vec<L
             });
         } else {
             result.push(LocalnetLibrary {
-                hash: lookup.hash,
+                hash,
                 found: false,
                 data: None,
                 publishers_count: 0,
