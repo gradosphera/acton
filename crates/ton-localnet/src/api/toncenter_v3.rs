@@ -7,7 +7,6 @@ use crate::storage::{
     MessageInfo, MsgMeta, NftItemMeta, TraceNode, TransactionInfo,
 };
 use crate::types::{Addr, BocBytes, Hash256};
-use base64::Engine;
 use serde_json::value::Value;
 use std::collections::HashMap;
 use tvm_ffi::json_stack::stack_to_json;
@@ -311,7 +310,7 @@ fn map_v3_message(
         "ihr_disabled": true,
         "message_content": {
             "hash": msg.body_hash.to_base64(),
-            "body": base64::engine::general_purpose::STANDARD.encode(&msg.body),
+            "body": msg.body.to_base64(),
         },
     });
 
@@ -334,7 +333,7 @@ fn map_v3_message(
             "init_state".to_string(),
             serde_json::json!({
                 "hash": hash_boc_base64(&msg.init_state).unwrap_or_default(),
-                "body": base64::engine::general_purpose::STANDARD.encode(&msg.init_state),
+                "body": msg.init_state.to_base64(),
             }),
         );
     }
@@ -546,16 +545,10 @@ fn map_account_state_full(
 
     if include_boc {
         if let Some(code) = state.code.as_ref() {
-            mapped.insert(
-                "code_boc".to_string(),
-                Value::String(base64::engine::general_purpose::STANDARD.encode(code)),
-            );
+            mapped.insert("code_boc".to_string(), Value::String(code.to_base64()));
         }
         if let Some(data) = state.data.as_ref() {
-            mapped.insert(
-                "data_boc".to_string(),
-                Value::String(base64::engine::general_purpose::STANDARD.encode(data)),
-            );
+            mapped.insert("data_boc".to_string(), Value::String(data.to_base64()));
         }
     }
 
@@ -1255,8 +1248,7 @@ fn map_stack_entry(entry: Value) -> Value {
 }
 
 fn encode_optional_boc(data: Option<&BocBytes>) -> String {
-    data.map(|c| base64::engine::general_purpose::STANDARD.encode(c))
-        .unwrap_or_default()
+    data.map(BocBytes::to_base64).unwrap_or_default()
 }
 
 fn zero_hash_base64() -> String {

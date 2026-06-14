@@ -1,7 +1,6 @@
 use crate::node::Node;
 use crate::storage::{self, AccountStatus, JettonMasterMeta, NftItemMeta};
 use crate::types::{Addr, Hash256};
-use base64::Engine;
 use tycho_types::boc::Boc;
 
 impl Node {
@@ -13,18 +12,9 @@ impl Node {
     }
 
     pub(crate) fn clear_detected_assets(&mut self, addr: &Addr) {
-        self.history.jetton_masters.remove(addr);
-        self.history.jetton_wallets.remove(addr);
-        self.history.nft_items.remove(addr);
-    }
-
-    pub(crate) fn ensure_jetton_master_detected(&mut self, addr: &Addr) -> anyhow::Result<()> {
-        if self.history.jetton_masters.contains_key(addr) {
-            return Ok(());
-        }
-
-        let _ = self.get_address_information(addr);
-        self.detect_jetton_masters(addr)
+        self.history.jetton_masters.shift_remove(addr);
+        self.history.jetton_wallets.shift_remove(addr);
+        self.history.nft_items.shift_remove(addr);
     }
 
     pub(crate) fn detect_jetton_wallets(&mut self, addr: &Addr) -> anyhow::Result<()> {
@@ -52,9 +42,7 @@ impl Node {
 
         let code = Boc::decode(&code_boc)?;
         let data = Boc::decode(&data_boc)?;
-        let libs = self
-            .build_vm_global_libs_boc()?
-            .map(|boc| base64::engine::general_purpose::STANDARD.encode(boc));
+        let libs = self.build_vm_global_libs_boc()?.map(|boc| boc.to_base64());
 
         if let Some(wallet_data) = ton_indexer::jettons::get_jetton_wallet_data(
             addr.to_string(),
@@ -103,9 +91,7 @@ impl Node {
 
         let code = Boc::decode(&code_boc)?;
         let data = Boc::decode(&data_boc)?;
-        let libs = self
-            .build_vm_global_libs_boc()?
-            .map(|boc| base64::engine::general_purpose::STANDARD.encode(boc));
+        let libs = self.build_vm_global_libs_boc()?.map(|boc| boc.to_base64());
 
         if let Some(jetton_data) =
             ton_indexer::jettons::get_jetton_data(addr.to_string(), code, data, libs.as_deref())

@@ -1,11 +1,10 @@
 use crate::executor::TvmEmulatorAdapter;
 use crate::node::{Node, StateSource};
 use crate::storage;
-use crate::storage::{AccountStatus, BlockMeta, EMPTY_CELL_BASE64, MsgMeta, TransactionInfo};
+use crate::storage::{AccountStatus, BlockMeta, MsgMeta, TransactionInfo};
 use crate::streaming::StreamingCommitEvent;
 use crate::types::{Addr, BocBytes, Hash256, Lt, Seqno};
 use anyhow::Context;
-use base64::Engine;
 use crc::{CRC_16_XMODEM, Crc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -1155,7 +1154,7 @@ fn process_loop_request(node: &mut Node, req: Request) {
             offset,
             resp,
         } => {
-            let res = node.get_jetton_masters(address, admin_address, limit, offset);
+            let res = handle_get_jetton_masters(node, address, admin_address, limit, offset);
             let _ = resp.send(res);
         }
         Request::GetJettonWallets {
@@ -1167,7 +1166,8 @@ fn process_loop_request(node: &mut Node, req: Request) {
             offset,
             resp,
         } => {
-            let res = node.get_jetton_wallets(
+            let res = handle_get_jetton_wallets(
+                node,
                 address,
                 owner_address,
                 jetton_address,
@@ -1187,7 +1187,8 @@ fn process_loop_request(node: &mut Node, req: Request) {
             offset,
             resp,
         } => {
-            let res = node.get_nft_items(
+            let res = handle_get_nft_items(
+                node,
                 address,
                 owner_address,
                 collection_address,
@@ -1295,7 +1296,7 @@ fn handle_get_address_info(
     Ok(LocalnetAccountState {
         address,
         account_state_hash: meta.account_hash,
-        balance: meta.balance.unwrap_or(0),
+        balance: meta.balance,
         code,
         code_hash: meta.code_hash,
         data,
@@ -1306,6 +1307,124 @@ fn handle_get_address_info(
         sync_utime,
         frozen_hash: meta.frozen_hash,
     })
+}
+
+fn handle_get_jetton_masters(
+    node: &Node,
+    address: Option<Addr>,
+    admin_address: Option<Addr>,
+    limit: usize,
+    offset: usize,
+) -> anyhow::Result<Vec<storage::JettonMasterMeta>> {
+    Ok(node
+        .iter_jetton_masters()
+        .filter(|master| {
+            if let Some(addr) = address
+                && master.address != addr
+            {
+                return false;
+            }
+            if let Some(addr) = admin_address
+                && master.admin_address != Some(addr)
+            {
+                return false;
+            }
+            true
+        })
+        .skip(offset)
+        .take(limit)
+        .cloned()
+        .collect())
+}
+
+fn handle_get_jetton_wallets(
+    node: &Node,
+    address: Option<Addr>,
+    owner_address: Option<Addr>,
+    jetton_address: Option<Addr>,
+    exclude_zero_balance: bool,
+    limit: usize,
+    offset: usize,
+) -> anyhow::Result<Vec<storage::JettonWalletMeta>> {
+    Ok(node
+        .iter_jetton_wallets()
+        .filter(|wallet| {
+            if let Some(addr) = address
+                && wallet.address != addr
+            {
+                return false;
+            }
+            if let Some(addr) = owner_address
+                && wallet.owner_address != addr
+            {
+                return false;
+            }
+            if let Some(addr) = jetton_address
+                && wallet.jetton_address != addr
+            {
+                return false;
+            }
+            if exclude_zero_balance && wallet.balance == 0 {
+                return false;
+            }
+            true
+        })
+        .skip(offset)
+        .take(limit)
+        .cloned()
+        .collect())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn handle_get_nft_items(
+    node: &Node,
+    address: Option<Addr>,
+    owner_address: Option<Addr>,
+    collection_address: Option<Addr>,
+    index: Option<String>,
+    sort_by_last_transaction_lt: bool,
+    limit: usize,
+    offset: usize,
+) -> anyhow::Result<Vec<storage::NftItemMeta>> {
+    let items = node.iter_nft_items().filter(|item| {
+        if let Some(addr) = address
+            && item.address != addr
+        {
+            return false;
+        }
+        if let Some(addr) = owner_address
+            && item.owner_address != Some(addr)
+        {
+            return false;
+        }
+        if let Some(addr) = collection_address
+            && item.collection_address != Some(addr)
+        {
+            return false;
+        }
+        if let Some(expected_index) = &index
+            && &item.index != expected_index
+        {
+            return false;
+        }
+        true
+    });
+
+    if sort_by_last_transaction_lt {
+        let mut items = items.cloned().collect::<Vec<_>>();
+        items.sort_by(|a, b| {
+            b.last_transaction_lt
+                .cmp(&a.last_transaction_lt)
+                .then_with(|| a.address.cmp(&b.address))
+        });
+        let start = offset.min(items.len());
+        let end = start.saturating_add(limit).min(items.len());
+        items.truncate(end);
+        items.drain(..start);
+        return Ok(items);
+    }
+
+    Ok(items.skip(offset).take(limit).cloned().collect())
 }
 
 fn handle_get_transactions(
@@ -1466,22 +1585,11 @@ fn handle_run_get_method(
     let block_id = block_header.block_id();
     let last_transaction_id = meta.last_tx_id();
 
-    let code_boc = meta.code_hash.and_then(|h| node.get_cell(&h)).map_or_else(
-        || EMPTY_CELL_BASE64.to_owned(),
-        |b| base64::engine::general_purpose::STANDARD.encode(b),
-    );
-
-    let data_boc = meta.data_hash.and_then(|h| node.get_cell(&h)).map_or_else(
-        || EMPTY_CELL_BASE64.to_owned(),
-        |b| base64::engine::general_purpose::STANDARD.encode(b),
-    );
+    let code_boc = node.get_cell_or_empty(meta.code_hash).to_base64();
+    let data_boc = node.get_cell_or_empty(meta.data_hash).to_base64();
     let libs = node
         .build_vm_global_libs_boc()?
-        .map_or_else(String::new, |boc| {
-            base64::engine::general_purpose::STANDARD.encode(boc)
-        });
-
-    let balance_tokens = meta.balance.unwrap_or(0);
+        .map_or_else(String::new, |boc| boc.to_base64());
 
     let args = RunGetMethodArgs {
         code: code_boc,
@@ -1489,7 +1597,7 @@ fn handle_run_get_method(
         method_id,
         address: address.to_string(),
         unixtime: SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as i64,
-        balance: balance_tokens.to_string(),
+        balance: meta.balance.to_string(),
         rand_seed: "0000000000000000000000000000000000000000000000000000000000000000".to_owned(),
         gas_limit: "10000000".to_owned(),
         debug_enabled: false,
@@ -1511,19 +1619,14 @@ fn handle_run_get_method(
         .context("Execution failed")?;
 
     match res {
-        GetMethodResult::Success(s) => {
-            let stack_bytes = base64::engine::general_purpose::STANDARD
-                .decode(s.stack.as_ref())
-                .unwrap_or_default();
-            Ok(LocalnetRunGetMethodResult {
-                gas_used: s.gas_used.parse().unwrap_or(0),
-                stack: stack_bytes.into(),
-                exit_code: s.vm_exit_code,
-                vm_log: s.vm_log,
-                block_id,
-                last_transaction_id,
-            })
-        }
+        GetMethodResult::Success(s) => Ok(LocalnetRunGetMethodResult {
+            gas_used: s.gas_used.parse().unwrap_or(0),
+            stack: BocBytes::from_base64(s.stack.as_ref()).unwrap_or_default(),
+            exit_code: s.vm_exit_code,
+            vm_log: s.vm_log,
+            block_id,
+            last_transaction_id,
+        }),
         GetMethodResult::Error(e) => anyhow::bail!("Get method error: {e:?}"),
     }
 }

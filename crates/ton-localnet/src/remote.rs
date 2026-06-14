@@ -63,7 +63,7 @@ pub(crate) fn account_meta_from_shard_account(
         return Ok(AccountMeta {
             account_hash,
             status: AccountStatus::Nonexist,
-            balance: Some(0),
+            balance: 0,
             last_trans_lt: Some(shard_account.last_trans_lt),
             last_trans_hash: Some(Hash256(*shard_account.last_trans_hash.as_array())),
             code_hash: None,
@@ -92,7 +92,7 @@ pub(crate) fn account_meta_from_shard_account(
     Ok(AccountMeta {
         account_hash,
         status,
-        balance: Some(balance),
+        balance,
         last_trans_lt: Some(shard_account.last_trans_lt),
         last_trans_hash: Some(Hash256(*shard_account.last_trans_hash.as_array())),
         code_hash,

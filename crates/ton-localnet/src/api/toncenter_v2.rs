@@ -59,7 +59,7 @@ pub fn map_transaction(tx: &LocalnetTransaction) -> Value {
         "address": { "@type": "accountAddress", "account_address": tx.address.to_string() },
         "account": tx.address.to_string(),
         "utime": tx.utime,
-        "data": base64::engine::general_purpose::STANDARD.encode(&tx.data),
+        "data": tx.data.to_base64(),
         "success": tx.success,
         "exit_code": tx.exit_code,
         "transaction_id": map_internal_transaction_id(&tx.transaction_id),
@@ -76,7 +76,7 @@ pub fn map_transaction_std(tx: &LocalnetTransaction) -> Value {
         "@type": "raw.transaction",
         "address": map_account_address(&tx.address),
         "utime": tx.utime,
-        "data": base64::engine::general_purpose::STANDARD.encode(&tx.data),
+        "data": tx.data.to_base64(),
         "transaction_id": map_internal_transaction_id(&tx.transaction_id),
         "fee": tx.total_fees.to_string(),
         "storage_fee": tx.storage_fees.to_string(),
@@ -104,8 +104,8 @@ pub fn map_message(msg: &crate::localnet::LocalnetMessage) -> Value {
         "body_hash": msg.body_hash.to_base64(),
         "msg_data": {
             "@type": "msg.dataRaw",
-            "body": base64::engine::general_purpose::STANDARD.encode(&msg.body),
-            "init_state": base64::engine::general_purpose::STANDARD.encode(&msg.init_state)
+            "body": msg.body.to_base64(),
+            "init_state": msg.init_state.to_base64()
         },
         "extra_currencies": []
     })
@@ -128,8 +128,8 @@ pub fn map_message_std(msg: &crate::localnet::LocalnetMessage) -> Value {
         "body_hash": msg.body_hash.to_base64(),
         "msg_data": {
             "@type": "msg.dataRaw",
-            "body": base64::engine::general_purpose::STANDARD.encode(&msg.body),
-            "init_state": base64::engine::general_purpose::STANDARD.encode(&msg.init_state)
+            "body": msg.body.to_base64(),
+            "init_state": msg.init_state.to_base64()
         },
         "extra_currencies": []
     })
@@ -270,7 +270,7 @@ pub fn map_libraries(libs: &[LocalnetLibrary]) -> Value {
                 serde_json::json!({
                     "@type": "smc.libraryEntry",
                     "hash": lib.hash.to_base64(),
-                    "data": base64::engine::general_purpose::STANDARD.encode(data),
+                    "data": data.to_base64(),
                 })
             })
             .collect::<Vec<_>>()
@@ -325,7 +325,7 @@ pub fn map_config_info(config: &BocBytes) -> Value {
         "@type": "configInfo",
         "config": {
             "@type": "tvm.cell",
-            "bytes": base64::engine::general_purpose::STANDARD.encode(config),
+            "bytes": config.to_base64(),
         }
     })
 }
@@ -431,8 +431,7 @@ pub fn map_unpack_address(addr: &StdAddr) -> Value {
 }
 
 fn encode_optional_boc(data: Option<&BocBytes>) -> String {
-    data.map(|c| base64::engine::general_purpose::STANDARD.encode(c))
-        .unwrap_or_default()
+    data.map(BocBytes::to_base64).unwrap_or_default()
 }
 
 fn map_internal_transaction_id(id: &LocalnetTransactionId) -> Value {

@@ -1,7 +1,5 @@
 use crate::types::{BocBytes, Lt};
 use anyhow::Context;
-use base64::Engine;
-use base64::engine::general_purpose::STANDARD;
 use ton_executor::ExecutorVerbosity;
 use ton_executor::message::{EmulationResult, Executor, RunTransactionArgs};
 use tycho_types::boc::Boc;
@@ -80,16 +78,16 @@ impl TvmExecutor for TvmEmulatorAdapter {
         libs: Option<&BocBytes>,
     ) -> anyhow::Result<ExecResult> {
         // 1. Prepare inputs
-        let config_b64 = STANDARD.encode(config);
+        let config_b64 = config.to_base64();
         self.inner
             .set_config(&config_b64)
             .context("Failed to set config")?;
 
-        let in_msg_b64 = STANDARD.encode(in_msg);
-        let shard_account_b64 = STANDARD.encode(shard_account);
+        let in_msg_b64 = in_msg.to_base64();
+        let shard_account_b64 = shard_account.to_base64();
 
         let args = RunTransactionArgs {
-            libs: libs.map(|value| STANDARD.encode(value)),
+            libs: libs.map(BocBytes::to_base64),
             shard_account: shard_account_b64,
             now: ctx.gen_utime,
             lt: ctx.lt,

@@ -1,5 +1,6 @@
 use crate::localnet::{LocalnetBlockId, LocalnetTransactionId};
 use crate::types::{Addr, BocBytes, Hash256, Lt, Seqno};
+use indexmap::IndexMap;
 use rusqlite::{Connection, params};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -7,8 +8,6 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 use std::fmt::Display;
 use std::sync::{Arc, Mutex};
 use tycho_types::models::{StdAddr, StdAddrFormat};
-
-pub const EMPTY_CELL_BASE64: &str = "te6cckEBAQEAAgAAAEysuc0=";
 
 pub struct CellStore {
     pub conn: Option<Arc<Mutex<Connection>>>,
@@ -121,7 +120,8 @@ impl Display for AccountStatus {
 pub struct AccountMeta {
     pub account_hash: Hash256,
     pub status: AccountStatus,
-    pub balance: Option<u128>,
+    #[serde(default)]
+    pub balance: u128,
     pub last_trans_lt: Option<Lt>,
     pub last_trans_hash: Option<Hash256>,
     pub code_hash: Option<Hash256>,
@@ -327,9 +327,9 @@ pub struct History {
     pub msg_by_hash: HashMap<Hash256, MsgMeta>,
     pub msg_to_tx: HashMap<Hash256, Hash256>,
     pub address_names: HashMap<Addr, String>,
-    pub jetton_masters: HashMap<Addr, JettonMasterMeta>,
-    pub jetton_wallets: HashMap<Addr, JettonWalletMeta>,
-    pub nft_items: HashMap<Addr, NftItemMeta>,
+    pub jetton_masters: IndexMap<Addr, JettonMasterMeta>,
+    pub jetton_wallets: IndexMap<Addr, JettonWalletMeta>,
+    pub nft_items: IndexMap<Addr, NftItemMeta>,
     pub compiler_abis: HashMap<Hash256, Value>,
 }
 
@@ -352,9 +352,9 @@ impl History {
             msg_by_hash: HashMap::new(),
             msg_to_tx: HashMap::new(),
             address_names,
-            jetton_masters: HashMap::new(),
-            jetton_wallets: HashMap::new(),
-            nft_items: HashMap::new(),
+            jetton_masters: IndexMap::new(),
+            jetton_wallets: IndexMap::new(),
+            nft_items: IndexMap::new(),
             compiler_abis: HashMap::new(),
         }
     }
@@ -370,9 +370,9 @@ impl History {
             msg_by_hash: HashMap::new(),
             msg_to_tx: HashMap::new(),
             address_names,
-            jetton_masters: HashMap::new(),
-            jetton_wallets: HashMap::new(),
-            nft_items: HashMap::new(),
+            jetton_masters: IndexMap::new(),
+            jetton_wallets: IndexMap::new(),
+            nft_items: IndexMap::new(),
             compiler_abis: HashMap::new(),
         }
     }

@@ -239,7 +239,7 @@ impl Node {
             .or_insert_with(|| AccountMeta {
                 account_hash: Hash256([0; 32]),
                 status: AccountStatus::Active,
-                balance: Some(GIVER_BALANCE),
+                balance: GIVER_BALANCE,
                 last_trans_lt: None,
                 last_trans_hash: None,
                 code_hash: None,
@@ -379,7 +379,7 @@ impl Node {
         let tx_hash = exec_result.tx_boc.hash()?;
         self.cas.put(exec_result.tx_boc.clone(), tx_hash);
 
-        let mut balance = None;
+        let mut balance = 0;
         let mut status = AccountStatus::Nonexist;
         let mut code_hash = None;
         let mut data_hash = None;
@@ -406,7 +406,7 @@ impl Node {
             .context("Failed to load new account state")?
             .0
         {
-            balance = Some(acc.balance.tokens.into());
+            balance = acc.balance.tokens.into();
             status = match acc.state {
                 AccountState::Uninit => AccountStatus::Uninit,
                 AccountState::Active(state) => {
@@ -531,155 +531,16 @@ impl Node {
         Ok((block_meta, tx_meta))
     }
 
-    pub fn get_jetton_masters(
-        &mut self,
-        address: Option<Addr>,
-        admin_address: Option<Addr>,
-        limit: usize,
-        offset: usize,
-    ) -> anyhow::Result<Vec<JettonMasterMeta>> {
-        if let Some(addr) = address {
-            self.ensure_jetton_master_detected(&addr)?;
-        } else {
-            let jetton_addresses: HashSet<_> = self
-                .history
-                .jetton_wallets
-                .values()
-                .map(|wallet| wallet.jetton_address)
-                .collect();
-            for addr in jetton_addresses {
-                self.ensure_jetton_master_detected(&addr)?;
-            }
-        }
-
-        let mut masters: Vec<_> = self
-            .history
-            .jetton_masters
-            .values()
-            .filter(|m| {
-                if let Some(addr) = address
-                    && m.address != addr
-                {
-                    return false;
-                }
-                if let Some(addr) = admin_address
-                    && m.admin_address.as_ref() != Some(&addr)
-                {
-                    return false;
-                }
-                true
-            })
-            .cloned()
-            .collect();
-
-        masters.sort_by_key(|m| m.address);
-
-        let start = offset.min(masters.len());
-        let end = (start + limit).min(masters.len());
-
-        Ok(masters[start..end].to_vec())
+    pub fn iter_jetton_masters(&self) -> impl Iterator<Item = &JettonMasterMeta> {
+        self.history.jetton_masters.values()
     }
 
-    pub fn get_jetton_wallets(
-        &self,
-        address: Option<Addr>,
-        owner_address: Option<Addr>,
-        jetton_address: Option<Addr>,
-        exclude_zero_balance: bool,
-        limit: usize,
-        offset: usize,
-    ) -> anyhow::Result<Vec<storage::JettonWalletMeta>> {
-        let mut wallets: Vec<_> = self
-            .history
-            .jetton_wallets
-            .values()
-            .filter(|w| {
-                if let Some(addr) = address
-                    && w.address != addr
-                {
-                    return false;
-                }
-                if let Some(addr) = owner_address
-                    && w.owner_address != addr
-                {
-                    return false;
-                }
-                if let Some(addr) = jetton_address
-                    && w.jetton_address != addr
-                {
-                    return false;
-                }
-                if exclude_zero_balance && w.balance == 0 {
-                    return false;
-                }
-                true
-            })
-            .cloned()
-            .collect();
-
-        wallets.sort_by_key(|w| w.address);
-
-        let start = offset.min(wallets.len());
-        let end = (start + limit).min(wallets.len());
-
-        Ok(wallets[start..end].to_vec())
+    pub fn iter_jetton_wallets(&self) -> impl Iterator<Item = &storage::JettonWalletMeta> {
+        self.history.jetton_wallets.values()
     }
 
-    #[allow(clippy::too_many_arguments)]
-    pub fn get_nft_items(
-        &self,
-        address: Option<Addr>,
-        owner_address: Option<Addr>,
-        collection_address: Option<Addr>,
-        index: Option<String>,
-        sort_by_last_transaction_lt: bool,
-        limit: usize,
-        offset: usize,
-    ) -> anyhow::Result<Vec<NftItemMeta>> {
-        let mut items: Vec<_> = self
-            .history
-            .nft_items
-            .values()
-            .filter(|item| {
-                if let Some(addr) = address
-                    && item.address != addr
-                {
-                    return false;
-                }
-                if let Some(addr) = owner_address
-                    && item.owner_address != Some(addr)
-                {
-                    return false;
-                }
-                if let Some(addr) = collection_address
-                    && item.collection_address != Some(addr)
-                {
-                    return false;
-                }
-                if let Some(expected_index) = &index
-                    && &item.index != expected_index
-                {
-                    return false;
-                }
-                true
-            })
-            .cloned()
-            .collect();
-
-        if sort_by_last_transaction_lt {
-            items.sort_by(|a, b| {
-                b.last_transaction_lt
-                    .cmp(&a.last_transaction_lt)
-                    .then_with(|| a.address.cmp(&b.address))
-            });
-        } else {
-            items.sort_by_key(|item| item.address);
-        }
-
-        let start = offset.min(items.len());
-        let end = (start + limit).min(items.len());
-
-        Ok(items[start..end].to_vec())
+    pub fn iter_nft_items(&self) -> impl Iterator<Item = &NftItemMeta> {
+        self.history.nft_items.values()
     }
 
     #[must_use]
@@ -1220,6 +1081,12 @@ impl Node {
     }
 
     #[must_use]
+    pub fn get_cell_or_empty(&self, hash: Option<Hash256>) -> BocBytes {
+        hash.and_then(|hash| self.get_cell(&hash))
+            .unwrap_or_else(|| Boc::encode(Cell::default()).into())
+    }
+
+    #[must_use]
     pub fn get_transactions(
         &self,
         addr: &Addr,
@@ -1728,7 +1595,7 @@ impl Node {
             .get(&GIVER_ADDR)
             .cloned()
             .context("Giver account not found")?;
-        let giver_balance = giver_meta.balance.unwrap_or(0);
+        let giver_balance = giver_meta.balance;
         if giver_balance < amount {
             anyhow::bail!("Giver has insufficient balance");
         }
@@ -1755,7 +1622,7 @@ impl Node {
 
         // Decrease giver balance before injecting the internal message. The local faucet
         // models a single destination transaction, so the source account is adjusted here.
-        giver_meta.balance = Some(giver_balance - amount);
+        giver_meta.balance = giver_balance - amount;
         self.latest.accounts.insert(GIVER_ADDR, giver_meta);
 
         self.send_internal_boc(BocRepr::encode(message)?.into())
@@ -1978,7 +1845,6 @@ mod tests {
     use super::*;
     use crate::executor::{ExecContext, ExecResult, TvmExecutor};
     use crate::node::StateSource;
-    use base64::Engine;
     use serde_json::json;
     use std::sync::{Arc, Mutex};
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -2028,10 +1894,8 @@ mod tests {
     }
 
     fn make_test_node(executor: Box<dyn TvmExecutor>) -> Node {
-        let config_bytes = base64::engine::general_purpose::STANDARD
-            .decode(DEFAULT_CONFIG)
-            .expect("must decode default config");
-        Node::new(executor, config_bytes.into(), StateSource::Local).expect("must create test node")
+        let config_boc = BocBytes::from_base64(DEFAULT_CONFIG).expect("must decode default config");
+        Node::new(executor, config_boc, StateSource::Local).expect("must create test node")
     }
 
     #[test]
@@ -2046,12 +1910,10 @@ mod tests {
         ));
         let db_path = temp_root.join("build/data/localnet.db");
 
-        let config_bytes = base64::engine::general_purpose::STANDARD
-            .decode(DEFAULT_CONFIG)
-            .expect("must decode default config");
+        let config_boc = BocBytes::from_base64(DEFAULT_CONFIG).expect("must decode default config");
         let node = Node::with_db_path(
             Box::new(NoopExecutor),
-            config_bytes.into(),
+            config_boc,
             StateSource::Local,
             Some(&db_path),
         )
@@ -2080,12 +1942,10 @@ mod tests {
         ));
         let db_path = temp_root.join("localnet.db");
 
-        let config_bytes = base64::engine::general_purpose::STANDARD
-            .decode(DEFAULT_CONFIG)
-            .expect("must decode default config");
+        let config_boc = BocBytes::from_base64(DEFAULT_CONFIG).expect("must decode default config");
         let mut node = Node::with_db_path(
             Box::new(NoopExecutor),
-            config_bytes.clone().into(),
+            config_boc.clone(),
             StateSource::Local,
             Some(&db_path),
         )
@@ -2107,7 +1967,7 @@ mod tests {
 
         let reopened = Node::with_db_path(
             Box::new(NoopExecutor),
-            config_bytes.into(),
+            config_boc,
             StateSource::Local,
             Some(&db_path),
         )
@@ -2179,7 +2039,7 @@ mod tests {
         AccountMeta {
             account_hash,
             status,
-            balance: Some(cached_balance),
+            balance: cached_balance,
             last_trans_lt: Some(0),
             last_trans_hash: None,
             code_hash: None,
@@ -2588,7 +2448,7 @@ mod tests {
             AccountMeta {
                 account_hash,
                 status: AccountStatus::Active,
-                balance: Some(1),
+                balance: 1,
                 last_trans_lt: Some(23),
                 last_trans_hash: None,
                 code_hash: None,
@@ -2915,7 +2775,7 @@ mod tests {
             AccountMeta {
                 account_hash,
                 status: AccountStatus::Active,
-                balance: Some(974_433),
+                balance: 974_433,
                 last_trans_lt: Some(42),
                 last_trans_hash: None,
                 code_hash: Some(code_hash),
@@ -3199,7 +3059,7 @@ mod tests {
             AccountMeta {
                 account_hash: high_account_hash,
                 status: AccountStatus::Active,
-                balance: Some(0),
+                balance: 0,
                 last_trans_lt: Some(100),
                 last_trans_hash: None,
                 code_hash: None,
@@ -3212,7 +3072,7 @@ mod tests {
             AccountMeta {
                 account_hash: low_account_hash,
                 status: AccountStatus::Active,
-                balance: Some(0),
+                balance: 0,
                 last_trans_lt: Some(5),
                 last_trans_hash: None,
                 code_hash: None,

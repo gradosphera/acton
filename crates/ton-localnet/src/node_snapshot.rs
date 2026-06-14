@@ -109,29 +109,26 @@ impl Node {
             .collect::<Vec<_>>();
         history_address_names.sort_by_key(|(addr, _)| *addr);
 
-        let mut history_jetton_masters = self
+        let history_jetton_masters = self
             .history
             .jetton_masters
             .iter()
             .map(|(addr, meta)| (*addr, meta.clone()))
             .collect::<Vec<_>>();
-        history_jetton_masters.sort_by_key(|(addr, _)| *addr);
 
-        let mut history_jetton_wallets = self
+        let history_jetton_wallets = self
             .history
             .jetton_wallets
             .iter()
             .map(|(addr, meta)| (*addr, meta.clone()))
             .collect::<Vec<_>>();
-        history_jetton_wallets.sort_by_key(|(addr, _)| *addr);
 
-        let mut history_nft_items = self
+        let history_nft_items = self
             .history
             .nft_items
             .iter()
             .map(|(addr, meta)| (*addr, meta.clone()))
             .collect::<Vec<_>>();
-        history_nft_items.sort_by_key(|(addr, _)| *addr);
 
         let mut history_compiler_abis = self
             .history
@@ -255,7 +252,7 @@ impl Node {
             .or_insert_with(|| AccountMeta {
                 account_hash: Hash256([0; 32]),
                 status: AccountStatus::Active,
-                balance: Some(GIVER_BALANCE),
+                balance: GIVER_BALANCE,
                 last_trans_lt: None,
                 last_trans_hash: None,
                 code_hash: None,
