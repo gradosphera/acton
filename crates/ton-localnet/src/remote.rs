@@ -140,7 +140,7 @@ pub fn fetch_remote_shard_account(
     let meta = AccountMeta {
         account_hash,
         status,
-        cached_balance: Some(balance),
+        balance: Some(balance),
         last_trans_lt: Some(last_trans_lt),
         last_trans_hash,
         code_hash: code,
@@ -170,7 +170,7 @@ pub(crate) fn account_meta_from_shard_account(
         return Ok(AccountMeta {
             account_hash,
             status: AccountStatus::Nonexist,
-            cached_balance: Some(0),
+            balance: Some(0),
             last_trans_lt: Some(shard_account.last_trans_lt),
             last_trans_hash: Some(Hash256(*shard_account.last_trans_hash.as_array())),
             code_hash: None,
@@ -199,7 +199,7 @@ pub(crate) fn account_meta_from_shard_account(
     Ok(AccountMeta {
         account_hash,
         status,
-        cached_balance: Some(balance),
+        balance: Some(balance),
         last_trans_lt: Some(shard_account.last_trans_lt),
         last_trans_hash: Some(Hash256(*shard_account.last_trans_hash.as_array())),
         code_hash,

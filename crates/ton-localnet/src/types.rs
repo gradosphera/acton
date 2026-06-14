@@ -4,6 +4,8 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt::Display;
 use std::ops::{Deref, DerefMut};
 use std::str::FromStr;
+use tycho_types::models::{IntAddr, StdAddr};
+use tycho_types::prelude::HashBytes;
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord, Default)]
 pub struct BocBytes(pub Vec<u8>);
@@ -169,6 +171,21 @@ impl FromStr for Addr {
 impl Display for Addr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}:{}", self.workchain, hex::encode(self.addr))
+    }
+}
+
+impl From<Addr> for IntAddr {
+    fn from(value: Addr) -> Self {
+        Self::from(&value)
+    }
+}
+
+impl From<&Addr> for IntAddr {
+    fn from(value: &Addr) -> Self {
+        Self::Std(StdAddr::new(
+            value.workchain.try_into().unwrap_or_default(),
+            HashBytes(value.addr),
+        ))
     }
 }
 

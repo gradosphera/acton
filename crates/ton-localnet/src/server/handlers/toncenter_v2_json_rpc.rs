@@ -95,9 +95,7 @@ async fn json_rpc_router(node: Arc<Localnet>, payload: JsonRpcRequest) -> anyhow
     let res: Value = match method {
         "sendBoc" => {
             let req: SendBocRequest = parse_params(params, method)?;
-            node.send_boc(req.boc)
-                .await
-                .map(|r| v2::map_block_transactions(&r))?
+            node.send_boc(req.boc).await.map(|r| v2::map_send_boc(&r))?
         }
         "sendBocReturnHash" => {
             let req: SendBocRequest = parse_params(params, method)?;

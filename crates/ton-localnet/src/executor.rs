@@ -5,7 +5,7 @@ use base64::engine::general_purpose::STANDARD;
 use ton_executor::ExecutorVerbosity;
 use ton_executor::message::{EmulationResult, Executor, RunTransactionArgs};
 use tycho_types::boc::Boc;
-use tycho_types::cell::{Cell, CellBuilder, CellFamily};
+use tycho_types::cell::{Cell, CellBuilder};
 use tycho_types::models::{ComputePhase, Transaction, TxInfo};
 
 #[derive(Clone, Debug)]
@@ -20,8 +20,8 @@ pub struct ExecContext {
 pub struct ExecResult {
     pub tx: Transaction,
     pub tx_boc: BocBytes,
-    pub new_account_boc: Option<BocBytes>,
-    pub out_msgs_boc: Vec<BocBytes>,
+    pub new_account_boc: BocBytes,
+    pub out_msg_cells: Vec<Cell>,
 }
 
 impl ExecResult {
@@ -108,30 +108,23 @@ impl TvmExecutor for TvmEmulatorAdapter {
         // 3. Process output
         match res {
             EmulationResult::Success(s) => {
-                let tx_boc = BocBytes::from(STANDARD.decode(s.transaction.as_ref())?);
-                let new_account_boc =
-                    Some(BocBytes::from(STANDARD.decode(s.shard_account.as_ref())?));
+                let tx_boc = BocBytes::from_base64(s.transaction.as_ref())?;
+                let new_account_boc = BocBytes::from_base64(s.shard_account.as_ref())?;
 
-                let tx_cell = Boc::decode_base64(s.transaction.as_ref())?;
+                let tx_cell = Boc::decode(&tx_boc)?;
                 let tx = tx_cell.parse::<Transaction>()?;
 
-                let out_msgs_boc = tx
+                let out_msg_cells = tx
                     .iter_out_msgs()
                     .filter_map(Result::ok)
-                    .map(|msg| {
-                        let mut builder = CellBuilder::new();
-                        use tycho_types::cell::Store;
-                        msg.store_into(&mut builder, Cell::empty_context())?;
-                        let cell = builder.build()?;
-                        Ok(BocBytes::from(Boc::encode(cell)))
-                    })
-                    .collect::<anyhow::Result<Vec<_>>>()?;
+                    .map(CellBuilder::build_from)
+                    .collect::<Result<Vec<_>, _>>()?;
 
                 Ok(ExecResult {
                     tx,
                     tx_boc,
                     new_account_boc,
-                    out_msgs_boc,
+                    out_msg_cells,
                 })
             }
             EmulationResult::Error(e) => {

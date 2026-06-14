@@ -1,6 +1,6 @@
 use crate::localnet::{
-    LocalnetAccountState, LocalnetBlockTransactions, LocalnetMessage, LocalnetRunGetMethodResult,
-    LocalnetTransaction, convert_to_message_struct,
+    LocalnetAcceptedExternalMessage, LocalnetAccountState, LocalnetMessage,
+    LocalnetRunGetMethodResult, LocalnetTransaction, convert_to_message_struct,
 };
 use crate::storage::{
     AccountStatePreview, AccountStatus, EmulateTraceResult, JettonMasterMeta, JettonWalletMeta,
@@ -201,19 +201,11 @@ pub fn map_address_information(state: &LocalnetAccountState) -> Value {
 }
 
 #[must_use]
-pub fn map_send_message(bt: &LocalnetBlockTransactions) -> Value {
-    let message_hash = bt
-        .msg_hash
-        .as_ref()
-        .map(Hash256::to_base64)
-        .unwrap_or_default();
-    let message_hash_norm = bt
-        .msg_hash_norm
-        .as_ref()
-        .map_or_else(|| message_hash.clone(), Hash256::to_base64);
+pub fn map_send_message(message: &LocalnetAcceptedExternalMessage) -> Value {
+    let message_hash = message.msg_hash.to_base64();
     serde_json::json!({
         "message_hash": message_hash,
-        "message_hash_norm": message_hash_norm,
+        "message_hash_norm": message.msg_hash_norm.to_base64(),
     })
 }
 

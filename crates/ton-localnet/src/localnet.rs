@@ -164,6 +164,20 @@ pub struct LocalnetBlockTransactions {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct LocalnetAcceptedExternalMessage {
+    /// Hash of the exact external-in message BOC accepted into the localnet queue.
+    pub msg_hash: Hash256,
+    /// TEP-467 normalized hash used by TonCenter-compatible lookups for external-in messages.
+    pub msg_hash_norm: Hash256,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct LocalnetAcceptedInternalMessage {
+    /// Hash of the exact internal message BOC accepted into the localnet queue.
+    pub msg_hash: Hash256,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct LocalnetLibrary {
     pub hash: Hash256,
     pub found: bool,
@@ -176,11 +190,11 @@ pub struct LocalnetLibrary {
 pub(crate) enum Request {
     SendBoc {
         boc: BocBytes,
-        resp: oneshot::Sender<anyhow::Result<LocalnetBlockTransactions>>,
+        resp: oneshot::Sender<anyhow::Result<LocalnetAcceptedExternalMessage>>,
     },
     SendInternalBoc {
         boc: BocBytes,
-        resp: oneshot::Sender<anyhow::Result<LocalnetBlockTransactions>>,
+        resp: oneshot::Sender<anyhow::Result<LocalnetAcceptedInternalMessage>>,
     },
     GetAddressInformation {
         address: Addr,
@@ -280,7 +294,7 @@ pub(crate) enum Request {
     Faucet {
         address: Addr,
         amount: u128,
-        resp: oneshot::Sender<anyhow::Result<Value>>,
+        resp: oneshot::Sender<anyhow::Result<LocalnetAcceptedInternalMessage>>,
     },
     GetTraces {
         tx_hash: Hash256,
@@ -394,7 +408,10 @@ impl Localnet {
         self.events_tx.subscribe()
     }
 
-    pub async fn send_boc(&self, boc_str: String) -> anyhow::Result<LocalnetBlockTransactions> {
+    pub async fn send_boc(
+        &self,
+        boc_str: String,
+    ) -> anyhow::Result<LocalnetAcceptedExternalMessage> {
         let boc = base64::engine::general_purpose::STANDARD
             .decode(&boc_str)
             .context("Invalid BOC base64")?
@@ -407,7 +424,7 @@ impl Localnet {
     pub async fn send_internal_boc(
         &self,
         boc_str: String,
-    ) -> anyhow::Result<LocalnetBlockTransactions> {
+    ) -> anyhow::Result<LocalnetAcceptedInternalMessage> {
         let boc = base64::engine::general_purpose::STANDARD
             .decode(&boc_str)
             .context("Invalid BOC base64")?
@@ -713,7 +730,11 @@ impl Localnet {
         rx.await?
     }
 
-    pub async fn faucet(&self, address_str: String, amount: u128) -> anyhow::Result<Value> {
+    pub async fn faucet(
+        &self,
+        address_str: String,
+        amount: u128,
+    ) -> anyhow::Result<LocalnetAcceptedInternalMessage> {
         let address = Self::parse_addr(&address_str)?;
         let (resp, rx) = oneshot::channel();
         self.tx
@@ -1114,7 +1135,9 @@ fn process_loop_request(node: &mut Node, req: Request) {
             amount,
             resp,
         } => {
-            let res = node.faucet(&address, amount);
+            let res = node
+                .faucet(&address, amount)
+                .map(|msg_hash| LocalnetAcceptedInternalMessage { msg_hash });
             let _ = resp.send(res);
         }
         Request::GetTraces { tx_hash, resp } => {
@@ -1234,44 +1257,25 @@ fn catalog_compiler_abi(code_hash: &Hash256) -> Option<Value> {
     serde_json::to_value(abi.as_ref()).ok()
 }
 
-fn handle_send_boc(node: &mut Node, boc: BocBytes) -> anyhow::Result<LocalnetBlockTransactions> {
-    let msg_hash_norm = normalized_ext_in_hash_from_boc(&boc)?;
-    let (msg_hash, tx_hash, seqno, _) = node.send_boc(boc)?;
-    build_send_boc_response(node, msg_hash, msg_hash_norm, tx_hash, seqno)
+fn handle_send_boc(
+    node: &mut Node,
+    boc: BocBytes,
+) -> anyhow::Result<LocalnetAcceptedExternalMessage> {
+    let msg_hash_norm = normalized_ext_in_hash_from_boc(&boc)?
+        .context("sendBoc accepts only external-in messages")?;
+    let msg_hash = node.send_boc(boc)?;
+    Ok(LocalnetAcceptedExternalMessage {
+        msg_hash,
+        msg_hash_norm,
+    })
 }
 
 fn handle_send_internal_boc(
     node: &mut Node,
     boc: BocBytes,
-) -> anyhow::Result<LocalnetBlockTransactions> {
-    let (msg_hash, tx_hash, seqno, _) = node.send_internal_boc(boc)?;
-    build_send_boc_response(node, msg_hash, None, tx_hash, seqno)
-}
-
-fn build_send_boc_response(
-    node: &Node,
-    msg_hash: Hash256,
-    msg_hash_norm: Option<Hash256>,
-    tx_hash: Hash256,
-    seqno: Seqno,
-) -> anyhow::Result<LocalnetBlockTransactions> {
-    let Some(ext_tx) = node.get_transaction_by_hash(&tx_hash) else {
-        anyhow::bail!("Transaction not found after mining")
-    };
-
-    let tx_boc = node.get_cell(&tx_hash).unwrap_or_default();
-    let tx_struct = convert_to_tx_struct(&ext_tx, tx_boc)?;
-
-    let Some(block_header) = node.get_block_header(seqno) else {
-        anyhow::bail!("Block {seqno} with transaction not found after mining")
-    };
-
-    Ok(LocalnetBlockTransactions {
-        id: block_header.block_id(),
-        transactions: vec![tx_struct],
-        msg_hash: Some(msg_hash),
-        msg_hash_norm,
-    })
+) -> anyhow::Result<LocalnetAcceptedInternalMessage> {
+    let msg_hash = node.send_internal_boc(boc)?;
+    Ok(LocalnetAcceptedInternalMessage { msg_hash })
 }
 
 fn handle_get_address_info(
@@ -1300,7 +1304,7 @@ fn handle_get_address_info(
     Ok(LocalnetAccountState {
         address,
         account_state_hash: meta.account_hash,
-        balance: meta.cached_balance.unwrap_or(0),
+        balance: meta.balance.unwrap_or(0),
         code,
         code_hash: meta.code_hash,
         data,
@@ -1486,7 +1490,7 @@ fn handle_run_get_method(
             base64::engine::general_purpose::STANDARD.encode(boc)
         });
 
-    let balance_tokens = meta.cached_balance.unwrap_or(0);
+    let balance_tokens = meta.balance.unwrap_or(0);
 
     let args = RunGetMethodArgs {
         code: code_boc,

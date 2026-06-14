@@ -29,7 +29,7 @@ use tycho_types::boc::BocRepr;
 use tycho_types::cell::{Cell, CellBuilder, CellFamily, Store};
 use tycho_types::models::{
     AccountState, CurrencyCollection, IntAddr, IntMsgInfo, LibDescr, Message, MsgInfo,
-    OptionalAccount, OwnedMessage, ShardAccount, StdAddr,
+    OptionalAccount, OwnedMessage, ShardAccount, TxInfo,
 };
 use tycho_types::prelude::HashBytes;
 
@@ -243,7 +243,7 @@ impl Node {
             .or_insert_with(|| AccountMeta {
                 account_hash: Hash256([0; 32]),
                 status: AccountStatus::Active,
-                cached_balance: Some(GIVER_BALANCE),
+                balance: Some(GIVER_BALANCE),
                 last_trans_lt: None,
                 last_trans_hash: None,
                 code_hash: None,
@@ -275,10 +275,7 @@ impl Node {
         Ok(node)
     }
 
-    pub fn send_boc(
-        &mut self,
-        boc: BocBytes,
-    ) -> anyhow::Result<(Hash256, Hash256, Seqno, Vec<Hash256>)> {
+    pub fn send_boc(&mut self, boc: BocBytes) -> anyhow::Result<Hash256> {
         self.send_boc_to_queue(
             boc,
             MessageKind::ExternalIn,
@@ -286,10 +283,7 @@ impl Node {
         )
     }
 
-    pub fn send_internal_boc(
-        &mut self,
-        boc: BocBytes,
-    ) -> anyhow::Result<(Hash256, Hash256, Seqno, Vec<Hash256>)> {
+    pub fn send_internal_boc(&mut self, boc: BocBytes) -> anyhow::Result<Hash256> {
         self.send_boc_to_queue(
             boc,
             MessageKind::Internal,
@@ -302,7 +296,7 @@ impl Node {
         boc: BocBytes,
         expected_kind: MessageKind,
         kind_error: &'static str,
-    ) -> anyhow::Result<(Hash256, Hash256, Seqno, Vec<Hash256>)> {
+    ) -> anyhow::Result<Hash256> {
         // 1. Validate
         let hash = compute_boc_hash(&boc)?;
         tracing::info!(
@@ -330,15 +324,7 @@ impl Node {
             MessageKind::ExternalOut => unreachable!("external-out messages are rejected above"),
         }
 
-        // 5. Mine one
-        let (block_meta, tx_meta) = self.mine_one()?;
-
-        Ok((
-            hash,
-            tx_meta.tx_hash,
-            block_meta.seqno,
-            tx_meta.out_msg_hashes,
-        ))
+        Ok(hash)
     }
 
     pub fn mine_one(&mut self) -> anyhow::Result<(BlockMeta, TxMeta)> {
@@ -383,73 +369,80 @@ impl Node {
             rand_seed: None,
             ignore_chksig: false,
         };
-        let vm_global_libs = self.build_vm_global_libs_boc()?;
+        let global_libs = self.build_vm_global_libs_boc()?;
 
         let exec_result = self.executor.execute(
             &shard_account_boc,
             &msg_boc,
             &ctx,
             &config_boc,
-            vm_global_libs.as_ref(),
+            global_libs.as_ref(),
         )?;
 
         // 6. Store outputs & 7. Derive hashes
         let tx_hash = compute_boc_hash(&exec_result.tx_boc)?;
         self.cas.put(exec_result.tx_boc.clone(), tx_hash);
 
-        let mut balance_cache = None;
+        let mut balance = None;
         let mut status = AccountStatus::Nonexist;
         let mut code_hash = None;
         let mut data_hash = None;
         let mut frozen_hash = None;
 
-        let new_account_hash = if let Some(acc_boc) = &exec_result.new_account_boc {
-            let h = compute_boc_hash(acc_boc)?;
-            self.cas.put(acc_boc.clone(), h);
-            let _ = store_account_state_cell_from_shard_account_boc(&mut self.cas, acc_boc);
+        let new_account_boc = &exec_result.new_account_boc;
+        let new_account_cell =
+            Boc::decode(new_account_boc).context("Failed to decode new ShardAccount BOC")?;
 
-            // Parse for meta
-            if let Ok(cell) = Boc::decode(acc_boc)
-                && let Ok(sa) = cell.parse::<ShardAccount>()
-                && let Ok(opt_acc) = sa.account.load()
-                && let Some(acc) = opt_acc.0
-            {
-                balance_cache = Some(acc.balance.tokens.into());
-                status = match acc.state {
-                    AccountState::Uninit => AccountStatus::Uninit,
-                    AccountState::Active(state) => {
-                        if let Some(cell) = state.code {
-                            let ch = Hash256(*cell.repr_hash().as_array());
-                            let boc = Boc::encode(cell);
-                            self.cas.put(boc.into(), ch);
-                            code_hash = Some(ch);
-                        }
-                        if let Some(cell) = state.data {
-                            let dh = Hash256(*cell.repr_hash().as_array());
-                            let boc = Boc::encode(cell);
-                            self.cas.put(boc.into(), dh);
-                            data_hash = Some(dh);
-                        }
-                        AccountStatus::Active
+        let new_account_hash = Hash256(*new_account_cell.repr_hash().as_array());
+        self.cas.put(new_account_boc.clone(), new_account_hash);
+
+        let new_shard_account = new_account_cell
+            .parse::<ShardAccount>()
+            .context("Failed to parse new ShardAccount")?;
+        let account_state_cell = new_shard_account.account.inner().clone();
+        let account_state_hash = Hash256(*account_state_cell.repr_hash().as_array());
+        self.cas
+            .put(Boc::encode(account_state_cell).into(), account_state_hash);
+
+        if let Some(acc) = new_shard_account
+            .account
+            .load()
+            .context("Failed to load new account state")?
+            .0
+        {
+            balance = Some(acc.balance.tokens.into());
+            status = match acc.state {
+                AccountState::Uninit => AccountStatus::Uninit,
+                AccountState::Active(state) => {
+                    if let Some(cell) = state.code {
+                        let ch = Hash256(*cell.repr_hash().as_array());
+                        let boc = Boc::encode(cell);
+                        self.cas.put(boc.into(), ch);
+                        code_hash = Some(ch);
                     }
-                    AccountState::Frozen(state) => {
-                        frozen_hash = Some(Hash256(state.0));
-                        AccountStatus::Frozen
+                    if let Some(cell) = state.data {
+                        let dh = Hash256(*cell.repr_hash().as_array());
+                        let boc = Boc::encode(cell);
+                        self.cas.put(boc.into(), dh);
+                        data_hash = Some(dh);
                     }
-                };
-            }
-            Some(h)
-        } else {
-            None
-        };
+                    AccountStatus::Active
+                }
+                AccountState::Frozen(state) => {
+                    frozen_hash = Some(Hash256(state.0));
+                    AccountStatus::Frozen
+                }
+            };
+        }
 
         let mut out_msg_hashes = Vec::new();
-        for out_boc in &exec_result.out_msgs_boc {
-            let h = compute_boc_hash(out_boc)?;
-            self.cas.put(out_boc.clone(), h);
+        for out_cell in &exec_result.out_msg_cells {
+            let h = Hash256(*out_cell.repr_hash().as_array());
+            let out_boc = BocBytes::from(Boc::encode(out_cell.clone()));
+            self.cas.put(out_boc, h);
             out_msg_hashes.push(h);
 
-            let out_meta = parse_msg_meta(out_boc, h)?;
+            let out_meta = parse_msg_meta_from_cell(out_cell, h)?;
             self.history.msg_by_hash.insert(h, out_meta);
         }
 
@@ -466,23 +459,22 @@ impl Node {
             start_lt: lt,
             end_lt: lt,
             tx_hash,
-            block_boc_hash: block_hash,
+            block_hash,
         };
 
         let compute_exit_code = exec_result.compute_exit_code();
         let action_result_code = exec_result.action_result_code();
 
         let info = exec_result.tx.info.load().ok();
-        let (storage_fees, other_fees) =
-            if let Some(tycho_types::models::TxInfo::Ordinary(ord)) = info {
-                let storage: u128 = ord
-                    .storage_phase
-                    .map_or(0, |p| p.storage_fees_collected.into());
-                let total: u128 = exec_result.tx.total_fees.tokens.into();
-                (storage, total.saturating_sub(storage))
-            } else {
-                (0, exec_result.tx.total_fees.tokens.into())
-            };
+        let (storage_fees, other_fees) = if let Some(TxInfo::Ordinary(ord)) = info {
+            let storage: u128 = ord
+                .storage_phase
+                .map_or(0, |p| p.storage_fees_collected.into());
+            let total: u128 = exec_result.tx.total_fees.tokens.into();
+            (storage, total.saturating_sub(storage))
+        } else {
+            (0, exec_result.tx.total_fees.tokens.into())
+        };
         let total_fees = exec_result.tx.total_fees.tokens.into();
 
         let tx_meta = TxMeta {
@@ -502,10 +494,10 @@ impl Node {
         };
 
         // 9. Prepare deltas
-        let new_meta = new_account_hash.map(|hash| AccountMeta {
-            account_hash: hash,
+        let new_meta = Some(AccountMeta {
+            account_hash: new_account_hash,
             status,
-            cached_balance: balance_cache,
+            balance,
             last_trans_lt: Some(lt),
             last_trans_hash: Some(tx_hash),
             code_hash,
@@ -516,7 +508,7 @@ impl Node {
         let delta = AccountDelta {
             addr: dst,
             old_hash: old_meta.as_ref().map(|m| m.account_hash),
-            new_hash: new_account_hash,
+            new_hash: Some(new_account_hash),
             old_meta,
             new_meta,
         };
@@ -534,7 +526,7 @@ impl Node {
         self.update_public_libraries_from_account_diff(
             &dst,
             Some(&shard_account_boc),
-            exec_result.new_account_boc.as_ref(),
+            Some(new_account_boc),
             lt,
         )?;
 
@@ -1775,29 +1767,29 @@ impl Node {
         let tx_hash = compute_boc_hash(&exec_result.tx_boc)?;
         let mut out_msg_hashes = Vec::new();
         let mut out_msgs = Vec::new();
-        for out_boc in &exec_result.out_msgs_boc {
-            let out_hash = compute_boc_hash(out_boc)?;
+        for out_cell in &exec_result.out_msg_cells {
+            let out_hash = Hash256(*out_cell.repr_hash().as_array());
             out_msg_hashes.push(out_hash);
-            let out_meta = parse_msg_meta(out_boc, out_hash)?;
+            let out_meta = parse_msg_meta_from_cell(out_cell, out_hash)?;
+            let out_boc = BocBytes::from(Boc::encode(out_cell.clone()));
             out_msgs.push(MessageInfo {
                 meta: out_meta,
-                boc: out_boc.clone(),
+                boc: out_boc,
             });
         }
 
         let compute_exit_code = exec_result.compute_exit_code();
         let action_result_code = exec_result.action_result_code();
         let info = exec_result.tx.info.load().ok();
-        let (storage_fees, other_fees) =
-            if let Some(tycho_types::models::TxInfo::Ordinary(ord)) = info {
-                let storage: u128 = ord
-                    .storage_phase
-                    .map_or(0, |p| p.storage_fees_collected.into());
-                let total: u128 = exec_result.tx.total_fees.tokens.into();
-                (storage, total.saturating_sub(storage))
-            } else {
-                (0, exec_result.tx.total_fees.tokens.into())
-            };
+        let (storage_fees, other_fees) = if let Some(TxInfo::Ordinary(ord)) = info {
+            let storage: u128 = ord
+                .storage_phase
+                .map_or(0, |p| p.storage_fees_collected.into());
+            let total: u128 = exec_result.tx.total_fees.tokens.into();
+            (storage, total.saturating_sub(storage))
+        } else {
+            (0, exec_result.tx.total_fees.tokens.into())
+        };
         let total_fees = exec_result.tx.total_fees.tokens.into();
 
         let tx_meta = TxMeta {
@@ -1817,7 +1809,7 @@ impl Node {
         };
 
         collect_code_data_cells(
-            exec_result.new_account_boc.as_ref(),
+            Some(&exec_result.new_account_boc),
             &mut code_cells,
             &mut data_cells,
         );
@@ -1833,10 +1825,9 @@ impl Node {
                     out_msgs,
                     tx_boc: exec_result.tx_boc,
                     account_state_before: account_state_preview_from_boc(&shard_account_boc),
-                    account_state_after: exec_result
-                        .new_account_boc
-                        .as_ref()
-                        .and_then(account_state_preview_from_boc),
+                    account_state_after: account_state_preview_from_boc(
+                        &exec_result.new_account_boc,
+                    ),
                 },
                 children: Vec::new(),
                 external_hash: Some(msg_hash),
@@ -1914,38 +1905,24 @@ impl Node {
         !self.pool.external.is_empty() || !self.pool.internal.is_empty()
     }
 
-    pub fn faucet(&mut self, addr: &Addr, amount: u128) -> anyhow::Result<Value> {
+    pub fn faucet(&mut self, addr: &Addr, amount: u128) -> anyhow::Result<Hash256> {
         let mut giver_meta = self
             .latest
             .accounts
             .get(&GIVER_ADDR)
             .cloned()
             .context("Giver account not found")?;
-        let giver_balance = giver_meta.cached_balance.unwrap_or(0);
+        let giver_balance = giver_meta.balance.unwrap_or(0);
         if giver_balance < amount {
             anyhow::bail!("Giver has insufficient balance");
         }
-
-        let src_addr = IntAddr::Std(StdAddr::new(
-            GIVER_ADDR
-                .workchain
-                .try_into()
-                .map_err(|_| anyhow::anyhow!("Invalid giver workchain {}", GIVER_ADDR.workchain))?,
-            HashBytes(GIVER_ADDR.addr),
-        ));
-        let dst_addr = IntAddr::Std(StdAddr::new(
-            addr.workchain
-                .try_into()
-                .map_err(|_| anyhow::anyhow!("Invalid destination workchain {}", addr.workchain))?,
-            HashBytes(addr.addr),
-        ));
 
         let message_info = IntMsgInfo {
             ihr_disabled: true,
             bounce: false,
             bounced: false,
-            src: src_addr,
-            dst: dst_addr,
+            src: GIVER_ADDR.into(),
+            dst: addr.into(),
             ihr_fee: Default::default(),
             value: CurrencyCollection::new(amount),
             fwd_fee: Default::default(),
@@ -1962,19 +1939,10 @@ impl Node {
 
         // Decrease giver balance before injecting the internal message. The local faucet
         // models a single destination transaction, so the source account is adjusted here.
-        giver_meta.cached_balance = Some(giver_balance - amount);
+        giver_meta.balance = Some(giver_balance - amount);
         self.latest.accounts.insert(GIVER_ADDR, giver_meta);
 
-        let (_, tx_hash, block_seqno, _) =
-            self.send_internal_boc(BocRepr::encode(message)?.into())?;
-
-        Ok(serde_json::json!({
-            "ok": true,
-            "result": {
-                "tx_hash": tx_hash.to_hex(),
-                "block_seqno": block_seqno
-            }
-        }))
+        self.send_internal_boc(BocRepr::encode(message)?.into())
     }
 }
 
@@ -2111,6 +2079,17 @@ fn parse_msg_meta(boc: &[u8], hash: Hash256) -> anyhow::Result<MsgMeta> {
 
 fn parse_msg_meta_with_kind(boc: &[u8], hash: Hash256) -> anyhow::Result<(MsgMeta, MessageKind)> {
     let cell = Boc::decode(boc)?;
+    parse_msg_meta_with_kind_from_cell(&cell, hash)
+}
+
+fn parse_msg_meta_from_cell(cell: &Cell, hash: Hash256) -> anyhow::Result<MsgMeta> {
+    Ok(parse_msg_meta_with_kind_from_cell(cell, hash)?.0)
+}
+
+fn parse_msg_meta_with_kind_from_cell(
+    cell: &Cell,
+    hash: Hash256,
+) -> anyhow::Result<(MsgMeta, MessageKind)> {
     let msg = cell.parse::<Message<'_>>()?;
 
     let (kind, src, dst, value, bounce, created_lt, created_at) = match msg.info {
@@ -2405,7 +2384,7 @@ mod tests {
         AccountMeta {
             account_hash,
             status,
-            cached_balance: Some(cached_balance),
+            balance: Some(cached_balance),
             last_trans_lt: Some(0),
             last_trans_hash: None,
             code_hash: None,
@@ -2818,7 +2797,7 @@ mod tests {
             AccountMeta {
                 account_hash,
                 status: AccountStatus::Active,
-                cached_balance: Some(1),
+                balance: Some(1),
                 last_trans_lt: Some(23),
                 last_trans_hash: None,
                 code_hash: None,
@@ -3145,7 +3124,7 @@ mod tests {
             AccountMeta {
                 account_hash,
                 status: AccountStatus::Active,
-                cached_balance: Some(974_433),
+                balance: Some(974_433),
                 last_trans_lt: Some(42),
                 last_trans_hash: None,
                 code_hash: Some(code_hash),
@@ -3243,6 +3222,7 @@ mod tests {
 
         let destination = test_addr(0xEF);
         let _ = node.faucet(&destination, 1);
+        let _ = node.mine_one();
 
         let calls = recorded_libs.lock().expect("recorded libs mutex poisoned");
         assert!(!calls.is_empty(), "executor must be invoked");
@@ -3426,7 +3406,7 @@ mod tests {
             AccountMeta {
                 account_hash: high_account_hash,
                 status: AccountStatus::Active,
-                cached_balance: Some(0),
+                balance: Some(0),
                 last_trans_lt: Some(100),
                 last_trans_hash: None,
                 code_hash: None,
@@ -3439,7 +3419,7 @@ mod tests {
             AccountMeta {
                 account_hash: low_account_hash,
                 status: AccountStatus::Active,
-                cached_balance: Some(0),
+                balance: Some(0),
                 last_trans_lt: Some(5),
                 last_trans_hash: None,
                 code_hash: None,

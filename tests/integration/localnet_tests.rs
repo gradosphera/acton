@@ -1126,9 +1126,10 @@ fn localnet_admin_dump_and_load_state_roundtrip() {
         }),
     );
 
-    let before_info = wait_for_ok_response(
+    let before_info = wait_for_address_balance_at_least(
         &node,
-        &format!("/api/v2/getAddressInformation?address={address_before}"),
+        address_before,
+        1_000_000_000,
         Duration::from_secs(5),
     );
     let before_balance = parse_address_balance(&before_info);
@@ -1148,9 +1149,10 @@ fn localnet_admin_dump_and_load_state_roundtrip() {
         }),
     );
 
-    let after_info = wait_for_ok_response(
+    let after_info = wait_for_address_balance_at_least(
         &node,
-        &format!("/api/v2/getAddressInformation?address={address_after}"),
+        address_after,
+        2_000_000_000,
         Duration::from_secs(5),
     );
     let after_balance_before_load = parse_address_balance(&after_info);
@@ -1214,11 +1216,8 @@ fn localnet_admin_set_shard_account_updates_selected_account() {
             "amount": 1_000_000_000u128,
         }),
     );
-    let source_info = wait_for_ok_response(
-        &node,
-        &format!("/api/v2/getAddressInformation?address={source}"),
-        Duration::from_secs(5),
-    );
+    let source_info =
+        wait_for_address_balance_at_least(&node, source, 1_000_000_000, Duration::from_secs(5));
     let source_balance = parse_address_balance(&source_info);
     let source_shard_response = wait_for_ok_response(
         &node,
@@ -1329,11 +1328,8 @@ fn localnet_raw_internal_messages_use_acton_endpoint() {
             "boc": internal_boc,
         }),
     );
-    let target_info = wait_for_ok_response(
-        &node,
-        &format!("/api/v2/getAddressInformation?address={target}"),
-        Duration::from_secs(5),
-    );
+    let target_info =
+        wait_for_address_balance_at_least(&node, target, 50_000_000, Duration::from_secs(5));
 
     let snapshot = json!({
         "send_boc": summarize_admin_response(&send_boc),
@@ -3636,6 +3632,28 @@ fn wait_until_address_state_active(
         assert!(
             Instant::now() < deadline,
             "Timed out waiting for address `{address}` to become active:\n{}",
+            serde_json::to_string_pretty(&response).unwrap_or_default()
+        );
+        thread::sleep(Duration::from_millis(200));
+    }
+}
+
+fn wait_for_address_balance_at_least(
+    node: &crate::support::localnet::LocalnetHandle,
+    address: &str,
+    expected_balance: u128,
+    timeout: Duration,
+) -> Value {
+    let query = format!("/api/v2/getAddressInformation?address={address}");
+    let deadline = Instant::now() + timeout;
+    loop {
+        let response = node.get_json(&query);
+        if is_success_response(&response) && parse_address_balance(&response) >= expected_balance {
+            return response;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "Timed out waiting for address `{address}` balance to reach {expected_balance}:\n{}",
             serde_json::to_string_pretty(&response).unwrap_or_default()
         );
         thread::sleep(Duration::from_millis(200));

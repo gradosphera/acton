@@ -23,9 +23,10 @@ pub async fn faucet(
     State(node): State<Arc<Localnet>>,
     Json(payload): Json<FaucetRequest>,
 ) -> Json<Value> {
-    handle_result(node.faucet(payload.address, payload.amount), |res| {
-        res.clone()
-    })
+    handle_result(
+        node.faucet(payload.address, payload.amount),
+        v2::map_send_internal_message,
+    )
     .await
 }
 
@@ -123,7 +124,7 @@ pub async fn send_internal_message(
 ) -> Json<Value> {
     handle_result(
         node.send_internal_boc(payload.boc),
-        v2::map_send_boc_return_hash,
+        v2::map_send_internal_message,
     )
     .await
 }

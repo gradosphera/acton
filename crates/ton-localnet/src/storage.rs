@@ -127,7 +127,7 @@ impl Display for AccountStatus {
 pub struct AccountMeta {
     pub account_hash: Hash256,
     pub status: AccountStatus,
-    pub cached_balance: Option<u128>,
+    pub balance: Option<u128>,
     pub last_trans_lt: Option<Lt>,
     pub last_trans_hash: Option<Hash256>,
     pub code_hash: Option<Hash256>,
@@ -209,7 +209,7 @@ pub struct BlockMeta {
     pub start_lt: Lt,
     pub end_lt: Lt,
     pub tx_hash: Hash256,
-    pub block_boc_hash: Hash256,
+    pub block_hash: Hash256,
 }
 
 impl BlockMeta {
@@ -219,8 +219,8 @@ impl BlockMeta {
             workchain: 0,
             shard: -9223372036854775808,
             seqno: self.seqno,
-            root_hash: self.block_boc_hash,
-            file_hash: self.block_boc_hash,
+            root_hash: self.block_hash,
+            file_hash: self.block_hash,
         }
     }
 }

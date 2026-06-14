@@ -1,7 +1,8 @@
 use crate::localnet::{
-    LocalnetAccountState, LocalnetBlockHeader, LocalnetBlockId, LocalnetBlockTransactions,
-    LocalnetConsensusBlock, LocalnetLibrary, LocalnetMasterchainInfo, LocalnetRunGetMethodResult,
-    LocalnetTransaction, LocalnetTransactionId,
+    LocalnetAcceptedExternalMessage, LocalnetAcceptedInternalMessage, LocalnetAccountState,
+    LocalnetBlockHeader, LocalnetBlockId, LocalnetBlockTransactions, LocalnetConsensusBlock,
+    LocalnetLibrary, LocalnetMasterchainInfo, LocalnetRunGetMethodResult, LocalnetTransaction,
+    LocalnetTransactionId,
 };
 use crate::storage::AccountStatus;
 use crate::types::{Addr, BocBytes};
@@ -222,6 +223,13 @@ pub fn map_block_transactions(_: &LocalnetBlockTransactions) -> Value {
     })
 }
 
+#[must_use]
+pub fn map_send_boc(_: &LocalnetAcceptedExternalMessage) -> Value {
+    serde_json::json!({
+      "@type": "ok",
+    })
+}
+
 pub fn map_block_transactions_ext(bt: &LocalnetBlockTransactions) -> Value {
     serde_json::json!({
         "@type": "blocks.transactionsExt",
@@ -270,25 +278,20 @@ pub fn map_libraries(libs: &[LocalnetLibrary]) -> Value {
 }
 
 #[must_use]
-pub fn map_send_boc_return_hash(bt: &LocalnetBlockTransactions) -> Value {
-    let msg_hash = bt
-        .msg_hash
-        .as_ref()
-        .map(super::super::types::Hash256::to_base64)
-        .unwrap_or_default();
-    let mut mapped = serde_json::json!({
+pub fn map_send_boc_return_hash(message: &LocalnetAcceptedExternalMessage) -> Value {
+    serde_json::json!({
         "@type": "ok",
-        "hash": msg_hash
-    });
-    if let Some(hash_norm) = bt
-        .msg_hash_norm
-        .as_ref()
-        .map(super::super::types::Hash256::to_base64)
-        && let Some(root) = mapped.as_object_mut()
-    {
-        root.insert("hash_norm".to_string(), Value::String(hash_norm));
-    }
-    mapped
+        "hash": message.msg_hash.to_base64(),
+        "hash_norm": message.msg_hash_norm.to_base64(),
+    })
+}
+
+#[must_use]
+pub fn map_send_internal_message(message: &LocalnetAcceptedInternalMessage) -> Value {
+    serde_json::json!({
+        "@type": "ok",
+        "hash": message.msg_hash.to_base64()
+    })
 }
 
 #[must_use]

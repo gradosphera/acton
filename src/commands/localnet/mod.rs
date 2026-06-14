@@ -7,7 +7,7 @@ use acton_config::config::ActonConfig;
 use anyhow::Context;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use ton::ton_core::cell::TonCell;
 use ton::ton_core::traits::tlb::TLB;
 use ton::ton_wallet::WalletVersion;
@@ -155,10 +155,7 @@ async fn setup_startup_accounts(
                 .await
                 .with_context(|| format!("Failed to top up wallet '{wallet_name}'"))?;
 
-            let wallet_state = node
-                .get_address_state(address.clone(), None)
-                .await
-                .with_context(|| format!("Failed to fetch state for wallet '{wallet_name}'"))?;
+            let wallet_state = wait_for_startup_wallet_funds(node, &address, &wallet_name).await?;
 
             if wallet_state == AccountStatus::Active {
                 println!(
@@ -193,6 +190,30 @@ async fn setup_startup_accounts(
     }
 
     Ok(startup_wallets)
+}
+
+async fn wait_for_startup_wallet_funds(
+    node: &Arc<Localnet>,
+    address: &str,
+    wallet_name: &str,
+) -> anyhow::Result<AccountStatus> {
+    let deadline = Instant::now() + Duration::from_secs(12);
+    loop {
+        let wallet_state = node
+            .get_address_state(address.to_owned(), None)
+            .await
+            .with_context(|| format!("Failed to fetch state for wallet '{wallet_name}'"))?;
+
+        if wallet_state != AccountStatus::Nonexist {
+            return Ok(wallet_state);
+        }
+
+        if Instant::now() >= deadline {
+            anyhow::bail!("Timed out waiting for localnet top up of wallet '{wallet_name}'");
+        }
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
 }
 
 const fn wallet_version_to_string(version: WalletVersion) -> &'static str {

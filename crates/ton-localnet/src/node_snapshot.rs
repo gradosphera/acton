@@ -255,7 +255,7 @@ impl Node {
             .or_insert_with(|| AccountMeta {
                 account_hash: Hash256([0; 32]),
                 status: AccountStatus::Active,
-                cached_balance: Some(GIVER_BALANCE),
+                balance: Some(GIVER_BALANCE),
                 last_trans_lt: None,
                 last_trans_hash: None,
                 code_hash: None,
