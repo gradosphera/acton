@@ -19,9 +19,20 @@ use tycho_types::models::{
 
 #[allow(clippy::ptr_arg)]
 pub fn map_jetton_masters(masters: &Vec<JettonMasterMeta>) -> Value {
+    let mut metadata = serde_json::Map::new();
+    for master in masters {
+        metadata.insert(
+            master.address.to_string(),
+            serde_json::json!({
+                "is_indexed": true,
+                "token_info": [map_jetton_master_token_info(master)],
+            }),
+        );
+    }
+
     serde_json::json!({
         "address_book": {},
-        "metadata": {},
+        "metadata": metadata,
         "jetton_masters": masters.iter().map(map_jetton_master).collect::<Vec<_>>()
     })
 }
@@ -1274,10 +1285,36 @@ const fn map_account_state_status(status: &AccountStatus) -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use super::{map_nft_collection_token_info, map_nft_item_token_info};
-    use crate::storage::NftItemMeta;
+    use super::{map_jetton_masters, map_nft_collection_token_info, map_nft_item_token_info};
+    use crate::storage::{JettonMasterMeta, NftItemMeta};
     use crate::types::Hash256;
     use serde_json::json;
+
+    fn sample_jetton_master() -> JettonMasterMeta {
+        JettonMasterMeta {
+            address: "0:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .parse()
+                .expect("valid master address"),
+            admin_address: Some(
+                "0:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+                    .parse()
+                    .expect("valid admin address"),
+            ),
+            code_hash: Hash256([1; 32]),
+            data_hash: Hash256([2; 32]),
+            jetton_content: json!({
+                "name": "UTYA",
+                "symbol": "UTYA",
+                "description": "Duck token",
+                "image": "https://example.com/utya.png",
+                "decimals": "9",
+            }),
+            jetton_wallet_code_hash: Hash256([3; 32]),
+            last_transaction_lt: 42,
+            mintable: true,
+            total_supply: 1_000_000,
+        }
+    }
 
     fn sample_nft_item() -> NftItemMeta {
         NftItemMeta {
@@ -1309,6 +1346,24 @@ mod tests {
             init: true,
             last_transaction_lt: 42,
         }
+    }
+
+    #[test]
+    fn jetton_masters_response_includes_token_metadata() {
+        let master = sample_jetton_master();
+        let address = master.address.to_string();
+        let response = map_jetton_masters(&vec![master]);
+        let token_info = &response["metadata"][&address]["token_info"][0];
+
+        assert_eq!(
+            response["metadata"][&address]["is_indexed"].as_bool(),
+            Some(true)
+        );
+        assert_eq!(token_info["type"].as_str(), Some("jetton_masters"));
+        assert_eq!(token_info["name"].as_str(), Some("UTYA"));
+        assert_eq!(token_info["symbol"].as_str(), Some("UTYA"));
+        assert_eq!(token_info["description"].as_str(), Some("Duck token"));
+        assert_eq!(token_info["extra"]["decimals"].as_str(), Some("9"));
     }
 
     #[test]
