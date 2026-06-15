@@ -14,16 +14,16 @@ import {Card, CardContent, CardDescription, CardHeader, CardTitle, useToast} fro
 import {useNavigate} from "react-router-dom"
 
 import type {TonClient} from "../../explorer/api/client"
-import type {V3TransactionListItem} from "../../explorer/api/types"
+import type {LocalnetNodeInfo, V3TransactionListItem} from "../../explorer/api/types"
 import {formatDuration, formatNano, formatTimeAgo, hashToHex} from "../../explorer/components/utils"
 import {useAddressBook} from "../../explorer/hooks/useAddressBook"
-import {useNetworkInfo} from "../../explorer/hooks/useNetworkInfo"
 import {collectRecentAccounts} from "../dashboardUtils"
 import {HomeAddressLabel} from "../HomeAddressLabel"
 
 import styles from "../DashboardPage.module.css"
 
 const HOME_RECENT_TRANSACTIONS_REFRESH_MS = 2000
+const HOME_NODE_INFO_REFRESH_MS = 1000
 
 interface HomePageProps {
   readonly client: TonClient
@@ -39,8 +39,8 @@ interface HomeState {
 export const HomePage: React.FC<HomePageProps> = ({client}) => {
   const navigate = useNavigate()
   const {showToast} = useToast()
-  const {nodeInfo} = useNetworkInfo()
   const {prefetchNames} = useAddressBook()
+  const [nodeInfo, setNodeInfo] = React.useState<LocalnetNodeInfo | undefined>()
   const [copiedEndpoint, setCopiedEndpoint] = React.useState<string>()
   const [homeState, setHomeState] = React.useState<HomeState>({
     transactions: [],
@@ -74,6 +74,37 @@ export const HomePage: React.FC<HomePageProps> = ({client}) => {
     }
     return [...addresses]
   }, [homeState.transactions, recentAccounts])
+
+  React.useEffect(() => {
+    let cancelled = false
+    let timeoutId: ReturnType<typeof setTimeout> | undefined
+
+    const loadNodeInfo = async () => {
+      try {
+        const nextNodeInfo = await client.getNodeInfo()
+        if (!cancelled) {
+          setNodeInfo(nextNodeInfo)
+        }
+      } catch {
+        if (!cancelled) {
+          setNodeInfo(undefined)
+        }
+      } finally {
+        if (!cancelled) {
+          timeoutId = globalThis.setTimeout(() => void loadNodeInfo(), HOME_NODE_INFO_REFRESH_MS)
+        }
+      }
+    }
+
+    void loadNodeInfo()
+
+    return () => {
+      cancelled = true
+      if (timeoutId !== undefined) {
+        globalThis.clearTimeout(timeoutId)
+      }
+    }
+  }, [client])
 
   React.useEffect(() => {
     let cancelled = false

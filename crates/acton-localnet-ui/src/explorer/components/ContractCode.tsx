@@ -343,35 +343,35 @@ function SourcePanel({
     activeSourceTab === "verified"
       ? undefined
       : activeSourceTab === "decompiled"
-      ? {
-          title: "Disassembly",
-          value: codeData.decompiled,
-          language: "tasm" as const,
-          wrap: false,
-        }
-      : activeSourceTab === "base64"
         ? {
-            title: "Code BoC Base64",
-            value: codeData.base64,
-            wrap: true,
+            title: "Disassembly",
+            value: codeData.decompiled,
+            language: "tasm" as const,
+            wrap: false,
           }
-        : activeSourceTab === "hex"
+        : activeSourceTab === "base64"
           ? {
-              title: "Code BoC HEX",
-              value: codeData.hex,
+              title: "Code BoC Base64",
+              value: codeData.base64,
               wrap: true,
             }
-          : activeSourceTab === "hex-hash"
+          : activeSourceTab === "hex"
             ? {
-                title: "Code hash HEX",
-                value: codeData.codeHashHex,
+                title: "Code BoC HEX",
+                value: codeData.hex,
                 wrap: true,
               }
-            : {
-                title: "Code hash Base64",
-                value: codeData.codeHashBase64,
-                wrap: true,
-              }
+            : activeSourceTab === "hex-hash"
+              ? {
+                  title: "Code hash HEX",
+                  value: codeData.codeHashHex,
+                  wrap: true,
+                }
+              : {
+                  title: "Code hash Base64",
+                  value: codeData.codeHashBase64,
+                  wrap: true,
+                }
 
   return (
     <section className={styles.sourceShell}>
@@ -413,9 +413,7 @@ function VerifiedSourcePanel({
     () => source.bundles.filter(bundle => bundle.files.length > 0),
     [source.bundles],
   )
-  const [selectedBundleHash, setSelectedBundleHash] = useState(
-    bundles[0]?.source_bundle_hash ?? "",
-  )
+  const [selectedBundleHash, setSelectedBundleHash] = useState(bundles[0]?.source_bundle_hash ?? "")
   const activeBundle =
     bundles.find(bundle => bundle.source_bundle_hash === selectedBundleHash) ?? bundles[0]
 
