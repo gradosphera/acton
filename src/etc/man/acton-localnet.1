@@ -52,6 +52,11 @@ Maximum \fB/api\fR requests per second to simulate provider rate limits.
 Delay TonCenter v2/v3 and Emulate API responses.
 .RE
 .sp
+\fB\-\-block\-interval\-ms\fR \fIms\fR
+.RS 4
+Localnet block production interval.
+.RE
+.sp
 \fB\-\-load\-state\fR \fIpath\fR
 .RS 4
 Load Localnet state from a JSON snapshot before startup.
@@ -110,6 +115,7 @@ fork\-block\-number = 55000000
 accounts = ["deployer", "user"]
 rate\-limit = 1
 response\-delay\-ms = 300
+block\-interval\-ms = 500
 .fi
 .RE
 .sp
@@ -150,6 +156,21 @@ endpoints, and the bundled localnet UI
 .RS 4
 \h'-04'\(bu\h'+03'the Localnet UI is available on the root path, for example
 \fBhttp://127.0.0.1:<port>/\fR
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'the node produces a block every \fB\-\-block\-interval\-ms\fR milliseconds, defaults
+to 500 ms, and still creates empty blocks when no transactions are queued
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'messages accepted through \fBsend_boc\fR, \fBacton_sendInternalMessage\fR, or the
+faucet are queued and included on a later block tick
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'a block can include multiple transactions; locally generated internal
+messages are processed in the same block when possible
 .RE
 .sp
 .RS 4

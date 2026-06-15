@@ -267,6 +267,17 @@ impl Node {
 
     fn rebuild_indexes(&mut self) {
         self.indexes = Indexes::new();
+        for (index, deltas) in self.history.deltas_by_seqno.iter().enumerate() {
+            let seqno = index as Seqno + 1;
+            for delta in deltas {
+                self.indexes
+                    .account_deltas_by_addr
+                    .entry(delta.addr)
+                    .or_default()
+                    .insert(seqno, delta.clone());
+            }
+        }
+
         for tx_meta in self.history.tx_by_hash.values() {
             let key = ReverseLtKey(cmp::Reverse(tx_meta.lt), tx_meta.tx_hash);
             self.indexes
@@ -274,9 +285,17 @@ impl Node {
                 .entry(tx_meta.account)
                 .or_default()
                 .insert(key, tx_meta.tx_hash);
+            for out_msg_hash in &tx_meta.out_msg_hashes {
+                self.indexes
+                    .tx_by_out_msg
+                    .insert(*out_msg_hash, tx_meta.tx_hash);
+            }
+        }
+
+        for block in &self.history.blocks {
             self.indexes
                 .tx_by_block
-                .insert(tx_meta.block_seqno, tx_meta.tx_hash);
+                .insert(block.seqno, block.tx_hashes.clone());
         }
     }
 }

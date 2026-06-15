@@ -37,11 +37,15 @@ pub async fn localnet_start_cmd(
     accounts: Vec<String>,
     rate_limit: Option<u32>,
     response_delay_ms: Option<u64>,
+    block_interval_ms: u64,
     load_state: Option<String>,
     dump_state: Option<String>,
 ) -> anyhow::Result<()> {
     if load_state.is_some() && db_path.is_some() {
         anyhow::bail!("--load-state cannot be used together with --db-path for now");
+    }
+    if block_interval_ms == 0 {
+        anyhow::bail!("localnet block interval must be greater than 0");
     }
 
     let (state_source, fork_network) = if let Some(network) = fork_net {
@@ -58,7 +62,11 @@ pub async fn localnet_start_cmd(
         (StateSource::Local, None)
     };
 
-    let node = Arc::new(Localnet::new(state_source, db_path.clone()));
+    let node = Arc::new(Localnet::new(
+        state_source,
+        db_path.clone(),
+        Duration::from_millis(block_interval_ms),
+    ));
     if let Some(path) = load_state.as_deref() {
         node.load_state(path.to_owned())
             .await

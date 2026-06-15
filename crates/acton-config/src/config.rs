@@ -503,6 +503,9 @@ pub struct LocalnetSettings {
     pub rate_limit: Option<u32>,
     /// Response delay in milliseconds for `Localnet` `/api/v2`, `/api/v3`, and `/api/emulate/v1` endpoints
     pub response_delay_ms: Option<u64>,
+    /// Block production interval in milliseconds for `acton localnet start`
+    #[schemars(range(min = 1))]
+    pub block_interval_ms: Option<u64>,
 }
 
 const fn default_localnet_port() -> Option<u16> {
@@ -2207,6 +2210,7 @@ fork-block-number = 1234567
 accounts = ["deployer", "user"]
 rate-limit = 3
 response-delay-ms = 300
+block-interval-ms = 250
 "#;
 
         let config: ActonConfig = toml::from_str(toml_content).unwrap();
@@ -2220,5 +2224,6 @@ response-delay-ms = 300
         );
         assert_eq!(localnet.rate_limit, Some(3));
         assert_eq!(localnet.response_delay_ms, Some(300));
+        assert_eq!(localnet.block_interval_ms, Some(250));
     }
 }

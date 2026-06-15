@@ -82,6 +82,9 @@ impl<'a> LocalnetBuilder<'a> {
             .arg("start")
             .arg("--port")
             .arg(self.port.to_string());
+        if !self.args.iter().any(|arg| arg == "--block-interval-ms") {
+            cmd.arg("--block-interval-ms").arg("50");
+        }
         cmd.args(&self.args)
             .current_dir(&self.current_dir)
             .env("NO_COLOR", "1")

@@ -9,5 +9,5 @@ pub mod server;
 pub mod storage;
 pub mod streaming;
 pub mod types;
-pub use localnet::Localnet;
+pub use localnet::{DEFAULT_BLOCK_INTERVAL_MS, Localnet};
 pub use server::{ServerArgs, StartupWallet, run_server};

@@ -460,6 +460,45 @@ fn localnet_starts_and_serves_masterchain_info() {
 }
 
 #[test]
+fn localnet_mines_empty_blocks_on_interval_without_transactions() {
+    let project = ProjectBuilder::new("localnet-empty-interval-blocks").build();
+    let node = project.localnet().start();
+
+    let initial_seqno = latest_masterchain_seqno(&node);
+    let empty_block_seqno = initial_seqno + 1;
+    let target_seqno = initial_seqno + 2;
+    let reached_seqno =
+        wait_for_masterchain_seqno_at_least(&node, target_seqno, Duration::from_secs(5));
+
+    let block = wait_for_ok_response(
+        &node,
+        &format!("/api/v2/getBlockTransactionsExt?seqno={empty_block_seqno}"),
+        Duration::from_secs(5),
+    );
+    let block_payload = response_payload(&block);
+    let transactions = block_payload["transactions"]
+        .as_array()
+        .expect("getBlockTransactionsExt must return transactions array");
+
+    let snapshot = json!({
+        "target_seqno_reached": reached_seqno >= target_seqno,
+        "empty_block": {
+            "type": block_payload["@type"].as_str(),
+            "req_count": block_payload["req_count"].as_u64(),
+            "transaction_count": transactions.len(),
+            "incomplete": block_payload["incomplete"].as_bool(),
+        }
+    });
+
+    assertion().eq(
+        pretty_json_for_snapshot(&snapshot, project.path()),
+        snapbox::file!("snapshots/localnet/test_localnet_empty_interval_blocks.summary.json"),
+    );
+
+    node.stop();
+}
+
+#[test]
 fn localnet_records_api_calls_for_dashboard() {
     let project = ProjectBuilder::new("localnet-api-calls-dashboard").build();
     let node = project.localnet().start();
@@ -2139,7 +2178,7 @@ fn localnet_uses_normalized_hash_for_send_boc_return_hash_and_v3_lookup() {
 
     let normalized_hash_query = encode_query_component(message_hash_norm);
 
-    let traces = wait_for_ok_response(
+    let traces = wait_for_ok_status_response(
         &node,
         &format!("/api/v3/traces?msg_hash={normalized_hash_query}"),
         Duration::from_secs(12),
@@ -2157,7 +2196,7 @@ fn localnet_uses_normalized_hash_for_send_boc_return_hash_and_v3_lookup() {
         Some(message_hash)
     );
 
-    let by_msg_hash = wait_for_ok_response(
+    let by_msg_hash = wait_for_v3_transactions_response(
         &node,
         &format!(
             "/api/v3/transactionsByMessage?msg_hash={normalized_hash_query}&direction=in&limit=50"
@@ -2181,6 +2220,74 @@ fn localnet_uses_normalized_hash_for_send_boc_return_hash_and_v3_lookup() {
 }
 
 #[test]
+fn localnet_send_boc_return_hash_waits_for_scheduled_block_before_transaction_appears() {
+    let project = ProjectBuilder::new("localnet-send-boc-scheduled-mining").build();
+    fs::write(project.path().join("wallets.toml"), DEPLOYER_WALLET_CONFIG)
+        .expect("Failed to write wallets.toml");
+
+    let node = project
+        .localnet()
+        .args(["--accounts", "deployer", "--block-interval-ms", "3000"])
+        .start();
+    let initial_seqno = latest_masterchain_seqno(&node);
+    wait_for_masterchain_seqno_at_least(&node, initial_seqno + 1, Duration::from_secs(6));
+
+    let message_boc = build_localnet_ext_in_boc();
+    let (expected_hash, expected_hash_norm) = compute_message_hashes_base64(&message_boc);
+
+    let response = node.post_json(
+        "/api/v2/sendBocReturnHash",
+        &json!({
+            "boc": message_boc
+        }),
+    );
+    let payload = response_payload(&response);
+    let message_hash = payload["hash"]
+        .as_str()
+        .expect("sendBocReturnHash hash must be a string");
+    let message_hash_norm = payload["hash_norm"]
+        .as_str()
+        .expect("sendBocReturnHash hash_norm must be a string");
+    let normalized_hash_query = encode_query_component(message_hash_norm);
+    let by_message_query = format!(
+        "/api/v3/transactionsByMessage?msg_hash={normalized_hash_query}&direction=in&limit=50"
+    );
+
+    let before_tick = wait_for_ok_response(&node, &by_message_query, Duration::from_secs(2));
+    let before_tick_transactions = v3_transactions_from_response(&before_tick);
+
+    let after_tick =
+        wait_for_v3_transactions_response(&node, &by_message_query, Duration::from_secs(8));
+    let after_tick_transactions = v3_transactions_from_response(&after_tick);
+    let matched_normalized_hash = after_tick_transactions
+        .iter()
+        .any(|tx| tx["in_msg"]["hash_norm"].as_str() == Some(message_hash_norm));
+
+    let snapshot = json!({
+        "accepted": {
+            "hash_matches": message_hash == expected_hash,
+            "hash_norm_matches": message_hash_norm == expected_hash_norm,
+        },
+        "before_next_tick": {
+            "transaction_count": before_tick_transactions.len(),
+        },
+        "after_next_tick": {
+            "has_transaction": !after_tick_transactions.is_empty(),
+            "matched_normalized_hash": matched_normalized_hash,
+        }
+    });
+
+    assertion().eq(
+        pretty_json_for_snapshot(&snapshot, project.path()),
+        snapbox::file!(
+            "snapshots/localnet/test_localnet_send_boc_waits_for_scheduled_block.summary.json"
+        ),
+    );
+
+    node.stop();
+}
+
+#[test]
 fn localnet_supports_emulate_v1_emulate_trace() {
     let project = ProjectBuilder::new("localnet-emulate-v1-emulate-trace").build();
     let node = project.localnet().start();
@@ -2189,6 +2296,12 @@ fn localnet_supports_emulate_v1_emulate_trace() {
     let seqno_before = before["result"]["last"]["seqno"]
         .as_i64()
         .expect("masterchain seqno must be integer before emulate");
+    let transactions_before = wait_for_ok_response(
+        &node,
+        "/api/v3/transactions?limit=100",
+        Duration::from_secs(5),
+    );
+    let tx_count_before = v3_transactions_from_response(&transactions_before).len();
 
     let response = node.post_json(
         "/api/emulate/v1/emulateTrace",
@@ -2236,19 +2349,23 @@ fn localnet_supports_emulate_v1_emulate_trace() {
         "address_book/metadata must be absent by default:\n{}",
         serde_json::to_string_pretty(&response).unwrap_or_default()
     );
-    assert_eq!(
-        response["mc_block_seqno"].as_i64(),
-        Some(seqno_before),
-        "Unexpected mc_block_seqno in emulateTrace response:\n{}",
+    let response_seqno = response["mc_block_seqno"]
+        .as_i64()
+        .expect("emulateTrace response must include mc_block_seqno");
+    assert!(
+        response_seqno >= seqno_before,
+        "Unexpected mc_block_seqno in emulateTrace response; expected at least {seqno_before}:\n{}",
         serde_json::to_string_pretty(&response).unwrap_or_default()
     );
 
+    let explicit_seqno =
+        wait_for_masterchain_seqno_at_least(&node, response_seqno.max(1), Duration::from_secs(5));
     let response_with_seqno = node.post_json(
         "/api/emulate/v1/emulateTrace",
         &json!({
             "boc": V3_MESSAGE_TEST_BOC,
             "ignore_chksig": false,
-            "mc_block_seqno": seqno_before
+            "mc_block_seqno": explicit_seqno
         }),
     );
     assert!(
@@ -2264,18 +2381,22 @@ fn localnet_supports_emulate_v1_emulate_trace() {
     );
     assert_eq!(
         response_with_seqno["mc_block_seqno"].as_i64(),
-        Some(seqno_before),
+        Some(explicit_seqno),
         "Unexpected mc_block_seqno for explicit emulate request:\n{}",
         serde_json::to_string_pretty(&response_with_seqno).unwrap_or_default()
     );
 
-    let after = wait_for_ok_response(&node, "/api/v2/getMasterchainInfo", Duration::from_secs(5));
-    let seqno_after = after["result"]["last"]["seqno"]
-        .as_i64()
-        .expect("masterchain seqno must be integer after emulate");
+    let transactions_after = wait_for_ok_response(
+        &node,
+        "/api/v3/transactions?limit=100",
+        Duration::from_secs(5),
+    );
     assert_eq!(
-        seqno_after, seqno_before,
-        "emulateTrace must not commit state. before={seqno_before}, after={seqno_after}"
+        v3_transactions_from_response(&transactions_after).len(),
+        tx_count_before,
+        "emulateTrace must not commit transactions. before:\n{}\nafter:\n{}",
+        serde_json::to_string_pretty(&transactions_before).unwrap_or_default(),
+        serde_json::to_string_pretty(&transactions_after).unwrap_or_default()
     );
 
     let (invalid_status, invalid) = node.post_json_with_status(
@@ -2485,7 +2606,7 @@ fn localnet_supports_v3_transactions_endpoints() {
         );
     }
 
-    let all_txs_response = wait_for_ok_response(
+    let all_txs_response = wait_for_v3_transactions_response(
         &node,
         "/api/v3/transactions?limit=100&sort=desc",
         Duration::from_secs(12),
@@ -2879,6 +3000,87 @@ fn localnet_supports_v3_transactions_endpoints() {
     let (status, response) =
         node.get_json_with_status("/api/v3/pendingTransactions?trace_id=bad-hash");
     assert_v3_bad_request(status, &response, "Invalid hash format");
+
+    node.stop();
+}
+
+#[test]
+fn localnet_batches_pending_faucet_messages_into_one_scheduled_block() {
+    let project = ProjectBuilder::new("localnet-batch-faucet-scheduled-block").build();
+    let node = project
+        .localnet()
+        .args(["--block-interval-ms", "3000"])
+        .start();
+    let initial_seqno = latest_masterchain_seqno(&node);
+    wait_for_masterchain_seqno_at_least(&node, initial_seqno + 1, Duration::from_secs(6));
+
+    let first_faucet = node.post_json(
+        "/acton_fundAccount",
+        &json!({
+            "address": V3_TRANSACTIONS_TEST_ACCOUNT_A,
+            "amount": 250_000_000u128
+        }),
+    );
+    let second_faucet = node.post_json(
+        "/acton_fundAccount",
+        &json!({
+            "address": V3_TRANSACTIONS_TEST_ACCOUNT_B,
+            "amount": 250_000_000u128
+        }),
+    );
+
+    let first_account_response = wait_for_v3_transactions_response(
+        &node,
+        &format!("/api/v3/transactions?account={V3_TRANSACTIONS_TEST_ACCOUNT_A}&limit=10"),
+        Duration::from_secs(8),
+    );
+    let second_account_response = wait_for_v3_transactions_response(
+        &node,
+        &format!("/api/v3/transactions?account={V3_TRANSACTIONS_TEST_ACCOUNT_B}&limit=10"),
+        Duration::from_secs(8),
+    );
+
+    let first_tx = &v3_transactions_from_response(&first_account_response)[0];
+    let second_tx = &v3_transactions_from_response(&second_account_response)[0];
+    let first_seqno = first_tx["mc_block_seqno"]
+        .as_u64()
+        .expect("first transaction mc_block_seqno must be integer");
+    let second_seqno = second_tx["mc_block_seqno"]
+        .as_u64()
+        .expect("second transaction mc_block_seqno must be integer");
+    let block = wait_for_ok_response(
+        &node,
+        &format!("/api/v2/getBlockTransactionsExt?seqno={first_seqno}"),
+        Duration::from_secs(5),
+    );
+    let block_payload = response_payload(&block);
+    let block_transactions = block_payload["transactions"]
+        .as_array()
+        .expect("getBlockTransactionsExt must return transactions array");
+
+    let snapshot = json!({
+        "faucet": {
+            "first_ok": is_success_response(&first_faucet),
+            "second_ok": is_success_response(&second_faucet),
+        },
+        "transactions": {
+            "first_account": first_tx["account"].as_str(),
+            "second_account": second_tx["account"].as_str(),
+            "same_mc_block_seqno": first_seqno == second_seqno,
+        },
+        "block": {
+            "req_count": block_payload["req_count"].as_u64(),
+            "transaction_count": block_transactions.len(),
+            "has_at_least_two_transactions": block_transactions.len() >= 2,
+        }
+    });
+
+    assertion().eq(
+        pretty_json_for_snapshot(&snapshot, project.path()),
+        snapbox::file!(
+            "snapshots/localnet/test_localnet_batches_faucet_messages_into_one_block.summary.json"
+        ),
+    );
 
     node.stop();
 }
@@ -3561,6 +3763,17 @@ fn normalize_localnet_status_json(payload: &mut Value, expected_port: u16) {
             serde_json::to_string_pretty(payload).unwrap_or_default()
         ),
     }
+
+    match payload.get_mut("last_block_seqno") {
+        Some(value) if value.as_u64().is_some() => {
+            *value = json!("[LAST_BLOCK_SEQNO]");
+        }
+        Some(value) if value.is_null() => {}
+        _ => panic!(
+            "Expected localnet status last_block_seqno to be a number or null, got:\n{}",
+            serde_json::to_string_pretty(payload).unwrap_or_default()
+        ),
+    }
 }
 
 fn normalize_localnet_status_stdout(stdout: &str, port: u16) -> String {
@@ -3573,6 +3786,9 @@ fn normalize_localnet_status_stdout(stdout: &str, port: u16) -> String {
             if trimmed.starts_with("Uptime: ") {
                 let indent = &line[..line.len() - trimmed.len()];
                 format!("{indent}Uptime: [UPTIME_SECONDS]s")
+            } else if trimmed.starts_with("Last block seqno: ") {
+                let indent = &line[..line.len() - trimmed.len()];
+                format!("{indent}Last block seqno: [LAST_BLOCK_SEQNO]")
             } else {
                 line.to_owned()
             }
@@ -3614,6 +3830,78 @@ fn wait_for_ok_response(
             serde_json::to_string_pretty(&response).unwrap_or_default()
         );
         thread::sleep(Duration::from_millis(200));
+    }
+}
+
+fn wait_for_ok_status_response(
+    node: &crate::support::localnet::LocalnetHandle,
+    query: &str,
+    timeout: Duration,
+) -> Value {
+    let deadline = Instant::now() + timeout;
+    loop {
+        let (status, response) = node.get_json_with_status(query);
+        if (200..300).contains(&status) && is_success_response(&response) {
+            return response;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "Timed out waiting for successful response from `{query}`; last status={status}:\n{}",
+            serde_json::to_string_pretty(&response).unwrap_or_default()
+        );
+        thread::sleep(Duration::from_millis(200));
+    }
+}
+
+fn wait_for_v3_transactions_response(
+    node: &crate::support::localnet::LocalnetHandle,
+    query: &str,
+    timeout: Duration,
+) -> Value {
+    let deadline = Instant::now() + timeout;
+    loop {
+        let (status, response) = node.get_json_with_status(query);
+        if (200..300).contains(&status)
+            && is_success_response(&response)
+            && !v3_transactions_from_response(&response).is_empty()
+        {
+            return response;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "Timed out waiting for non-empty v3 transactions from `{query}`; last status={status}:\n{}",
+            serde_json::to_string_pretty(&response).unwrap_or_default()
+        );
+        thread::sleep(Duration::from_millis(200));
+    }
+}
+
+fn latest_masterchain_seqno(node: &crate::support::localnet::LocalnetHandle) -> i64 {
+    let response = wait_for_ok_response(node, "/api/v2/getMasterchainInfo", Duration::from_secs(5));
+    response["result"]["last"]["seqno"]
+        .as_i64()
+        .expect("masterchain seqno must be integer")
+}
+
+fn wait_for_masterchain_seqno_at_least(
+    node: &crate::support::localnet::LocalnetHandle,
+    min_seqno: i64,
+    timeout: Duration,
+) -> i64 {
+    let deadline = Instant::now() + timeout;
+    loop {
+        let response = node.get_json("/api/v2/getMasterchainInfo");
+        if let Some(seqno) = response["result"]["last"]["seqno"].as_i64()
+            && seqno >= min_seqno
+        {
+            return seqno;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "Timed out waiting for masterchain seqno >= {min_seqno}; last response:\n{}",
+            serde_json::to_string_pretty(&response).unwrap_or_default()
+        );
+        thread::sleep(Duration::from_millis(50));
     }
 }
 

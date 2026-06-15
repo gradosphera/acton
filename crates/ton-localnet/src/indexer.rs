@@ -4,6 +4,17 @@ use crate::types::{Addr, Hash256};
 use tycho_types::boc::Boc;
 
 impl Node {
+    pub(crate) fn ensure_detected_assets_for_address(&mut self, addr: &Addr) -> anyhow::Result<()> {
+        if self.history.asset_detection_checked.contains(addr) {
+            return Ok(());
+        }
+
+        let _ = self.get_address_information(addr);
+        self.detect_assets(addr)?;
+        self.history.asset_detection_checked.insert(*addr);
+        Ok(())
+    }
+
     pub(crate) fn detect_assets(&mut self, addr: &Addr) -> anyhow::Result<()> {
         self.detect_jetton_masters(addr)?;
         self.detect_jetton_wallets(addr)?;
@@ -15,6 +26,7 @@ impl Node {
         self.history.jetton_masters.shift_remove(addr);
         self.history.jetton_wallets.shift_remove(addr);
         self.history.nft_items.shift_remove(addr);
+        self.history.asset_detection_checked.remove(addr);
     }
 
     pub(crate) fn detect_jetton_wallets(&mut self, addr: &Addr) -> anyhow::Result<()> {

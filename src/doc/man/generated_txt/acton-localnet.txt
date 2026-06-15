@@ -40,6 +40,9 @@ SUBCOMMANDS
           --response-delay-ms ms
               Delay TonCenter v2/v3 and Emulate API responses.
 
+          --block-interval-ms ms
+              Localnet block production interval.
+
           --load-state path
               Load Localnet state from a JSON snapshot before startup.
 
@@ -87,6 +90,7 @@ CONFIGURATION
            accounts = ["deployer", "user"]
            rate-limit = 1
            response-delay-ms = 300
+           block-interval-ms = 500
 
        CLI flags override config values for the current invocation.
 
@@ -118,6 +122,16 @@ RUNTIME MODEL
 
        o  the Localnet UI is available on the root path, for example
           http://127.0.0.1:<port>/
+
+       o  the node produces a block every --block-interval-ms milliseconds,
+          defaults to 500 ms, and still creates empty blocks when no
+          transactions are queued
+
+       o  messages accepted through send_boc, acton_sendInternalMessage, or the
+          faucet are queued and included on a later block tick
+
+       o  a block can include multiple transactions; locally generated internal
+          messages are processed in the same block when possible
 
        o  the bundled UI is a single-page explorer app, so routes like
           /explorer, /tokens, /nfts, and per-address or per-transaction pages

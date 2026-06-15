@@ -17,7 +17,7 @@ use core::cmp;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::broadcast;
@@ -50,6 +50,15 @@ pub struct Node {
     pub global_libs_boc: Option<BocBytes>,
     pub global_libs_dirty: bool,
     pub streaming_events: Option<broadcast::Sender<StreamingCommitEvent>>,
+}
+
+const CASCADE_TX_HARD_LIMIT: usize = 10_000;
+
+struct TransactionCommit {
+    tx_meta: TxMeta,
+    delta: AccountDelta,
+    out_msg_hashes: Vec<Hash256>,
+    msg_to_tx: Vec<(Hash256, Hash256)>,
 }
 
 pub const GIVER_ADDR: Addr = Addr {
@@ -159,7 +168,13 @@ impl Node {
                 ))
             })?;
             for tx in tx_iter {
-                let (hash, tx_meta, addr, lt, seqno) = tx?;
+                let (hash, tx_meta, addr, lt, _seqno) = tx?;
+                if let Some(in_msg_hash) = tx_meta.in_msg_hash {
+                    history.msg_to_tx.insert(in_msg_hash, hash);
+                }
+                for out_msg_hash in &tx_meta.out_msg_hashes {
+                    indexes.tx_by_out_msg.insert(*out_msg_hash, hash);
+                }
                 history.tx_by_hash.insert(hash, tx_meta);
 
                 let key = ReverseLtKey(cmp::Reverse(lt), hash);
@@ -168,7 +183,12 @@ impl Node {
                     .entry(addr)
                     .or_default()
                     .insert(key, hash);
-                indexes.tx_by_block.insert(seqno, hash);
+            }
+
+            for block in &history.blocks {
+                indexes
+                    .tx_by_block
+                    .insert(block.seqno, block.tx_hashes.clone());
             }
 
             // Load accounts
@@ -324,13 +344,132 @@ impl Node {
     }
 
     pub fn mine_one(&mut self) -> anyhow::Result<(BlockMeta, TxMeta)> {
-        // 1. Select message
-        let msg_hash = self
-            .pool
-            .pop_next(self.globals.queue_policy, &self.history.msg_by_hash)
-            .context("Queue empty")?;
+        let block_meta = self.mine_block()?;
+        let tx_hash = block_meta
+            .tx_hashes
+            .first()
+            .context("Block contains no transactions")?;
+        let tx_meta = self
+            .history
+            .tx_by_hash
+            .get(tx_hash)
+            .cloned()
+            .context("Transaction in mined block not found")?;
+        Ok((block_meta, tx_meta))
+    }
 
-        // 2. Load inbound message
+    pub fn mine_block(&mut self) -> anyhow::Result<BlockMeta> {
+        let seqno = self.globals.head_seqno + 1;
+        let prev_lt = self.globals.global_lt;
+        let gen_utime = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as u32;
+        let initial_pending = self.pool.external.len() + self.pool.internal.len();
+
+        let mut tx_commits = Vec::new();
+        let mut new_msgs = VecDeque::new();
+        let mut deferred_msg_hashes = Vec::new();
+
+        for _ in 0..initial_pending {
+            let Some(msg_hash) = self
+                .pool
+                .pop_next(self.globals.queue_policy, &self.history.msg_by_hash)
+            else {
+                break;
+            };
+            match self.execute_message_in_block(msg_hash, seqno, gen_utime) {
+                Ok(commit) => {
+                    self.collect_local_internal_messages(&commit.out_msg_hashes, &mut new_msgs);
+                    tx_commits.push(commit);
+                }
+                Err(e) => {
+                    tracing::error!(
+                        "Block collation skipped message {}: {:?}",
+                        msg_hash.to_hex(),
+                        e
+                    );
+                }
+            }
+        }
+
+        let mut cascade_txs = 0usize;
+        while let Some(msg_hash) = new_msgs.pop_front() {
+            if cascade_txs >= CASCADE_TX_HARD_LIMIT {
+                tracing::error!(
+                    "Cascade transaction hard limit reached in block {seqno}; deferring remaining messages"
+                );
+                deferred_msg_hashes.push(msg_hash);
+                deferred_msg_hashes.extend(new_msgs);
+                break;
+            }
+            cascade_txs += 1;
+
+            match self.execute_message_in_block(msg_hash, seqno, gen_utime) {
+                Ok(commit) => {
+                    self.collect_local_internal_messages(&commit.out_msg_hashes, &mut new_msgs);
+                    tx_commits.push(commit);
+                }
+                Err(e) => {
+                    tracing::error!(
+                        "Block collation skipped cascade message {}: {:?}",
+                        msg_hash.to_hex(),
+                        e
+                    );
+                }
+            }
+        }
+
+        let tx_hashes = tx_commits
+            .iter()
+            .map(|commit| commit.tx_meta.tx_hash)
+            .collect::<Vec<_>>();
+        let block_boc = create_dev_block_boc(seqno, &tx_hashes)?;
+        let block_hash = block_boc.hash()?;
+        self.cas.put(block_boc, block_hash);
+
+        let block_meta = BlockMeta {
+            seqno,
+            prev_seqno: if seqno > 1 { Some(seqno - 1) } else { None },
+            gen_utime,
+            start_lt: tx_commits
+                .first()
+                .map_or(prev_lt, |commit| commit.tx_meta.lt),
+            end_lt: tx_commits
+                .last()
+                .map_or(prev_lt, |commit| commit.tx_meta.lt),
+            tx_hashes,
+            block_hash,
+        };
+
+        let pending = PendingCommit {
+            block_meta: block_meta.clone(),
+            tx_metas: tx_commits
+                .iter()
+                .map(|commit| commit.tx_meta.clone())
+                .collect(),
+            deltas: tx_commits
+                .iter()
+                .map(|commit| commit.delta.clone())
+                .collect(),
+            out_msg_hashes: tx_commits
+                .iter()
+                .flat_map(|commit| commit.out_msg_hashes.iter().copied())
+                .collect(),
+            msg_to_tx: tx_commits
+                .iter()
+                .flat_map(|commit| commit.msg_to_tx.iter().copied())
+                .collect(),
+            deferred_msg_hashes,
+        };
+
+        self.apply_commit(pending)?;
+        Ok(block_meta)
+    }
+
+    fn execute_message_in_block(
+        &mut self,
+        msg_hash: Hash256,
+        seqno: Seqno,
+        gen_utime: u32,
+    ) -> anyhow::Result<TransactionCommit> {
         let msg_meta = self
             .history
             .msg_by_hash
@@ -352,7 +491,6 @@ impl Node {
         // 4. Allocate LT & time
         let lt = self.globals.global_lt + self.globals.lt_step;
         self.globals.global_lt = lt;
-        let gen_utime = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as u32;
 
         // 5. Execute
         let config_boc = self
@@ -442,22 +580,6 @@ impl Node {
             self.history.msg_by_hash.insert(h, out_meta);
         }
 
-        // 8. Build dev block
-        let seqno = self.globals.head_seqno + 1;
-        let block_boc = create_dev_block_boc(seqno, tx_hash)?;
-        let block_hash = block_boc.hash()?;
-        self.cas.put(block_boc, block_hash);
-
-        let block_meta = BlockMeta {
-            seqno,
-            prev_seqno: if seqno > 1 { Some(seqno - 1) } else { None },
-            gen_utime,
-            start_lt: lt,
-            end_lt: lt,
-            tx_hash,
-            block_hash,
-        };
-
         let compute_exit_code = exec_result.compute_exit_code();
         let action_result_code = exec_result.action_result_code();
 
@@ -509,16 +631,11 @@ impl Node {
             new_meta,
         };
 
-        // 10. Commit
-        let pending = PendingCommit {
-            block_meta: block_meta.clone(),
-            tx_meta: tx_meta.clone(),
-            delta,
-            out_msg_hashes,
-            msg_to_tx: vec![(msg_hash, tx_hash)],
-        };
-
-        self.apply_commit(pending)?;
+        if let Some(new_meta) = &delta.new_meta {
+            self.latest.accounts.insert(delta.addr, new_meta.clone());
+        } else {
+            self.latest.accounts.remove(&delta.addr);
+        }
         self.update_public_libraries_from_account_diff(
             &dst,
             Some(&shard_account_boc),
@@ -528,7 +645,29 @@ impl Node {
 
         self.detect_assets(&dst)?;
 
-        Ok((block_meta, tx_meta))
+        Ok(TransactionCommit {
+            tx_meta,
+            delta,
+            out_msg_hashes,
+            msg_to_tx: vec![(msg_hash, tx_hash)],
+        })
+    }
+
+    fn collect_local_internal_messages(
+        &self,
+        out_msg_hashes: &[Hash256],
+        new_msgs: &mut VecDeque<Hash256>,
+    ) {
+        for hash in out_msg_hashes {
+            if self
+                .history
+                .msg_by_hash
+                .get(hash)
+                .is_some_and(|meta| meta.dst.is_some())
+            {
+                new_msgs.push_back(*hash);
+            }
+        }
     }
 
     pub fn iter_jetton_masters(&self) -> impl Iterator<Item = &JettonMasterMeta> {
@@ -923,9 +1062,9 @@ impl Node {
 
     fn apply_commit(&mut self, pending: PendingCommit) -> anyhow::Result<()> {
         tracing::info!(
-            "Applying block commit: seqno={}, tx_hash={}",
+            "Applying block commit: seqno={}, tx_count={}",
             pending.block_meta.seqno,
-            pending.tx_meta.tx_hash.to_hex()
+            pending.tx_metas.len()
         );
 
         // Persistent storage
@@ -939,30 +1078,38 @@ impl Node {
                 params![pending.block_meta.seqno, block_data],
             )?;
 
-            // Save transaction
-            let tx_data = serde_json::to_vec(&pending.tx_meta)?;
-            conn.execute(
-                "INSERT OR REPLACE INTO transactions (hash, data, account, lt, seqno) VALUES (?1, ?2, ?3, ?4, ?5)",
-                params![
-                    pending.tx_meta.tx_hash.0.to_vec(),
-                    tx_data,
-                    pending.tx_meta.account.addr.to_vec(),
-                    pending.tx_meta.lt,
-                    pending.block_meta.seqno
-                ],
-            )?;
-
-            // Save account state
-            if let Some(new_meta) = &pending.delta.new_meta {
-                let account_data = serde_json::to_vec(new_meta)?;
+            // Save transactions
+            for tx_meta in &pending.tx_metas {
+                let tx_data = serde_json::to_vec(tx_meta)?;
                 conn.execute(
-                    "INSERT OR REPLACE INTO accounts (address, data) VALUES (?1, ?2)",
-                    params![pending.delta.addr.addr.to_vec(), account_data],
+                    "INSERT OR REPLACE INTO transactions (hash, data, account, lt, seqno) VALUES (?1, ?2, ?3, ?4, ?5)",
+                    params![
+                        tx_meta.tx_hash.0.to_vec(),
+                        tx_data,
+                        tx_meta.account.addr.to_vec(),
+                        tx_meta.lt,
+                        pending.block_meta.seqno
+                    ],
                 )?;
             }
 
-            // Save messages
-            for h in &pending.out_msg_hashes {
+            // Save account state
+            for delta in &pending.deltas {
+                if let Some(new_meta) = &delta.new_meta {
+                    let account_data = serde_json::to_vec(new_meta)?;
+                    conn.execute(
+                        "INSERT OR REPLACE INTO accounts (address, data) VALUES (?1, ?2)",
+                        params![delta.addr.addr.to_vec(), account_data],
+                    )?;
+                }
+            }
+
+            // Save every message referenced by this block.
+            for h in pending
+                .out_msg_hashes
+                .iter()
+                .chain(pending.msg_to_tx.iter().map(|(msg, _)| msg))
+            {
                 if let Some(msg_meta) = self.history.msg_by_hash.get(h) {
                     let msg_data = serde_json::to_vec(msg_meta)?;
                     conn.execute(
@@ -974,12 +1121,12 @@ impl Node {
         }
 
         // Apply delta
-        if let Some(new_meta) = &pending.delta.new_meta {
-            self.latest
-                .accounts
-                .insert(pending.delta.addr, new_meta.clone());
-        } else {
-            self.latest.accounts.remove(&pending.delta.addr);
+        for delta in &pending.deltas {
+            if let Some(new_meta) = &delta.new_meta {
+                self.latest.accounts.insert(delta.addr, new_meta.clone());
+            } else {
+                self.latest.accounts.remove(&delta.addr);
+            }
         }
 
         // History
@@ -993,36 +1140,54 @@ impl Node {
         }
         // seqno is 1-based, index is seqno-1
         if seqno > 0 {
-            self.history.deltas_by_seqno[seqno as usize - 1].push(pending.delta);
+            for delta in &pending.deltas {
+                self.indexes
+                    .account_deltas_by_addr
+                    .entry(delta.addr)
+                    .or_default()
+                    .insert(seqno, delta.clone());
+            }
+            self.history.deltas_by_seqno[seqno as usize - 1].extend(pending.deltas);
         }
 
-        self.history
-            .tx_by_hash
-            .insert(pending.tx_meta.tx_hash, pending.tx_meta.clone());
+        for tx_meta in &pending.tx_metas {
+            self.history
+                .tx_by_hash
+                .insert(tx_meta.tx_hash, tx_meta.clone());
+        }
 
         for (msg, tx) in pending.msg_to_tx {
             self.history.msg_to_tx.insert(msg, tx);
         }
 
         // Indexes
-        let key = ReverseLtKey(cmp::Reverse(pending.tx_meta.lt), pending.tx_meta.tx_hash);
-        self.indexes
-            .tx_by_account
-            .entry(pending.tx_meta.account)
-            .or_default()
-            .insert(key, pending.tx_meta.tx_hash);
-        self.indexes
-            .tx_by_block
-            .insert(seqno, pending.tx_meta.tx_hash);
+        for tx_meta in &pending.tx_metas {
+            let key = ReverseLtKey(cmp::Reverse(tx_meta.lt), tx_meta.tx_hash);
+            self.indexes
+                .tx_by_account
+                .entry(tx_meta.account)
+                .or_default()
+                .insert(key, tx_meta.tx_hash);
+            self.indexes
+                .tx_by_block
+                .entry(seqno)
+                .or_default()
+                .push(tx_meta.tx_hash);
+            for out_msg_hash in &tx_meta.out_msg_hashes {
+                self.indexes
+                    .tx_by_out_msg
+                    .insert(*out_msg_hash, tx_meta.tx_hash);
+            }
 
-        if let Some(events) = &self.streaming_events {
-            let _ = events.send(StreamingCommitEvent {
-                tx_hash: pending.tx_meta.tx_hash,
-            });
+            if let Some(events) = &self.streaming_events {
+                let _ = events.send(StreamingCommitEvent {
+                    tx_hash: tx_meta.tx_hash,
+                });
+            }
         }
 
-        // Enqueue out msgs
-        for h in pending.out_msg_hashes {
+        // Enqueue out msgs deferred to future blocks.
+        for h in pending.deferred_msg_hashes {
             self.pool.push_internal(h);
         }
 
@@ -1060,19 +1225,11 @@ impl Node {
             return self.get_address_information(addr);
         }
 
-        // search backwards from seqno to find the state as it was after block 'seqno'
-        for s in (1..=seqno).rev() {
-            if s as usize > self.history.deltas_by_seqno.len() {
-                continue;
-            }
-            let deltas = &self.history.deltas_by_seqno[s as usize - 1];
-            for delta in deltas {
-                if delta.addr == *addr {
-                    return delta.new_meta.clone();
-                }
-            }
-        }
-        None
+        self.indexes
+            .account_deltas_by_addr
+            .get(addr)
+            .and_then(|deltas| deltas.range(..=seqno).next_back())
+            .and_then(|(_, delta)| delta.new_meta.clone())
     }
 
     #[must_use]
@@ -1144,9 +1301,15 @@ impl Node {
 
     #[must_use]
     pub fn get_block_transactions(&self, block_meta: &BlockMeta) -> Option<Vec<TxMeta>> {
-        let tx_hash = self.indexes.tx_by_block.get(&block_meta.seqno)?;
-        let tx = self.history.tx_by_hash.get(tx_hash).cloned()?;
-        Some(vec![tx])
+        let tx_hashes = self
+            .indexes
+            .tx_by_block
+            .get(&block_meta.seqno)
+            .map_or(block_meta.tx_hashes.as_slice(), Vec::as_slice);
+        tx_hashes
+            .iter()
+            .map(|tx_hash| self.history.tx_by_hash.get(tx_hash).cloned())
+            .collect()
     }
 
     #[must_use]
@@ -1232,22 +1395,14 @@ impl Node {
                         break;
                     }
 
-                    // Find transaction that produced this message
-                    let mut found_parent = false;
-                    for (h, t) in &self.history.tx_by_hash {
-                        if t.out_msg_hashes.contains(in_msg_hash) {
-                            if visited_up.contains(h) {
-                                // Cycle detected
-                                break;
-                            }
-                            root_hash = *h;
-                            curr_tx_hash = *h;
-                            visited_up.insert(*h);
-                            found_parent = true;
+                    if let Some(parent_hash) = self.indexes.tx_by_out_msg.get(in_msg_hash) {
+                        if visited_up.contains(parent_hash) {
                             break;
                         }
-                    }
-                    if !found_parent {
+                        root_hash = *parent_hash;
+                        curr_tx_hash = *parent_hash;
+                        visited_up.insert(*parent_hash);
+                    } else {
                         // Source is not in our history (maybe external or pruned)
                         root_hash = curr_tx_hash;
                         break;
@@ -1272,8 +1427,9 @@ impl Node {
             })
         });
 
+        let mut visited_down = HashSet::new();
         let mut trace = self
-            .build_trace_node(&root_hash)
+            .build_trace_node(&root_hash, &mut visited_down)
             .ok_or_else(|| anyhow::anyhow!("Root transaction not found"))?;
         trace.external_hash = external_hash;
         Ok(trace)
@@ -1281,17 +1437,18 @@ impl Node {
 
     pub fn get_traces_by_message_hash(&self, msg_hash: &Hash256) -> anyhow::Result<TraceNode> {
         let tx_hash = self
-            .find_trace_tx_hash_by_message_hash(msg_hash)
+            .history
+            .msg_to_tx
+            .get(msg_hash)
+            .or_else(|| self.indexes.tx_by_out_msg.get(msg_hash))
+            .copied()
+            .or_else(|| self.find_trace_tx_hash_by_normalized_message_hash(msg_hash))
             .ok_or_else(|| anyhow::anyhow!("Trace not found for message {}", msg_hash.to_hex()))?;
         self.get_traces(&tx_hash)
     }
 
-    fn find_trace_tx_hash_by_message_hash(&self, msg_hash: &Hash256) -> Option<Hash256> {
+    fn find_trace_tx_hash_by_normalized_message_hash(&self, msg_hash: &Hash256) -> Option<Hash256> {
         self.history.tx_by_hash.values().find_map(|tx| {
-            if tx.in_msg_hash == Some(*msg_hash) || tx.out_msg_hashes.contains(msg_hash) {
-                return Some(tx.tx_hash);
-            }
-
             let in_msg_hash = tx.in_msg_hash?;
             let msg_meta = self.history.msg_by_hash.get(&in_msg_hash)?;
             if msg_meta.src.is_some() {
@@ -1306,13 +1463,21 @@ impl Node {
         })
     }
 
-    fn build_trace_node(&self, tx_hash: &Hash256) -> Option<TraceNode> {
+    fn build_trace_node(
+        &self,
+        tx_hash: &Hash256,
+        visited: &mut HashSet<Hash256>,
+    ) -> Option<TraceNode> {
+        if !visited.insert(*tx_hash) {
+            return None;
+        }
+
         let tx_info = self.get_transaction_by_hash(tx_hash)?;
         let mut children = Vec::new();
 
         for out_msg in &tx_info.meta.out_msg_hashes {
             if let Some(child_tx_hash) = self.history.msg_to_tx.get(out_msg)
-                && let Some(child_node) = self.build_trace_node(child_tx_hash)
+                && let Some(child_node) = self.build_trace_node(child_tx_hash, visited)
             {
                 children.push(child_node);
             }
@@ -1814,10 +1979,21 @@ fn parse_msg_meta_with_kind_from_cell(
     ))
 }
 
-fn create_dev_block_boc(seqno: Seqno, tx_hash: Hash256) -> anyhow::Result<BocBytes> {
+fn create_dev_block_boc(seqno: Seqno, tx_hashes: &[Hash256]) -> anyhow::Result<BocBytes> {
+    let mut tx_list_builder = CellBuilder::new();
+    tx_list_builder.store_u32(tx_hashes.len().try_into().context("Too many tx hashes")?)?;
+    let mut tx_list = tx_list_builder.build()?;
+
+    for tx_hash in tx_hashes.iter().rev() {
+        let mut item = CellBuilder::new();
+        item.store_u256(&HashBytes(tx_hash.0))?;
+        item.store_reference(tx_list)?;
+        tx_list = item.build()?;
+    }
+
     let mut builder = CellBuilder::new();
     builder.store_u32(seqno)?;
-    builder.store_u256(&HashBytes(tx_hash.0))?;
+    builder.store_reference(tx_list)?;
     let cell = builder.build()?;
     Ok(Boc::encode(cell).into())
 }
@@ -1980,6 +2156,213 @@ mod tests {
         );
 
         drop(reopened);
+        let _ = std::fs::remove_dir_all(temp_root);
+    }
+
+    #[test]
+    fn db_reopen_restores_block_messages_and_msg_to_tx_index() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time must be after unix epoch")
+            .as_nanos();
+        let temp_root = std::path::PathBuf::from("/tmp").join(format!(
+            "ton-localnet-history-reopen-test-{}-{unique}",
+            std::process::id()
+        ));
+        let db_path = temp_root.join("localnet.db");
+
+        let config_boc = BocBytes::from_base64(DEFAULT_CONFIG).expect("must decode default config");
+        let mut node = Node::with_db_path(
+            Box::new(NoopExecutor),
+            config_boc.clone(),
+            StateSource::Local,
+            Some(&db_path),
+        )
+        .expect("must create sqlite-backed test node");
+
+        let account = test_addr(0x42);
+        let tx_hash = Hash256([0x10; 32]);
+        let in_msg_hash = Hash256([0x11; 32]);
+        let out_msg_hash = Hash256([0x12; 32]);
+        let block_hash = Hash256([0x13; 32]);
+        let dummy_boc = BocBytes::from(Boc::encode(Cell::default()));
+        node.cas.put(dummy_boc.clone(), in_msg_hash);
+        node.cas.put(dummy_boc, out_msg_hash);
+        node.history.msg_by_hash.insert(
+            in_msg_hash,
+            MsgMeta {
+                msg_hash: in_msg_hash,
+                msg_boc_hash: in_msg_hash,
+                src: None,
+                dst: Some(account),
+                value: None,
+                bounce: None,
+                created_lt: None,
+                created_at: None,
+            },
+        );
+        node.history.msg_by_hash.insert(
+            out_msg_hash,
+            MsgMeta {
+                msg_hash: out_msg_hash,
+                msg_boc_hash: out_msg_hash,
+                src: Some(account),
+                dst: Some(test_addr(0x43)),
+                value: Some(1),
+                bounce: Some(false),
+                created_lt: Some(2),
+                created_at: Some(3),
+            },
+        );
+
+        let tx_meta = TxMeta {
+            tx_hash,
+            account,
+            lt: 1,
+            now: 3,
+            success: true,
+            compute_exit_code: Some(0),
+            action_result_code: Some(0),
+            total_fees: Some(0),
+            storage_fees: Some(0),
+            other_fees: Some(0),
+            in_msg_hash: Some(in_msg_hash),
+            out_msg_hashes: vec![out_msg_hash],
+            block_seqno: 1,
+        };
+        let block_meta = BlockMeta {
+            seqno: 1,
+            prev_seqno: None,
+            gen_utime: 3,
+            start_lt: 1,
+            end_lt: 1,
+            tx_hashes: vec![tx_hash],
+            block_hash,
+        };
+        node.apply_commit(PendingCommit {
+            block_meta,
+            tx_metas: vec![tx_meta.clone()],
+            deltas: Vec::new(),
+            out_msg_hashes: vec![out_msg_hash],
+            msg_to_tx: vec![(in_msg_hash, tx_hash)],
+            deferred_msg_hashes: Vec::new(),
+        })
+        .expect("commit must persist");
+        drop(node);
+
+        let reopened = Node::with_db_path(
+            Box::new(NoopExecutor),
+            config_boc,
+            StateSource::Local,
+            Some(&db_path),
+        )
+        .expect("must reopen sqlite-backed test node");
+        let reopened_block = reopened
+            .get_block_header(1)
+            .expect("persisted block must be loaded");
+
+        assert_eq!(reopened_block.tx_hashes, vec![tx_hash]);
+        let txs = reopened
+            .get_block_transactions(&reopened_block)
+            .expect("persisted block transactions must resolve");
+        assert_eq!(txs.len(), 1);
+        assert_eq!(txs[0].tx_hash, tx_meta.tx_hash);
+        assert_eq!(txs[0].in_msg_hash, tx_meta.in_msg_hash);
+        assert_eq!(txs[0].out_msg_hashes, tx_meta.out_msg_hashes);
+        assert!(reopened.get_message_info(&in_msg_hash).is_some());
+        assert!(reopened.get_message_info(&out_msg_hash).is_some());
+        assert_eq!(reopened.history.msg_to_tx.get(&in_msg_hash), Some(&tx_hash));
+        assert_eq!(
+            reopened.indexes.tx_by_out_msg.get(&out_msg_hash),
+            Some(&tx_hash)
+        );
+
+        drop(reopened);
+        let _ = std::fs::remove_dir_all(temp_root);
+    }
+
+    #[test]
+    fn snapshot_load_rebuilds_historical_account_and_out_message_indexes() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time must be after unix epoch")
+            .as_nanos();
+        let temp_root = std::path::PathBuf::from("/tmp").join(format!(
+            "ton-localnet-snapshot-indexes-test-{}-{unique}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&temp_root).expect("must create temp dir");
+        let snapshot_path = temp_root.join("state.json");
+
+        let account = test_addr(0x44);
+        let account_meta = AccountMeta {
+            account_hash: Hash256([0x41; 32]),
+            status: AccountStatus::Active,
+            balance: 7,
+            last_trans_lt: Some(10),
+            last_trans_hash: Some(Hash256([0x42; 32])),
+            code_hash: None,
+            data_hash: None,
+            frozen_hash: None,
+        };
+        let tx_hash = Hash256([0x10; 32]);
+        let out_msg_hash = Hash256([0x11; 32]);
+        let mut node = make_test_node(Box::new(NoopExecutor));
+        node.globals.head_seqno = 2;
+        node.history.blocks.push(BlockMeta {
+            seqno: 1,
+            prev_seqno: None,
+            gen_utime: 3,
+            start_lt: 10,
+            end_lt: 10,
+            tx_hashes: vec![tx_hash],
+            block_hash: Hash256([0x12; 32]),
+        });
+        node.history.deltas_by_seqno = vec![vec![AccountDelta {
+            addr: account,
+            old_hash: None,
+            new_hash: Some(account_meta.account_hash),
+            old_meta: None,
+            new_meta: Some(account_meta.clone()),
+        }]];
+        node.history.tx_by_hash.insert(
+            tx_hash,
+            TxMeta {
+                tx_hash,
+                account,
+                lt: 10,
+                now: 3,
+                success: true,
+                compute_exit_code: Some(0),
+                action_result_code: Some(0),
+                total_fees: Some(0),
+                storage_fees: Some(0),
+                other_fees: Some(0),
+                in_msg_hash: None,
+                out_msg_hashes: vec![out_msg_hash],
+                block_seqno: 1,
+            },
+        );
+        node.dump_state_to_path(&snapshot_path)
+            .expect("snapshot must dump");
+
+        let mut loaded = make_test_node(Box::new(NoopExecutor));
+        loaded
+            .load_state_from_path(&snapshot_path)
+            .expect("snapshot must load");
+
+        assert_eq!(
+            loaded
+                .get_address_information_at_block(&account, 1)
+                .map(|meta| meta.balance),
+            Some(account_meta.balance)
+        );
+        assert_eq!(
+            loaded.indexes.tx_by_out_msg.get(&out_msg_hash),
+            Some(&tx_hash)
+        );
+        assert_eq!(loaded.indexes.tx_by_block.get(&1), Some(&vec![tx_hash]));
+
         let _ = std::fs::remove_dir_all(temp_root);
     }
 
@@ -2211,6 +2594,137 @@ mod tests {
         assert_eq!(preview.status, AccountStatus::Active);
     }
 
+    #[test]
+    fn mine_block_creates_empty_block_without_pending_messages() {
+        let mut node = make_test_node(Box::new(NoopExecutor));
+
+        let block = node.mine_block().expect("empty block must be mined");
+
+        assert_eq!(block.seqno, 1);
+        assert_eq!(block.prev_seqno, None);
+        assert!(block.tx_hashes.is_empty());
+        assert_eq!(block.start_lt, 0);
+        assert_eq!(block.end_lt, 0);
+        assert_eq!(node.globals.head_seqno, 1);
+        assert_eq!(
+            node.get_block_transactions(&block)
+                .expect("empty block transactions must resolve")
+                .len(),
+            0
+        );
+    }
+
+    #[test]
+    fn get_traces_uses_out_msg_index_to_find_parent_transaction() {
+        let mut node = make_test_node(Box::new(NoopExecutor));
+        let parent_account = test_addr(0x61);
+        let child_account = test_addr(0x62);
+        let external_msg_hash = Hash256([0x63; 32]);
+        let internal_msg_hash = Hash256([0x64; 32]);
+        let parent_tx_hash = Hash256([0x65; 32]);
+        let child_tx_hash = Hash256([0x66; 32]);
+        let block_hash = Hash256([0x67; 32]);
+        let dummy_boc = BocBytes::from(Boc::encode(Cell::default()));
+
+        for hash in [
+            external_msg_hash,
+            internal_msg_hash,
+            parent_tx_hash,
+            child_tx_hash,
+        ] {
+            node.cas.put(dummy_boc.clone(), hash);
+        }
+        node.history.msg_by_hash.insert(
+            external_msg_hash,
+            MsgMeta {
+                msg_hash: external_msg_hash,
+                msg_boc_hash: external_msg_hash,
+                src: None,
+                dst: Some(parent_account),
+                value: None,
+                bounce: None,
+                created_lt: None,
+                created_at: None,
+            },
+        );
+        node.history.msg_by_hash.insert(
+            internal_msg_hash,
+            MsgMeta {
+                msg_hash: internal_msg_hash,
+                msg_boc_hash: internal_msg_hash,
+                src: Some(parent_account),
+                dst: Some(child_account),
+                value: Some(1),
+                bounce: Some(false),
+                created_lt: Some(1),
+                created_at: Some(2),
+            },
+        );
+
+        let parent_tx = TxMeta {
+            tx_hash: parent_tx_hash,
+            account: parent_account,
+            lt: 1,
+            now: 2,
+            success: true,
+            compute_exit_code: Some(0),
+            action_result_code: Some(0),
+            total_fees: Some(0),
+            storage_fees: Some(0),
+            other_fees: Some(0),
+            in_msg_hash: Some(external_msg_hash),
+            out_msg_hashes: vec![internal_msg_hash],
+            block_seqno: 1,
+        };
+        let child_tx = TxMeta {
+            tx_hash: child_tx_hash,
+            account: child_account,
+            lt: 2,
+            now: 2,
+            success: true,
+            compute_exit_code: Some(0),
+            action_result_code: Some(0),
+            total_fees: Some(0),
+            storage_fees: Some(0),
+            other_fees: Some(0),
+            in_msg_hash: Some(internal_msg_hash),
+            out_msg_hashes: Vec::new(),
+            block_seqno: 1,
+        };
+        node.apply_commit(PendingCommit {
+            block_meta: BlockMeta {
+                seqno: 1,
+                prev_seqno: None,
+                gen_utime: 2,
+                start_lt: 1,
+                end_lt: 2,
+                tx_hashes: vec![parent_tx_hash, child_tx_hash],
+                block_hash,
+            },
+            tx_metas: vec![parent_tx, child_tx],
+            deltas: Vec::new(),
+            out_msg_hashes: vec![internal_msg_hash],
+            msg_to_tx: vec![
+                (external_msg_hash, parent_tx_hash),
+                (internal_msg_hash, child_tx_hash),
+            ],
+            deferred_msg_hashes: Vec::new(),
+        })
+        .expect("commit must index trace");
+
+        assert_eq!(
+            node.indexes.tx_by_out_msg.get(&internal_msg_hash),
+            Some(&parent_tx_hash)
+        );
+        let trace = node
+            .get_traces(&child_tx_hash)
+            .expect("child transaction trace must resolve to root");
+        assert_eq!(trace.transaction.meta.tx_hash, parent_tx_hash);
+        assert_eq!(trace.external_hash, Some(external_msg_hash));
+        assert_eq!(trace.children.len(), 1);
+        assert_eq!(trace.children[0].transaction.meta.tx_hash, child_tx_hash);
+    }
+
     fn found_library_entry(node: &Node, hash: Hash256) -> Option<GlobalLibraryEntry> {
         let mut entries = node.get_libraries(&[hash]);
         assert_eq!(entries.len(), 1, "expected one lookup result");
@@ -2263,6 +2777,15 @@ mod tests {
                 new_meta: Some(active_meta),
             }],
         ];
+        for (index, deltas) in node.history.deltas_by_seqno.iter().enumerate() {
+            for delta in deltas {
+                node.indexes
+                    .account_deltas_by_addr
+                    .entry(delta.addr)
+                    .or_default()
+                    .insert(index as Seqno + 1, delta.clone());
+            }
+        }
         node.globals.head_seqno = 3;
 
         let before_first_delta = node
@@ -2277,6 +2800,49 @@ mod tests {
         assert_eq!(
             node.get_shard_account_at_block(&account, Some(3))
                 .expect("must return latest active state"),
+            active_boc
+        );
+    }
+
+    #[test]
+    fn get_shard_account_at_block_uses_last_delta_in_same_block() {
+        let mut node = make_test_node(Box::new(NoopExecutor));
+        let account = test_addr(0x25);
+        let uninit_boc = make_uninit_shard_account_boc(account);
+        let active_boc = make_active_shard_account_boc(account, Dict::new());
+        let uninit_meta = store_test_account_meta(&mut node, &uninit_boc, AccountStatus::Uninit);
+        let active_meta = store_test_account_meta(&mut node, &active_boc, AccountStatus::Active);
+
+        node.history.deltas_by_seqno = vec![vec![
+            AccountDelta {
+                addr: account,
+                old_hash: None,
+                new_hash: Some(uninit_meta.account_hash),
+                old_meta: None,
+                new_meta: Some(uninit_meta.clone()),
+            },
+            AccountDelta {
+                addr: account,
+                old_hash: Some(uninit_meta.account_hash),
+                new_hash: Some(active_meta.account_hash),
+                old_meta: Some(uninit_meta),
+                new_meta: Some(active_meta),
+            },
+        ]];
+        for (index, deltas) in node.history.deltas_by_seqno.iter().enumerate() {
+            for delta in deltas {
+                node.indexes
+                    .account_deltas_by_addr
+                    .entry(delta.addr)
+                    .or_default()
+                    .insert(index as Seqno + 1, delta.clone());
+            }
+        }
+        node.globals.head_seqno = 2;
+
+        assert_eq!(
+            node.get_shard_account_at_block(&account, Some(1))
+                .expect("must return final state from historical block"),
             active_boc
         );
     }

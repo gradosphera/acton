@@ -55,6 +55,10 @@ Maximum `/api` requests per second to simulate provider rate limits.
 Delay TonCenter v2/v3 and Emulate API responses.
 {{/option}}
 
+{{#option "`--block-interval-ms` _ms_" }}
+Localnet block production interval.
+{{/option}}
+
 {{#option "`--load-state` _path_" }}
 Load Localnet state from a JSON snapshot before startup.
 {{/option}}
@@ -127,6 +131,7 @@ fork-block-number = 55000000
 accounts = ["deployer", "user"]
 rate-limit = 1
 response-delay-ms = 300
+block-interval-ms = 500
 ```
 
 CLI flags override config values for the current invocation.
@@ -156,6 +161,12 @@ one-off overrides or CI.
   `Ctrl+C`
 - the Localnet UI is available on the root path, for example
   `http://127.0.0.1:<port>/`
+- the node produces a block every `--block-interval-ms` milliseconds, defaults
+  to 500 ms, and still creates empty blocks when no transactions are queued
+- messages accepted through `send_boc`, `acton_sendInternalMessage`, or the
+  faucet are queued and included on a later block tick
+- a block can include multiple transactions; locally generated internal
+  messages are processed in the same block when possible
 - the bundled UI is a single-page explorer app, so routes like `/explorer`,
   `/tokens`, `/nfts`, and per-address or per-transaction pages are served from
   the same frontend shell

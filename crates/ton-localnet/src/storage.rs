@@ -4,7 +4,7 @@ use indexmap::IndexMap;
 use rusqlite::{Connection, params};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::fmt::Display;
 use std::sync::{Arc, Mutex};
 use tycho_types::models::{StdAddr, StdAddrFormat};
@@ -202,7 +202,7 @@ pub struct BlockMeta {
     pub gen_utime: u32,
     pub start_lt: Lt,
     pub end_lt: Lt,
-    pub tx_hash: Hash256,
+    pub tx_hashes: Vec<Hash256>,
     pub block_hash: Hash256,
 }
 
@@ -330,6 +330,7 @@ pub struct History {
     pub jetton_masters: IndexMap<Addr, JettonMasterMeta>,
     pub jetton_wallets: IndexMap<Addr, JettonWalletMeta>,
     pub nft_items: IndexMap<Addr, NftItemMeta>,
+    pub asset_detection_checked: HashSet<Addr>,
     pub compiler_abis: HashMap<Hash256, Value>,
 }
 
@@ -355,6 +356,7 @@ impl History {
             jetton_masters: IndexMap::new(),
             jetton_wallets: IndexMap::new(),
             nft_items: IndexMap::new(),
+            asset_detection_checked: HashSet::new(),
             compiler_abis: HashMap::new(),
         }
     }
@@ -373,6 +375,7 @@ impl History {
             jetton_masters: IndexMap::new(),
             jetton_wallets: IndexMap::new(),
             nft_items: IndexMap::new(),
+            asset_detection_checked: HashSet::new(),
             compiler_abis: HashMap::new(),
         }
     }
@@ -441,8 +444,10 @@ impl History {
 pub struct ReverseLtKey(pub core::cmp::Reverse<Lt>, pub Hash256);
 
 pub struct Indexes {
+    pub account_deltas_by_addr: HashMap<Addr, BTreeMap<Seqno, AccountDelta>>,
     pub tx_by_account: HashMap<Addr, BTreeMap<ReverseLtKey, Hash256>>,
-    pub tx_by_block: HashMap<Seqno, Hash256>,
+    pub tx_by_block: HashMap<Seqno, Vec<Hash256>>,
+    pub tx_by_out_msg: HashMap<Hash256, Hash256>,
 }
 
 impl Default for Indexes {
@@ -455,8 +460,10 @@ impl Indexes {
     #[must_use]
     pub fn new() -> Self {
         Self {
+            account_deltas_by_addr: HashMap::new(),
             tx_by_account: HashMap::new(),
             tx_by_block: HashMap::new(),
+            tx_by_out_msg: HashMap::new(),
         }
     }
 }
@@ -557,8 +564,9 @@ impl MessagePool {
 
 pub struct PendingCommit {
     pub block_meta: BlockMeta,
-    pub tx_meta: TxMeta,
-    pub delta: AccountDelta,
+    pub tx_metas: Vec<TxMeta>,
+    pub deltas: Vec<AccountDelta>,
     pub out_msg_hashes: Vec<Hash256>,
     pub msg_to_tx: Vec<(Hash256, Hash256)>,
+    pub deferred_msg_hashes: Vec<Hash256>,
 }

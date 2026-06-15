@@ -18,7 +18,7 @@ use std::io::{IsTerminal, Read, Write, stdin, stdout};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::mpsc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use toml_edit::{DocumentMut, Item, Table, value};
 use ton::ton_core::cell::TonCell;
 use ton::ton_core::traits::tlb::TLB;
@@ -525,7 +525,7 @@ fn perform_testnet_airdrop(
             challenge_data.difficulty
         );
     }
-    let start = std::time::Instant::now();
+    let start = Instant::now();
     let nonce = solve_challenge(&challenge_data.challenge, challenge_data.difficulty)?;
     let duration = start.elapsed();
     if !json {
@@ -588,6 +588,7 @@ fn perform_localnet_airdrop(
         .build()
         .context("Failed to build HTTP client")?;
     let amount_nanograms = (amount_grams * 1_000_000_000.0) as u128;
+    let initial_balance = fetch_localnet_account_balance(&client, port, &address);
     let response = client
         .post(format!("http://127.0.0.1:{port}/acton_fundAccount"))
         .json(&serde_json::json!({
@@ -612,6 +613,10 @@ fn perform_localnet_airdrop(
                 .and_then(serde_json::Value::as_bool)
                 .unwrap_or(false)
         {
+            let expected_balance = initial_balance
+                .context("Failed to read localnet balance before faucet request")?
+                .saturating_add(amount_nanograms);
+            wait_for_localnet_airdrop_balance(&client, port, &address, expected_balance)?;
             let message = format!("Successfully airdropped {amount_grams} GRAM on localnet");
             Ok(AirdropResult {
                 address,
@@ -631,6 +636,50 @@ fn perform_localnet_airdrop(
         let status = response.status();
         let body = response.text().unwrap_or_default();
         anyhow::bail!("Localnet faucet returned error {status}: {body}");
+    }
+}
+
+fn fetch_localnet_account_balance(
+    client: &reqwest::blocking::Client,
+    port: u16,
+    address: &str,
+) -> anyhow::Result<u128> {
+    let response: serde_json::Value = client
+        .get(format!(
+            "http://127.0.0.1:{port}/api/v2/getAddressInformation"
+        ))
+        .query(&[("address", address)])
+        .send()
+        .context("Failed to query localnet account balance")?
+        .json()
+        .context("Failed to parse localnet account balance response")?;
+
+    response
+        .pointer("/result/balance")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("0")
+        .parse::<u128>()
+        .context("Failed to parse localnet account balance")
+}
+
+fn wait_for_localnet_airdrop_balance(
+    client: &reqwest::blocking::Client,
+    port: u16,
+    address: &str,
+    expected_balance: u128,
+) -> anyhow::Result<()> {
+    let deadline = Instant::now() + Duration::from_secs(12);
+    loop {
+        if fetch_localnet_account_balance(client, port, address).unwrap_or_default()
+            >= expected_balance
+        {
+            return Ok(());
+        }
+
+        if Instant::now() >= deadline {
+            anyhow::bail!("Timed out waiting for localnet airdrop balance");
+        }
+        std::thread::sleep(Duration::from_millis(100));
     }
 }
 
@@ -758,7 +807,7 @@ fn solve_challenge_with_limits(
         anyhow::bail!("PoW difficulty must be at most 256 bits");
     }
 
-    let started_at = std::time::Instant::now();
+    let started_at = Instant::now();
     let mut nonce: u64 = 0;
     loop {
         if started_at.elapsed() >= max_duration {

@@ -468,6 +468,12 @@
             "type": "string"
           }
         },
+        "block-interval-ms": {
+          "description": "Block production interval in milliseconds for `acton localnet start`",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 1.0
+        },
         "fork-block-number": {
           "description": "Block sequence number used by `acton localnet start` when forking from historical state",
           "type": "integer",

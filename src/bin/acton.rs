@@ -1131,6 +1131,13 @@ pub enum LocalnetCommand {
         response_delay_ms: Option<u64>,
         #[arg(
             long,
+            value_name = "MS",
+            value_parser = clap::value_parser!(u64).range(1..),
+            help = "Localnet block production interval, in milliseconds (default: [localnet].block-interval-ms or 500)"
+        )]
+        block_interval_ms: Option<u64>,
+        #[arg(
+            long,
             help = "Load Localnet state from JSON snapshot before startup",
             conflicts_with = "db_path", // for now
             value_name = "PATH"
@@ -2381,6 +2388,7 @@ fn main() {
                 db_path,
                 rate_limit,
                 response_delay_ms,
+                block_interval_ms,
                 load_state,
                 dump_state,
             } => {
@@ -2391,6 +2399,7 @@ fn main() {
                     accounts,
                     rate_limit,
                     response_delay_ms,
+                    block_interval_ms,
                 );
                 let rt = tokio::runtime::Builder::new_multi_thread()
                     .enable_all()
@@ -2405,6 +2414,7 @@ fn main() {
                         resolved_localnet.accounts,
                         resolved_localnet.rate_limit,
                         resolved_localnet.response_delay_ms,
+                        resolved_localnet.block_interval_ms,
                         load_state,
                         dump_state,
                     )
@@ -2537,10 +2547,11 @@ struct ResolvedLocalnetSettings {
     accounts: Vec<String>,
     rate_limit: Option<u32>,
     response_delay_ms: Option<u64>,
+    block_interval_ms: u64,
 }
 
 fn resolve_localnet_port(cli_port: Option<u16>) -> u16 {
-    resolve_localnet_settings(cli_port, None, None, None, None, None).port
+    resolve_localnet_settings(cli_port, None, None, None, None, None, None).port
 }
 
 fn resolve_localnet_settings(
@@ -2550,6 +2561,7 @@ fn resolve_localnet_settings(
     cli_accounts: Option<Vec<String>>,
     cli_rate_limit: Option<u32>,
     cli_response_delay_ms: Option<u64>,
+    cli_block_interval_ms: Option<u64>,
 ) -> ResolvedLocalnetSettings {
     let config = load_localnet_settings_from_config();
     ResolvedLocalnetSettings {
@@ -2559,6 +2571,9 @@ fn resolve_localnet_settings(
         accounts: cli_accounts.or(config.accounts).unwrap_or_default(),
         rate_limit: cli_rate_limit.or(config.rate_limit),
         response_delay_ms: cli_response_delay_ms.or(config.response_delay_ms),
+        block_interval_ms: cli_block_interval_ms
+            .or(config.block_interval_ms)
+            .unwrap_or(ton_localnet::DEFAULT_BLOCK_INTERVAL_MS),
     }
 }
 

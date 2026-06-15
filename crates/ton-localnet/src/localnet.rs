@@ -10,8 +10,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashSet;
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::{broadcast, mpsc, oneshot};
+use tokio::time::Instant;
 use ton_executor::DEFAULT_CONFIG;
 use ton_executor::ExecutorVerbosity;
 use ton_executor::get::{GetExecutor, GetMethodResult, RunGetMethodArgs};
@@ -60,6 +61,22 @@ pub struct LocalnetAccountState {
     pub state: AccountStatus,
     pub sync_utime: u64,
     pub frozen_hash: Option<Hash256>,
+}
+
+#[derive(Debug, Clone)]
+pub struct LocalnetAddressInfo {
+    pub address: Addr,
+    pub code_hash: Option<Hash256>,
+    pub jetton_wallet: Option<storage::JettonWalletMeta>,
+    pub jetton_master: Option<storage::JettonMasterMeta>,
+    pub nft_item: Option<storage::NftItemMeta>,
+    pub nft_collection_item: Option<storage::NftItemMeta>,
+}
+
+#[derive(Debug, Clone)]
+pub struct LocalnetAccountStateWithInfo {
+    pub state: LocalnetAccountState,
+    pub info: LocalnetAddressInfo,
 }
 
 impl LocalnetAccountState {
@@ -199,6 +216,15 @@ pub(crate) enum Request {
         address: Addr,
         seqno: Option<u32>,
         resp: oneshot::Sender<anyhow::Result<LocalnetAccountState>>,
+    },
+    GetAccountStates {
+        addresses: Vec<Addr>,
+        seqno: Option<u32>,
+        resp: oneshot::Sender<anyhow::Result<Vec<LocalnetAccountStateWithInfo>>>,
+    },
+    GetAddressInfos {
+        addresses: Vec<Addr>,
+        resp: oneshot::Sender<anyhow::Result<Vec<LocalnetAddressInfo>>>,
     },
     GetShardAccountCell {
         address: Addr,
@@ -368,22 +394,23 @@ pub struct Localnet {
     started_at: SystemTime,
 }
 
-impl Default for Localnet {
-    fn default() -> Self {
-        Self::new(StateSource::Local, None)
-    }
-}
+pub const DEFAULT_BLOCK_INTERVAL_MS: u64 = 500;
 
 impl Localnet {
     #[must_use]
-    pub fn new(state_source: StateSource, db_path: Option<String>) -> Self {
+    pub fn new(
+        state_source: StateSource,
+        db_path: Option<String>,
+        block_interval: Duration,
+    ) -> Self {
         let (tx, rx) = mpsc::channel(100);
         let (events_tx, _) = broadcast::channel(1024);
         let started_at = SystemTime::now();
         let node_events_tx = events_tx.clone();
 
         std::thread::spawn(move || {
-            if let Err(e) = run_node_loop(rx, node_events_tx, state_source, db_path) {
+            if let Err(e) = run_node_loop(rx, node_events_tx, state_source, db_path, block_interval)
+            {
                 tracing::error!("Node loop failed: {:?}", e);
             }
         });
@@ -440,6 +467,33 @@ impl Localnet {
                 seqno,
                 resp,
             })
+            .await?;
+        rx.await?
+    }
+
+    pub async fn get_account_states(
+        &self,
+        addresses: Vec<Addr>,
+        seqno: Option<u32>,
+    ) -> anyhow::Result<Vec<LocalnetAccountStateWithInfo>> {
+        let (resp, rx) = oneshot::channel();
+        self.tx
+            .send(Request::GetAccountStates {
+                addresses,
+                seqno,
+                resp,
+            })
+            .await?;
+        rx.await?
+    }
+
+    pub async fn get_address_infos(
+        &self,
+        addresses: Vec<Addr>,
+    ) -> anyhow::Result<Vec<LocalnetAddressInfo>> {
+        let (resp, rx) = oneshot::channel();
+        self.tx
+            .send(Request::GetAddressInfos { addresses, resp })
             .await?;
         rx.await?
     }
@@ -948,42 +1002,73 @@ impl Localnet {
 }
 
 fn run_node_loop(
+    rx: mpsc::Receiver<Request>,
+    events_tx: broadcast::Sender<StreamingCommitEvent>,
+    state_source: StateSource,
+    db_path: Option<String>,
+    block_interval: Duration,
+) -> anyhow::Result<()> {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_time()
+        .build()
+        .context("Failed to create localnet node runtime")?;
+    runtime.block_on(run_node_loop_async(
+        rx,
+        events_tx,
+        state_source,
+        db_path,
+        block_interval,
+    ))
+}
+
+// The node loop runs on a dedicated current-thread Tokio runtime, so the
+// non-Send executor stored in Node never crosses thread boundaries.
+#[allow(clippy::future_not_send)]
+async fn run_node_loop_async(
     mut rx: mpsc::Receiver<Request>,
     events_tx: broadcast::Sender<StreamingCommitEvent>,
     state_source: StateSource,
     db_path: Option<String>,
+    block_interval: Duration,
 ) -> anyhow::Result<()> {
     let executor = Box::new(TvmEmulatorAdapter::new()?);
     let config_boc = BocBytes::from_base64(DEFAULT_CONFIG)?;
     let mut node = Node::with_db_path(executor, config_boc, state_source, db_path)?;
     node.streaming_events = Some(events_tx);
 
-    tracing::info!("TON localnet started");
+    tracing::info!(
+        "TON localnet started, block interval: {}ms",
+        block_interval.as_millis()
+    );
+    let mut next_block_at = Instant::now() + block_interval;
 
     loop {
-        // 1. Process all currently pending requests
-        while let Ok(req) = rx.try_recv() {
-            process_loop_request(&mut node, req);
-        }
-
-        // 2. If there are pending messages in the pool, mine one
-        if node.has_pending_messages() {
-            tracing::info!("Auto-mining message from pool");
-            if let Err(e) = node.mine_one() {
-                tracing::error!("Auto-mining failed: {:?}", e);
-            }
-            std::thread::sleep(std::time::Duration::from_millis(1));
+        if Instant::now() >= next_block_at {
+            next_block_at = mine_scheduled_block(&mut node, block_interval);
             continue;
         }
 
-        // 3. If pool is empty, block until next request
-        if let Some(req) = rx.blocking_recv() {
-            process_loop_request(&mut node, req);
-        } else {
-            break; // Channel closed
+        tokio::select! {
+            biased;
+            () = tokio::time::sleep_until(next_block_at) => {
+                next_block_at = mine_scheduled_block(&mut node, block_interval);
+            }
+            req = rx.recv() => {
+                let Some(req) = req else {
+                    return Ok(());
+                };
+                process_loop_request(&mut node, req);
+            }
         }
     }
-    Ok(())
+}
+
+fn mine_scheduled_block(node: &mut Node, block_interval: Duration) -> Instant {
+    tracing::info!("Mining localnet block");
+    if let Err(e) = node.mine_block() {
+        tracing::error!("Block mining failed: {:?}", e);
+    }
+    Instant::now() + block_interval
 }
 
 fn process_loop_request(node: &mut Node, req: Request) {
@@ -1003,6 +1088,18 @@ fn process_loop_request(node: &mut Node, req: Request) {
             resp,
         } => {
             let res = handle_get_address_info(node, address, seqno);
+            let _ = resp.send(res);
+        }
+        Request::GetAccountStates {
+            addresses,
+            seqno,
+            resp,
+        } => {
+            let res = handle_get_account_states(node, addresses, seqno);
+            let _ = resp.send(res);
+        }
+        Request::GetAddressInfos { addresses, resp } => {
+            let res = handle_get_address_infos(node, addresses);
             let _ = resp.send(res);
         }
         Request::GetShardAccountCell {
@@ -1275,14 +1372,9 @@ fn handle_get_address_info(
     address: Addr,
     seqno: Option<u32>,
 ) -> anyhow::Result<LocalnetAccountState> {
-    let seqno = seqno.unwrap_or(node.globals.head_seqno);
+    let seqno = account_query_seqno(node, seqno);
     let meta = node.get_address_information_at_block(&address, seqno);
-
-    let Some(block_header) = node.get_block_header(seqno) else {
-        anyhow::bail!("Block {seqno} not found")
-    };
-
-    let block_id = block_header.block_id();
+    let block_id = block_id_for_query_seqno(node, seqno)?;
     let sync_utime = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
 
     let Some(meta) = meta else {
@@ -1309,13 +1401,95 @@ fn handle_get_address_info(
     })
 }
 
+fn handle_get_account_states(
+    node: &mut Node,
+    addresses: Vec<Addr>,
+    seqno: Option<u32>,
+) -> anyhow::Result<Vec<LocalnetAccountStateWithInfo>> {
+    addresses
+        .into_iter()
+        .map(|address| {
+            let state = handle_get_address_info(node, address, seqno)?;
+            let info = handle_get_address_context(node, address)?;
+            Ok(LocalnetAccountStateWithInfo { state, info })
+        })
+        .collect()
+}
+
+fn handle_get_address_infos(
+    node: &mut Node,
+    addresses: Vec<Addr>,
+) -> anyhow::Result<Vec<LocalnetAddressInfo>> {
+    addresses
+        .into_iter()
+        .map(|address| handle_get_address_context(node, address))
+        .collect()
+}
+
+fn handle_get_address_context(
+    node: &mut Node,
+    address: Addr,
+) -> anyhow::Result<LocalnetAddressInfo> {
+    node.ensure_detected_assets_for_address(&address)?;
+
+    let code_hash = node
+        .get_address_information(&address)
+        .and_then(|meta| meta.code_hash);
+    let jetton_wallet = node
+        .iter_jetton_wallets()
+        .find(|wallet| wallet.address == address)
+        .cloned();
+    let jetton_master = node
+        .iter_jetton_masters()
+        .find(|master| master.address == address)
+        .cloned();
+    let nft_item = node
+        .iter_nft_items()
+        .find(|item| item.address == address)
+        .cloned();
+    let nft_collection_item = node
+        .iter_nft_items()
+        .find(|item| item.collection_address == Some(address))
+        .cloned();
+
+    Ok(LocalnetAddressInfo {
+        address,
+        code_hash,
+        jetton_wallet,
+        jetton_master,
+        nft_item,
+        nft_collection_item,
+    })
+}
+
+const fn account_query_seqno(node: &Node, seqno: Option<Seqno>) -> Seqno {
+    match seqno {
+        Some(0) | None => node.globals.head_seqno,
+        Some(seqno) => seqno,
+    }
+}
+
+fn block_id_for_query_seqno(node: &Node, seqno: Seqno) -> anyhow::Result<LocalnetBlockId> {
+    if seqno == 0 {
+        return Ok(LocalnetBlockId::first());
+    }
+
+    node.get_block_header(seqno)
+        .map(|block| block.block_id())
+        .ok_or_else(|| anyhow::anyhow!("Block {seqno} not found"))
+}
+
 fn handle_get_jetton_masters(
-    node: &Node,
+    node: &mut Node,
     address: Option<Addr>,
     admin_address: Option<Addr>,
     limit: usize,
     offset: usize,
 ) -> anyhow::Result<Vec<storage::JettonMasterMeta>> {
+    if let Some(addr) = address {
+        node.ensure_detected_assets_for_address(&addr)?;
+    }
+
     Ok(node
         .iter_jetton_masters()
         .filter(|master| {
@@ -1338,7 +1512,7 @@ fn handle_get_jetton_masters(
 }
 
 fn handle_get_jetton_wallets(
-    node: &Node,
+    node: &mut Node,
     address: Option<Addr>,
     owner_address: Option<Addr>,
     jetton_address: Option<Addr>,
@@ -1346,6 +1520,10 @@ fn handle_get_jetton_wallets(
     limit: usize,
     offset: usize,
 ) -> anyhow::Result<Vec<storage::JettonWalletMeta>> {
+    if let Some(addr) = address {
+        node.ensure_detected_assets_for_address(&addr)?;
+    }
+
     Ok(node
         .iter_jetton_wallets()
         .filter(|wallet| {
@@ -1377,7 +1555,7 @@ fn handle_get_jetton_wallets(
 
 #[allow(clippy::too_many_arguments)]
 fn handle_get_nft_items(
-    node: &Node,
+    node: &mut Node,
     address: Option<Addr>,
     owner_address: Option<Addr>,
     collection_address: Option<Addr>,
@@ -1386,6 +1564,10 @@ fn handle_get_nft_items(
     limit: usize,
     offset: usize,
 ) -> anyhow::Result<Vec<storage::NftItemMeta>> {
+    if let Some(addr) = address {
+        node.ensure_detected_assets_for_address(&addr)?;
+    }
+
     let items = node.iter_nft_items().filter(|item| {
         if let Some(addr) = address
             && item.address != addr
@@ -1574,15 +1756,10 @@ fn handle_run_get_method(
     stack: Tuple,
     seqno: Option<u32>,
 ) -> anyhow::Result<LocalnetRunGetMethodResult> {
-    let seqno = seqno.unwrap_or(node.globals.head_seqno);
+    let seqno = account_query_seqno(node, seqno);
     let meta = node.get_address_information_at_block(&address, seqno);
     let meta = meta.ok_or_else(|| anyhow::anyhow!("Account {address} not found"))?;
-
-    let Some(block_header) = node.get_block_header(seqno) else {
-        anyhow::bail!("Block {seqno} not found")
-    };
-
-    let block_id = block_header.block_id();
+    let block_id = block_id_for_query_seqno(node, seqno)?;
     let last_transaction_id = meta.last_tx_id();
 
     let code_boc = node.get_cell_or_empty(meta.code_hash).to_base64();
