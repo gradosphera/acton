@@ -183,6 +183,7 @@ async fn setup_startup_accounts(
                 node.send_boc(deploy_boc)
                     .await
                     .with_context(|| format!("Failed to deploy wallet '{wallet_name}'"))?;
+                wait_for_startup_wallet_deploy(node, &address, &wallet_name).await?;
                 println!(
                     "       {} wallet {} {}",
                     "Ready".green().bold(),
@@ -224,6 +225,30 @@ async fn wait_for_startup_wallet_funds(
 
         if Instant::now() >= deadline {
             anyhow::bail!("Timed out waiting for localnet top up of wallet '{wallet_name}'");
+        }
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+}
+
+async fn wait_for_startup_wallet_deploy(
+    node: &Arc<Localnet>,
+    address: &str,
+    wallet_name: &str,
+) -> anyhow::Result<()> {
+    let deadline = Instant::now() + Duration::from_secs(12);
+    loop {
+        let wallet_state = node
+            .get_address_state(address.to_owned(), None)
+            .await
+            .with_context(|| format!("Failed to fetch state for wallet '{wallet_name}'"))?;
+
+        if wallet_state == AccountStatus::Active {
+            return Ok(());
+        }
+
+        if Instant::now() >= deadline {
+            anyhow::bail!("Timed out waiting for localnet deployment of wallet '{wallet_name}'");
         }
 
         tokio::time::sleep(Duration::from_millis(100)).await;
