@@ -1,7 +1,7 @@
 .container {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-md);
+  gap: 14px;
   padding: var(--spacing-md);
   background-color: var(--tonscan-card-bg);
   border-radius: 0 0 var(--border-radius-md) var(--border-radius-md);
@@ -9,43 +9,167 @@
 
 .tabs {
   display: flex;
-  gap: var(--spacing-xs);
-  padding: 3px;
-  background-color: var(--tonscan-row-hover);
-  border: 1px solid var(--tonscan-border);
-  border-radius: var(--border-radius-md);
+  align-items: center;
+  gap: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
   width: fit-content;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .tab {
-  padding: 6px 12px;
-  font-size: 12px;
+  min-height: 34px;
+  padding: 8px 18px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--tonscan-text-secondary);
   cursor: pointer;
-  border-radius: calc(var(--border-radius-md) - 2px);
-  transition: all var(--transition-duration-fast);
-  background: none;
-  border: none;
+  border: 1px solid var(--tonscan-border);
+  border-left-width: 0;
+  border-radius: 0;
+  transition: color var(--transition-duration-fast);
+  background: var(--tonscan-row-hover);
+}
+
+.tab:first-child {
+  border-left-width: 1px;
+  border-radius: 8px 0 0 8px;
+}
+
+.tab:last-child {
+  border-radius: 0 8px 8px 0;
 }
 
 .tab:hover {
   color: var(--tonscan-text-primary);
-  background-color: var(--litenode-accent-bg);
 }
 
 .tabActive {
-  background-color: var(--tonscan-card-bg);
   color: var(--tonscan-text-primary);
-  box-shadow: var(--litenode-shadow-sm);
+  background: var(--tonscan-bg);
 }
 
-.codeBlock {
-  position: relative;
-  background-color: var(--tonscan-bg);
-  border-radius: var(--border-radius-md);
+.content {
+  min-width: 0;
+}
+
+.sourceShell {
+  min-width: 0;
+  overflow: visible;
+  background: transparent;
+}
+
+.editorTabBar {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  min-height: 34px;
+  padding: 0;
+  margin: 0 0 -1px;
+  background: transparent;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.editorTabBar::-webkit-scrollbar {
+  display: none;
+}
+
+.editorTab {
+  min-height: 34px;
+  padding: 8px 18px;
   border: 1px solid var(--tonscan-border);
+  border-left-width: 0;
+  border-radius: 0;
+  background: var(--tonscan-row-hover);
+  color: var(--tonscan-text-secondary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: var(--font-weight-medium);
+  line-height: 1.2;
+  white-space: nowrap;
+  transition:
+    background-color var(--transition-duration-fast),
+    border-color var(--transition-duration-fast),
+    color var(--transition-duration-fast);
+}
+
+.editorTab:first-child {
+  border-left-width: 1px;
+  border-radius: 8px 0 0;
+}
+
+.editorTab:last-child {
+  border-radius: 0 8px 0 0;
+}
+
+.editorTab:hover {
+  color: var(--tonscan-text-primary);
+}
+
+.editorTabActive {
+  position: relative;
+  z-index: 1;
+  color: var(--tonscan-text-primary);
+  background: var(--tonscan-bg);
+  border-bottom-color: var(--tonscan-bg);
+}
+
+.dataPanel {
+  position: relative;
+  min-width: 0;
   overflow: hidden;
+  border: 1px solid var(--tonscan-border);
+  border-radius: 12px;
+  background: var(--tonscan-bg);
+}
+
+.sourceShell .dataPanel {
+  border-radius: 0 8px 8px;
+}
+
+.copyButton {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  color: var(--tonscan-text-secondary);
+  cursor: pointer;
+  background: color-mix(in srgb, var(--tonscan-card-bg) 84%, transparent);
+  border: 1px solid var(--tonscan-border);
+  border-radius: 8px;
+  backdrop-filter: blur(8px);
+  transition:
+    background-color var(--transition-duration-fast),
+    border-color var(--transition-duration-fast),
+    color var(--transition-duration-fast);
+}
+
+.copyButton:hover {
+  color: var(--tonscan-text-primary);
+  background: var(--litenode-control-hover);
+  border-color: var(--tonscan-border);
+}
+
+.copyButton:focus-visible,
+.tab:focus-visible,
+.editorTab:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--litenode-focus);
 }
 
 .code {
@@ -55,10 +179,11 @@
   color: var(--tonscan-text-primary);
   white-space: pre;
   word-break: normal;
-  padding: var(--spacing-md);
+  padding: var(--spacing-md) 54px var(--spacing-md) var(--spacing-md);
   margin: 0;
   overflow-x: auto;
   max-height: 600px;
+  background: transparent;
 }
 
 .codeWrap {
@@ -66,6 +191,35 @@
   overflow-wrap: anywhere;
   word-break: break-all;
   overflow-x: hidden;
+}
+
+.highlightedCode {
+  max-height: 600px;
+  overflow: auto;
+}
+
+.highlightedCode :global(pre) {
+  margin: 0 !important;
+  padding: var(--spacing-md) 54px var(--spacing-md) var(--spacing-md) !important;
+  overflow: visible !important;
+  background: transparent !important;
+  font-family: var(--font-mono) !important;
+  font-size: 13px !important;
+  line-height: 1.6 !important;
+}
+
+.highlightedCode :global(code) {
+  display: block;
+  width: max-content;
+  min-width: 100%;
+  font-family: var(--font-mono) !important;
+}
+
+.highlightedCodeWrap :global(code) {
+  width: auto;
+  white-space: pre-wrap !important;
+  overflow-wrap: anywhere;
+  word-break: break-all;
 }
 
 .storageBlock {
@@ -85,4 +239,23 @@
   background-color: var(--tonscan-row-hover);
   border: 1px solid var(--tonscan-border);
   border-radius: var(--border-radius-md);
+}
+
+@media (max-width: 720px) {
+  .container {
+    padding: 12px;
+  }
+
+  .tabs,
+  .editorTabBar {
+    width: auto;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .tab,
+  .editorTab {
+    flex: 0 0 auto;
+  }
 }

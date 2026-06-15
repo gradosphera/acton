@@ -1,7 +1,7 @@
 import type {ContractABI} from "@ton/tolk-abi-to-typescript"
-import {Check, Copy, Edit2, QrCode, X} from "lucide-react"
+import {Check, Copy, Edit2, Info, QrCode, X} from "lucide-react"
 import type React from "react"
-import {useEffect, useRef, useState} from "react"
+import {useEffect, useId, useRef, useState} from "react"
 import {QRCodeSVG} from "qrcode.react"
 
 import type {FullAccountState, JettonMaster, JettonWallet} from "../api/types"
@@ -63,6 +63,7 @@ export const AccountInfo: React.FC<AccountInfoProps> = ({
   const [renameSaving, setRenameSaving] = useState(false)
   const [qrOpen, setQrOpen] = useState(false)
   const editInputRef = useRef<HTMLInputElement>(null)
+  const contractDescriptionId = useId()
   const {setAddressName} = useAddressBook()
   const resolvedName = useAddressName(address)
   const {addressFormat, forkNetwork} = useNetworkInfo()
@@ -159,7 +160,9 @@ export const AccountInfo: React.FC<AccountInfoProps> = ({
   }
 
   const contractTypeLabels = getContractTypeLabels(compilerAbi, contractInterfaces)
-  const contractTypeText = contractTypeLabels.join(", ")
+  const contractDescription = compilerAbi?.description?.trim()
+  const contractDescriptionTitle = compilerAbi?.contract_name?.trim() || contractTypeLabels[0]
+  const contractDescriptionUrl = contractDescription && getExternalUrl(contractDescription)
   const statusInfo = getStatusInfo(state?.state)
   const shortAddress = formatAddress(displayAddress, true, addressFormat)
   const addressRowText = hasContextCard ? shortAddress : displayAddress
@@ -465,7 +468,51 @@ export const AccountInfo: React.FC<AccountInfoProps> = ({
                 {stateLoading ? (
                   <div className={`${styles.skeleton} ${styles.skeletonTagWide}`} />
                 ) : (
-                  <span className={styles.primaryValue}>{contractTypeText}</span>
+                  <span className={styles.contractTypeValue}>
+                    {contractTypeLabels.map((label, index) => (
+                      <span key={`${label}-${index}`} className={styles.contractTypeItem}>
+                        <span className={styles.primaryValue}>{label}</span>
+                        {index === 0 && contractDescription && (
+                          <span className={styles.contractDescription}>
+                            <button
+                              type="button"
+                              className={styles.contractDescriptionButton}
+                              aria-label="Show contract description"
+                              aria-describedby={contractDescriptionId}
+                            >
+                              <Info size={12} />
+                            </button>
+                            <span
+                              id={contractDescriptionId}
+                              className={styles.contractDescriptionPopover}
+                              role="tooltip"
+                            >
+                              <span className={styles.contractDescriptionTitle}>
+                                {contractDescriptionTitle}
+                              </span>
+                              {contractDescriptionUrl ? (
+                                <a
+                                  className={styles.contractDescriptionLink}
+                                  href={contractDescriptionUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                >
+                                  {contractDescription}
+                                </a>
+                              ) : (
+                                <span className={styles.contractDescriptionText}>
+                                  {contractDescription}
+                                </span>
+                              )}
+                            </span>
+                          </span>
+                        )}
+                        {index < contractTypeLabels.length - 1 && (
+                          <span className={styles.contractTypeSeparator}>,</span>
+                        )}
+                      </span>
+                    ))}
+                  </span>
                 )}
               </div>
             </div>
@@ -566,6 +613,15 @@ function getInterfaceLabel(value: string): string | undefined {
     default: {
       return normalizedInterface.replaceAll("_", " ")
     }
+  }
+}
+
+function getExternalUrl(value: string): string | undefined {
+  try {
+    const url = new URL(value)
+    return url.protocol === "http:" || url.protocol === "https:" ? url.toString() : undefined
+  } catch {
+    return undefined
   }
 }
 

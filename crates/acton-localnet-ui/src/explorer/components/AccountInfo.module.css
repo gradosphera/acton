@@ -12,7 +12,7 @@
   justify-content: space-between;
   gap: 16px;
   box-sizing: border-box;
-  min-height: 186px;
+  min-height: 150px;
   padding: 20px 24px;
 }
 
@@ -75,6 +75,150 @@
   overflow-wrap: anywhere;
 }
 
+.contractTypeValue {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0 4px;
+  min-width: 0;
+}
+
+.contractTypeItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.contractTypeSeparator {
+  color: var(--tonscan-text-primary);
+  font-size: var(--font-size-sm);
+  line-height: 20px;
+}
+
+.contractDescription {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  min-height: 18px;
+}
+
+.contractDescriptionButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  color: var(--tonscan-text-primary);
+  background: var(--litenode-neutral-bg);
+  border: 1px solid transparent;
+  border-radius: 50%;
+  cursor: help;
+  transition:
+    background-color var(--transition-duration-fast),
+    border-color var(--transition-duration-fast),
+    color var(--transition-duration-fast);
+}
+
+.contractDescriptionButton:hover {
+  color: var(--tonscan-text-primary);
+  background: var(--litenode-control-hover);
+}
+
+.contractDescriptionButton:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--litenode-focus);
+}
+
+.contractDescriptionPopover {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  z-index: 40;
+  display: grid;
+  gap: 6px;
+  width: max-content;
+  max-width: min(420px, calc(100vw - 40px));
+  padding: 12px 14px;
+  color: var(--tonscan-text-primary);
+  background: color-mix(in srgb, var(--tonscan-card-bg) 92%, transparent);
+  border: 1px solid var(--tonscan-border);
+  border-radius: 12px;
+  box-shadow: var(--litenode-shadow-popover);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-50%) scale(0.98);
+  transform-origin: 50% 100%;
+  transition:
+    opacity var(--transition-duration-fast),
+    transform var(--transition-duration-fast),
+    visibility var(--transition-duration-fast);
+  visibility: hidden;
+  backdrop-filter: blur(18px);
+}
+
+.contractDescriptionPopover::after {
+  content: "";
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  width: 12px;
+  height: 12px;
+  background: inherit;
+  border-right: 1px solid var(--tonscan-border);
+  border-bottom: 1px solid var(--tonscan-border);
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.contractDescription:hover .contractDescriptionPopover,
+.contractDescription:focus-within .contractDescriptionPopover {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(-50%) scale(1);
+  visibility: visible;
+}
+
+.contractDescriptionTitle,
+.contractDescriptionText,
+.contractDescriptionLink {
+  display: block;
+  min-width: 0;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.contractDescriptionTitle {
+  color: var(--tonscan-text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+.contractDescriptionText,
+.contractDescriptionLink {
+  color: var(--tonscan-text-primary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-normal);
+}
+
+.contractDescriptionLink {
+  color: var(--tonscan-link);
+  text-decoration: none;
+}
+
+.contractDescriptionLink:hover {
+  color: var(--tonscan-accent);
+  text-decoration: underline;
+}
+
+.contractDescriptionLink:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--litenode-focus);
+}
+
 .mutedValue {
   color: var(--tonscan-text-secondary);
 }
@@ -95,7 +239,7 @@
 .addressActions {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
   flex: 0 0 auto;
   margin-left: 2px;
   line-height: 20px;
