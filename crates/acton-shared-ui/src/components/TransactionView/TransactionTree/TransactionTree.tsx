@@ -282,15 +282,16 @@ export function TransactionTree({
     const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
     triggerRectReference.current = rect
 
-    const contractAddress = tx.address ? formatAddress(tx.address, contracts) : "unknown"
+    const contractAddress = tx.address ? tx.address.toString({testOnly: true}) : "unknown"
     const isCreated =
       tx.transaction.oldStatus === "non-existing" && tx.transaction.endStatus === "active"
     const isDestroyed =
       tx.transaction.oldStatus === "active" && tx.transaction.endStatus === "non-existing"
+    const contractTypeName = tx.contractName ?? tx.contractAbi?.contract_name?.trim() ?? "unknown"
 
     const tooltipData: NodeTransactionTooltipData = {
       contract: {
-        typeName: tx.contractName ?? "unknown",
+        typeName: contractTypeName,
         address: contractAddress,
       },
       account: {
