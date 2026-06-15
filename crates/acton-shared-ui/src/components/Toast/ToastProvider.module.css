@@ -59,6 +59,21 @@
   word-break: break-word;
 }
 
+.toastDescription a {
+  color: var(--litenode-accent, var(--text-primary));
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.toastDescription a:hover {
+  color: var(--litenode-text, var(--text-primary));
+}
+
+.toastDescription a:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--litenode-focus, var(--focus-ring));
+}
+
 .dismissButton {
   position: relative;
   width: 1.75rem;

@@ -1,13 +1,19 @@
-import {ArrowUpRight, Coins, Wallet} from "lucide-react"
+import {ArrowUpRight, Check, ChevronDown, Coins, Wallet} from "lucide-react"
 import * as React from "react"
 import {Button, Input, useToast} from "@acton/shared-ui"
 import type {Address} from "@ton/core"
+import {useSearchParams} from "react-router-dom"
 
-import type {JettonMaster} from "../../explorer/api/types"
+import type {JettonMaster, StartupWallet} from "../../explorer/api/types"
 import type {TonClient} from "../../explorer/api/client"
-import {formatAddress, parseAddress} from "../../explorer/components/utils"
+import {
+  formatAddress,
+  hashToHex,
+  isSameAddress,
+  parseAddress,
+} from "../../explorer/components/utils"
 import {useAddressFormat} from "../../explorer/hooks/useNetworkInfo"
-import {QUICK_AMOUNTS} from "../constants"
+import {QUICK_AMOUNTS, TOKEN_PLACEHOLDER_IMAGE} from "../constants"
 import {parseGramAmount} from "../dashboardUtils"
 import {
   buildJettonMintInternalMessageBoc,
@@ -23,13 +29,34 @@ interface FaucetPageProps {
 
 type FaucetMode = "ton" | "jetton"
 
+const FAUCET_MODE_QUERY_PARAM = "mode"
+
+interface FaucetOption {
+  readonly id: string
+  readonly title: string
+  readonly subtitle: string
+  readonly value: string
+  readonly badge?: string
+  readonly image?: string
+  readonly fallbackInitial?: string
+}
+
 export const FaucetPage: React.FC<FaucetPageProps> = ({client}) => {
   const {showToast} = useToast()
   const addressFormat = useAddressFormat()
-  const [mode, setMode] = React.useState<FaucetMode>("ton")
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [mode, setMode] = React.useState<FaucetMode>(() =>
+    parseFaucetMode(searchParams.get(FAUCET_MODE_QUERY_PARAM)),
+  )
   const [address, setAddress] = React.useState("")
   const [jettonMinter, setJettonMinter] = React.useState("")
   const [amount, setAmount] = React.useState("1")
+  const [startupWallets, setStartupWallets] = React.useState<StartupWallet[]>([])
+  const [jettonMasters, setJettonMasters] = React.useState<JettonMaster[]>([])
+  const [walletsLoading, setWalletsLoading] = React.useState(true)
+  const [jettonsLoading, setJettonsLoading] = React.useState(true)
+  const [walletsError, setWalletsError] = React.useState<string>()
+  const [jettonsError, setJettonsError] = React.useState<string>()
   const [isSubmitting, setIsSubmitting] = React.useState(false)
   const amountNano = React.useMemo(() => parseGramAmount(amount), [amount])
   const isJettonMode = mode === "jetton"
@@ -38,6 +65,130 @@ export const FaucetPage: React.FC<FaucetPageProps> = ({client}) => {
     address.trim().length === 0 ||
     amount.trim().length === 0 ||
     (isJettonMode && jettonMinter.trim().length === 0)
+
+  React.useEffect(() => {
+    setMode(parseFaucetMode(searchParams.get(FAUCET_MODE_QUERY_PARAM)))
+  }, [searchParams])
+
+  const selectMode = React.useCallback(
+    (nextMode: FaucetMode) => {
+      setMode(nextMode)
+      setSearchParams(
+        currentSearchParams => {
+          const nextSearchParams = new URLSearchParams(currentSearchParams)
+          nextSearchParams.set(FAUCET_MODE_QUERY_PARAM, nextMode)
+          return nextSearchParams
+        },
+        {replace: true},
+      )
+    },
+    [setSearchParams],
+  )
+
+  React.useEffect(() => {
+    let cancelled = false
+
+    void (async () => {
+      setWalletsLoading(true)
+      setWalletsError(undefined)
+
+      try {
+        const wallets = await client.getStartupWallets()
+        if (!cancelled) {
+          setStartupWallets(wallets)
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setStartupWallets([])
+          setWalletsError(error instanceof Error ? error.message : "Failed to load wallets")
+        }
+      } finally {
+        if (!cancelled) {
+          setWalletsLoading(false)
+        }
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [client])
+
+  React.useEffect(() => {
+    let cancelled = false
+
+    void (async () => {
+      setJettonsLoading(true)
+      setJettonsError(undefined)
+
+      try {
+        const masters = await client.getJettonMasters(undefined, 100, 0)
+        if (!cancelled) {
+          setJettonMasters(masters)
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setJettonMasters([])
+          setJettonsError(error instanceof Error ? error.message : "Failed to load jettons")
+        }
+      } finally {
+        if (!cancelled) {
+          setJettonsLoading(false)
+        }
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [client])
+
+  const walletOptions = React.useMemo<FaucetOption[]>(
+    () =>
+      startupWallets.map(wallet => {
+        const value = parseAddress(wallet.address)?.toString(addressFormat) ?? wallet.address
+        return {
+          id: wallet.address,
+          title: wallet.name,
+          subtitle: `${wallet.version} · ${formatAddress(value, true, addressFormat)}`,
+          value,
+          badge: wallet.name,
+          fallbackInitial: wallet.name.slice(0, 1).toUpperCase(),
+        }
+      }),
+    [addressFormat, startupWallets],
+  )
+  const selectedWalletOption = React.useMemo(
+    () => walletOptions.find(option => isSameAddress(option.value, address)),
+    [address, walletOptions],
+  )
+  const jettonOptions = React.useMemo<FaucetOption[]>(
+    () =>
+      jettonMasters
+        .filter(master => master.mintable)
+        .map(master => {
+          const symbol = jettonSymbol(master)
+          const value = parseAddress(master.address)?.toString(addressFormat) ?? master.address
+          return {
+            id: master.address,
+            title: master.jetton_content.name || symbol,
+            subtitle: formatAddress(value, true, addressFormat),
+            value,
+            badge: symbol,
+            image:
+              typeof master.jetton_content.image === "string" &&
+              master.jetton_content.image.length > 0
+                ? master.jetton_content.image
+                : TOKEN_PLACEHOLDER_IMAGE,
+            fallbackInitial: symbol.slice(0, 1).toUpperCase(),
+          }
+        }),
+    [addressFormat, jettonMasters],
+  )
+  const selectedJettonOption = React.useMemo(
+    () => jettonOptions.find(option => isSameAddress(option.value, jettonMinter)),
+    [jettonMinter, jettonOptions],
+  )
 
   async function handleSubmit(event?: React.FormEvent): Promise<void> {
     event?.preventDefault()
@@ -132,17 +283,51 @@ export const FaucetPage: React.FC<FaucetPageProps> = ({client}) => {
       recipient: recipientAddress,
       jettonAmount,
     })
-    await client.sendInternalMessage(boc)
+    const msgHash = await client.sendInternalMessage(boc)
+    const txHash = await waitForTraceTransactionHash(msgHash)
 
     const symbol = jettonSymbol(master)
     showToast({
       variant: "success",
       title: "Mint sent",
-      description: `Minted ${amount.trim()} ${symbol} to ${formatAddress(normalized, true, addressFormat)}.`,
+      description: (
+        <span>
+          Minted {amount.trim()} {symbol} to {formatAddress(normalized, true, addressFormat)}.
+          {txHash && (
+            <>
+              <br />
+              <br />
+              <a href={`/explorer/tx/${encodeURIComponent(txHash)}`}>View transaction</a>
+            </>
+          )}
+        </span>
+      ),
+      durationMs: txHash ? 8000 : undefined,
     })
   }
 
-  const symbolHint = isJettonMode ? "jettons" : "GRAM"
+  async function waitForTraceTransactionHash(msgHash: string): Promise<string | undefined> {
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      if (attempt > 0) {
+        await delay(500)
+      }
+
+      try {
+        const response = await client.getTracesByMessageHash(msgHash)
+        const txHash =
+          response.traces[0]?.trace.tx_hash ?? response.traces[0]?.transactions_order[0]
+        if (txHash) {
+          return hashToHex(txHash) ?? txHash
+        }
+      } catch {
+        // The mint message can be accepted before the next scheduled block indexes its trace.
+      }
+    }
+
+    return undefined
+  }
+
+  const symbolHint = isJettonMode ? (selectedJettonOption?.badge ?? "jettons") : "GRAM"
 
   function jettonSymbol(master: JettonMaster): string {
     const symbol = master.jetton_content.symbol
@@ -185,7 +370,7 @@ export const FaucetPage: React.FC<FaucetPageProps> = ({client}) => {
               type="button"
               className={`${styles.modeToggleButton} ${mode === "ton" ? styles.modeToggleButtonActive : ""}`}
               aria-pressed={mode === "ton"}
-              onClick={() => setMode("ton")}
+              onClick={() => selectMode("ton")}
             >
               <Wallet size={15} />
               GRAM
@@ -194,7 +379,7 @@ export const FaucetPage: React.FC<FaucetPageProps> = ({client}) => {
               type="button"
               className={`${styles.modeToggleButton} ${mode === "jetton" ? styles.modeToggleButtonActive : ""}`}
               aria-pressed={mode === "jetton"}
-              onClick={() => setMode("jetton")}
+              onClick={() => selectMode("jetton")}
             >
               <Coins size={15} />
               Jetton
@@ -206,17 +391,20 @@ export const FaucetPage: React.FC<FaucetPageProps> = ({client}) => {
               <label className={styles.label} htmlFor="dashboard-jetton-minter">
                 Jetton minter
               </label>
-              <Input
+              <FaucetDropdownInput
                 id="dashboard-jetton-minter"
-                className={styles.fieldInput}
+                menuLabel="Choose jetton"
+                emptyLabel={jettonsError ?? "No mintable jettons found."}
+                isLoading={jettonsLoading}
+                loadingLabel="Loading jettons..."
+                options={jettonOptions}
                 placeholder="EQ..."
+                selectedOption={selectedJettonOption}
+                showOptionBadge
                 value={jettonMinter}
-                autoComplete="off"
-                autoCorrect="off"
-                spellCheck={false}
-                onChange={event => setJettonMinter(event.target.value)}
+                onChange={setJettonMinter}
+                onSelect={option => setJettonMinter(option.value)}
               />
-              <p className={styles.hint}>Paste the jetton master contract address.</p>
             </div>
           )}
 
@@ -224,17 +412,19 @@ export const FaucetPage: React.FC<FaucetPageProps> = ({client}) => {
             <label className={styles.label} htmlFor="dashboard-address">
               Recipient address
             </label>
-            <Input
+            <FaucetDropdownInput
               id="dashboard-address"
-              className={styles.fieldInput}
+              menuLabel="Choose wallet"
+              emptyLabel={walletsError ?? "No startup wallets found."}
+              isLoading={walletsLoading}
+              loadingLabel="Loading wallets..."
+              options={walletOptions}
               placeholder="EQ..."
+              selectedOption={selectedWalletOption}
               value={address}
-              autoComplete="off"
-              autoCorrect="off"
-              spellCheck={false}
-              onChange={event => setAddress(event.target.value)}
+              onChange={setAddress}
+              onSelect={option => setAddress(option.value)}
             />
-            <p className={styles.hint}>Paste any raw or user-friendly TON address.</p>
           </div>
 
           <div className={styles.fieldBlock}>
@@ -270,11 +460,7 @@ export const FaucetPage: React.FC<FaucetPageProps> = ({client}) => {
           </div>
 
           <div className={styles.formFooter}>
-            <div className={styles.formHint}>
-              {isJettonMode
-                ? "Minting uses the local jetton master metadata."
-                : "Use this faucet to fund wallets for testing."}
-            </div>
+            <div />
             <Button type="submit" className={styles.sendButton} disabled={isSubmitDisabled}>
               <span>
                 {isSubmitting ? "Sending..." : isJettonMode ? "Mint Jetton" : "Send GRAM"}
@@ -285,5 +471,176 @@ export const FaucetPage: React.FC<FaucetPageProps> = ({client}) => {
         </form>
       </section>
     </>
+  )
+}
+
+function parseFaucetMode(value: string | null): FaucetMode {
+  return value === "jetton" ? "jetton" : "ton"
+}
+
+function delay(durationMs: number): Promise<void> {
+  return new Promise(resolve => {
+    globalThis.setTimeout(resolve, durationMs)
+  })
+}
+
+interface FaucetDropdownInputProps {
+  readonly id: string
+  readonly menuLabel: string
+  readonly emptyLabel: string
+  readonly isLoading: boolean
+  readonly loadingLabel: string
+  readonly options: readonly FaucetOption[]
+  readonly placeholder: string
+  readonly selectedOption?: FaucetOption
+  readonly showOptionBadge?: boolean
+  readonly value: string
+  readonly onChange: (value: string) => void
+  readonly onSelect: (option: FaucetOption) => void
+}
+
+const FaucetDropdownInput: React.FC<FaucetDropdownInputProps> = ({
+  id,
+  menuLabel,
+  emptyLabel,
+  isLoading,
+  loadingLabel,
+  options,
+  placeholder,
+  selectedOption,
+  showOptionBadge = false,
+  value,
+  onChange,
+  onSelect,
+}) => {
+  const [isOpen, setIsOpen] = React.useState(false)
+  const containerRef = React.useRef<HTMLDivElement>(null)
+  const listboxId = React.useId()
+
+  React.useEffect(() => {
+    if (!isOpen) {
+      return
+    }
+
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target
+      if (target instanceof Node && !containerRef.current?.contains(target)) {
+        setIsOpen(false)
+      }
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsOpen(false)
+      }
+    }
+
+    globalThis.addEventListener("pointerdown", onPointerDown)
+    globalThis.addEventListener("keydown", onKeyDown)
+    return () => {
+      globalThis.removeEventListener("pointerdown", onPointerDown)
+      globalThis.removeEventListener("keydown", onKeyDown)
+    }
+  }, [isOpen])
+
+  return (
+    <div
+      ref={containerRef}
+      className={`${styles.faucetDropdownField} ${isOpen ? styles.faucetDropdownFieldOpen : ""}`}
+    >
+      <Input
+        id={id}
+        className={`${styles.fieldInput} ${styles.faucetDropdownInput}`}
+        placeholder={placeholder}
+        value={value}
+        autoComplete="off"
+        autoCorrect="off"
+        spellCheck={false}
+        onChange={event => onChange(event.target.value)}
+      />
+      <button
+        type="button"
+        className={`${styles.faucetDropdownTrigger} ${isOpen ? styles.faucetDropdownTriggerOpen : ""}`}
+        aria-label={menuLabel}
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+        aria-controls={listboxId}
+        onClick={() => setIsOpen(current => !current)}
+      >
+        <span className={styles.faucetDropdownTriggerLabel}>
+          {selectedOption?.image && (
+            <img
+              src={selectedOption.image}
+              alt=""
+              className={styles.faucetDropdownTriggerImage}
+              onError={event => {
+                const imageElement = event.currentTarget
+                if (imageElement.getAttribute("src") !== TOKEN_PLACEHOLDER_IMAGE) {
+                  imageElement.src = TOKEN_PLACEHOLDER_IMAGE
+                }
+              }}
+            />
+          )}
+          {selectedOption?.badge ?? "Select"}
+        </span>
+        <ChevronDown
+          size={16}
+          className={`${styles.faucetDropdownChevron} ${isOpen ? styles.faucetDropdownChevronOpen : ""}`}
+          aria-hidden="true"
+        />
+      </button>
+
+      {isOpen && (
+        <div id={listboxId} className={styles.faucetDropdownMenu} role="listbox">
+          {isLoading ? (
+            <div className={styles.faucetDropdownState}>{loadingLabel}</div>
+          ) : options.length === 0 ? (
+            <div className={styles.faucetDropdownState}>{emptyLabel}</div>
+          ) : (
+            options.map(option => {
+              const isSelected = selectedOption?.id === option.id
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  className={`${styles.faucetDropdownOption} ${isSelected ? styles.faucetDropdownOptionSelected : ""}`}
+                  role="option"
+                  aria-selected={isSelected}
+                  onClick={() => {
+                    onSelect(option)
+                    setIsOpen(false)
+                  }}
+                >
+                  {option.image ? (
+                    <img
+                      src={option.image}
+                      alt=""
+                      className={styles.faucetDropdownOptionImage}
+                      onError={event => {
+                        const imageElement = event.currentTarget
+                        if (imageElement.getAttribute("src") !== TOKEN_PLACEHOLDER_IMAGE) {
+                          imageElement.src = TOKEN_PLACEHOLDER_IMAGE
+                        }
+                      }}
+                    />
+                  ) : (
+                    <span className={styles.faucetDropdownOptionAvatar}>
+                      {option.fallbackInitial || "A"}
+                    </span>
+                  )}
+                  <span className={styles.faucetDropdownOptionBody}>
+                    <span className={styles.faucetDropdownOptionTitle}>{option.title}</span>
+                    <span className={styles.faucetDropdownOptionSubtitle}>{option.subtitle}</span>
+                  </span>
+                  {showOptionBadge && option.badge && (
+                    <span className={styles.faucetDropdownBadge}>{option.badge}</span>
+                  )}
+                  {isSelected && <Check size={16} className={styles.faucetDropdownCheck} />}
+                </button>
+              )
+            })
+          )}
+        </div>
+      )}
+    </div>
   )
 }

@@ -1,10 +1,10 @@
 import type React from "react"
-import type {ContractABI} from "@ton/tolk-abi-to-typescript"
-import {Copy, X} from "lucide-react"
+import {Check, Copy, X} from "lucide-react"
 import {useEffect, useMemo, useState} from "react"
 import {useLocation, useNavigate, useParams} from "react-router-dom"
 
 import type {TonClient} from "../api/client"
+import type {ExtendedContractABI} from "../api/compilerAbi"
 import type {
   AccountStatesResponse,
   AccountStateTokenInfo,
@@ -57,7 +57,7 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
   const [transactionsError, setTransactionsError] = useState<string | undefined>()
   const [accountLoading, setAccountLoading] = useState(true)
   const [accountError, setAccountError] = useState<string | undefined>()
-  const [compilerAbi, setCompilerAbi] = useState<ContractABI | undefined>()
+  const [extendedContractAbi, setExtendedContractAbi] = useState<ExtendedContractABI | undefined>()
   const [compilerAbiLoading, setCompilerAbiLoading] = useState(false)
   const [compilerAbiError, setCompilerAbiError] = useState<string | undefined>()
   const [jettonMetadataOpen, setJettonMetadataOpen] = useState(false)
@@ -73,6 +73,7 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
   }, [location.hash])
   const accountInterfaces = accountStateV3?.interfaces ?? []
   const accountCodeHash = accountStateV3?.code_hash
+  const compilerAbi = extendedContractAbi?.compiler_abi
   const isJettonMasterAccount = hasAccountInterface(accountInterfaces, "jetton_master")
   const isJettonWalletAccount = hasAccountInterface(accountInterfaces, "jetton_wallet")
   const isNftItemAccount = hasAccountInterface(accountInterfaces, "nft_item")
@@ -197,24 +198,24 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
 
     const loadCompilerAbi = async () => {
       if (!accountCodeHash) {
-        setCompilerAbi(undefined)
+        setExtendedContractAbi(undefined)
         setCompilerAbiLoading(false)
         setCompilerAbiError(undefined)
         return
       }
 
-      setCompilerAbi(undefined)
+      setExtendedContractAbi(undefined)
       setCompilerAbiLoading(true)
       setCompilerAbiError(undefined)
 
       try {
         const abis = await client.getCompilerAbis([accountCodeHash])
         if (!isActive) return
-        setCompilerAbi(abis[accountCodeHash] ?? undefined)
+        setExtendedContractAbi(abis[accountCodeHash] ?? undefined)
         setCompilerAbiLoading(false)
       } catch (error) {
         if (!isActive) return
-        setCompilerAbi(undefined)
+        setExtendedContractAbi(undefined)
         setCompilerAbiLoading(false)
         setCompilerAbiError(error instanceof Error ? error.message : "Failed to load compiler ABI")
       }
@@ -626,7 +627,7 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
             <AccountInfo
               address={formattedAddress}
               state={accountState}
-              compilerAbi={compilerAbi}
+              extendedContractAbi={extendedContractAbi}
               contractInterfaces={accountStateV3?.interfaces}
               jettonWallets={jettonWallets}
               accountLoading={accountLoading}
@@ -682,35 +683,41 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
                         <div className={styles.jettonDetails}>
                           <div className={styles.jettonRow}>
                             <span className={styles.jettonLabel}>Jetton master</span>
-                            <span
-                              className={`${styles.jettonValue} ${styles.jettonLink}`}
-                              onClick={() => handleSearch(jettonWalletAccount.jetton)}
-                              onKeyDown={e => {
-                                if (e.key === "Enter" || e.key === " ") {
-                                  handleSearch(jettonWalletAccount.jetton)
-                                }
-                              }}
-                              role="button"
-                              tabIndex={0}
-                            >
-                              <AddressLabel address={jettonWalletAccount.jetton} />
-                            </span>
+                            <div className={styles.jettonAddressValue}>
+                              <span
+                                className={`${styles.jettonValue} ${styles.jettonLink}`}
+                                onClick={() => handleSearch(jettonWalletAccount.jetton)}
+                                onKeyDown={e => {
+                                  if (e.key === "Enter" || e.key === " ") {
+                                    handleSearch(jettonWalletAccount.jetton)
+                                  }
+                                }}
+                                role="button"
+                                tabIndex={0}
+                              >
+                                <AddressLabel address={jettonWalletAccount.jetton} />
+                              </span>
+                              <CopyAddressButton address={jettonWalletAccount.jetton} />
+                            </div>
                           </div>
                           <div className={styles.jettonRow}>
                             <span className={styles.jettonLabel}>Holder address</span>
-                            <span
-                              className={`${styles.jettonValue} ${styles.jettonLink}`}
-                              onClick={() => handleSearch(jettonWalletAccount.owner)}
-                              onKeyDown={e => {
-                                if (e.key === "Enter" || e.key === " ") {
-                                  handleSearch(jettonWalletAccount.owner)
-                                }
-                              }}
-                              role="button"
-                              tabIndex={0}
-                            >
-                              <AddressLabel address={jettonWalletAccount.owner} />
-                            </span>
+                            <div className={styles.jettonAddressValue}>
+                              <span
+                                className={`${styles.jettonValue} ${styles.jettonLink}`}
+                                onClick={() => handleSearch(jettonWalletAccount.owner)}
+                                onKeyDown={e => {
+                                  if (e.key === "Enter" || e.key === " ") {
+                                    handleSearch(jettonWalletAccount.owner)
+                                  }
+                                }}
+                                role="button"
+                                tabIndex={0}
+                              >
+                                <AddressLabel address={jettonWalletAccount.owner} />
+                              </span>
+                              <CopyAddressButton address={jettonWalletAccount.owner} />
+                            </div>
                           </div>
                         </div>
                       </>
@@ -980,6 +987,47 @@ function formatJettonAmount(value: string, decimals?: string): string {
   return (Number(value) / 10 ** decimalsNumber).toLocaleString(undefined, {
     maximumFractionDigits: decimalsNumber,
   })
+}
+
+interface CopyAddressButtonProps {
+  readonly address: string
+  readonly className?: string
+  readonly title?: string
+}
+
+const CopyAddressButton: React.FC<CopyAddressButtonProps> = ({
+  address,
+  className,
+  title = "Copy address",
+}) => {
+  const [isCopied, setIsCopied] = useState(false)
+
+  useEffect(() => {
+    if (!isCopied) {
+      return
+    }
+
+    const timer = setTimeout(() => setIsCopied(false), 1600)
+    return () => clearTimeout(timer)
+  }, [isCopied])
+
+  return (
+    <button
+      type="button"
+      className={`${styles.addressCopyButton} ${isCopied ? styles.addressCopyButtonCopied : ""} ${
+        className ?? ""
+      }`}
+      onClick={event => {
+        event.stopPropagation()
+        void navigator.clipboard.writeText(address)
+        setIsCopied(true)
+      }}
+      aria-label={isCopied ? "Address copied" : title}
+      title={isCopied ? "Copied" : title}
+    >
+      {isCopied ? <Check size={14} /> : <Copy size={14} />}
+    </button>
+  )
 }
 
 const JSON_TOKEN_RE =

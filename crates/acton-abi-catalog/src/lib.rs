@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, OnceLock};
 use tolk_compiler::abi::{ABIDeclaration, ContractABI};
@@ -18,7 +18,26 @@ pub struct AbiCatalog {
 pub struct CatalogContract {
     pub display_name: String,
     pub code_hashes: Vec<String>,
+    pub links: Vec<ContractAbiLink>,
     abi: Arc<ContractABI>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ContractAbiLink {
+    pub kind: String,
+    pub title: String,
+    pub url: String,
+    pub scope: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ExtendedContractAbi<T = ContractABI> {
+    pub compiler_abi: T,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub display_name: Option<String>,
+    pub code_hashes: Vec<String>,
+    #[serde(default)]
+    pub links: Vec<ContractAbiLink>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -32,6 +51,8 @@ struct RawContract {
     display_name: String,
     hashes: Vec<String>,
     compiler_abi: ContractABI,
+    #[serde(default)]
+    links: Vec<ContractAbiLink>,
 }
 
 #[must_use]
@@ -93,6 +114,7 @@ impl AbiCatalog {
             contracts.push(CatalogContract {
                 display_name: raw_contract.display_name,
                 code_hashes,
+                links: raw_contract.links,
                 abi: Arc::new(raw_contract.compiler_abi),
             });
         }
@@ -184,6 +206,16 @@ impl CatalogContract {
     pub fn abi(&self) -> Arc<ContractABI> {
         self.abi.clone()
     }
+
+    #[must_use]
+    pub fn extended_abi(&self) -> ExtendedContractAbi {
+        ExtendedContractAbi {
+            compiler_abi: self.abi.as_ref().clone(),
+            display_name: Some(self.display_name.clone()),
+            code_hashes: self.code_hashes.clone(),
+            links: self.links.clone(),
+        }
+    }
 }
 
 fn normalize_code_hash(code_hash: &str) -> Option<String> {
@@ -261,6 +293,20 @@ mod tests {
 
         assert_eq!(contract.display_name, "Account");
         assert_eq!(contract.abi().contract_name, "AffluentAccount");
+    }
+
+    #[test]
+    fn loads_contract_links() {
+        let contract = find_contract_by_name("Jetton2Master")
+            .expect("jetton master must be present in bundled catalog");
+
+        assert!(
+            contract
+                .links
+                .iter()
+                .any(|link| link.kind == "spec" && link.title.contains("TEP-74")),
+            "catalog contract links must be loaded from bundled metadata"
+        );
     }
 
     #[test]

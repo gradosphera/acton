@@ -103,7 +103,7 @@
         "tags": ["Localnet Control"],
         "operationId": "getCompilerAbi",
         "summary": "Get compiler ABI metadata",
-        "description": "Returns registered compiler ABI metadata for the requested code hashes. Missing ABI entries are returned as null.",
+        "description": "Returns extended contract ABI metadata for the requested code hashes. Missing ABI entries are returned as null.",
         "parameters": [
           {
             "$ref": "#/components/parameters/CodeHashQuery"
@@ -444,7 +444,7 @@
         }
       },
       "CompilerAbisResponse": {
-        "description": "Successful wrapped response with compiler ABI metadata keyed by requested code hash.",
+        "description": "Successful wrapped response with extended contract ABI metadata keyed by requested code hash.",
         "content": {
           "application/json": {
             "schema": {
@@ -458,6 +458,11 @@
                     "result": {
                       "type": "object",
                       "additionalProperties": {
+                        "allOf": [
+                          {
+                            "$ref": "#/components/schemas/ExtendedContractABI"
+                          }
+                        ],
                         "nullable": true
                       }
                     }
@@ -688,6 +693,47 @@
             "$ref": "#/components/schemas/Hash"
           },
           "compiler_abi": {}
+        }
+      },
+      "ContractAbiLink": {
+        "type": "object",
+        "required": ["kind", "title", "url", "scope"],
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "scope": {
+            "type": "string"
+          }
+        }
+      },
+      "ExtendedContractABI": {
+        "type": "object",
+        "required": ["compiler_abi", "code_hashes", "links"],
+        "properties": {
+          "compiler_abi": {},
+          "display_name": {
+            "type": "string"
+          },
+          "code_hashes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Hash"
+            }
+          },
+          "links": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContractAbiLink"
+            }
+          }
         }
       },
       "RegisterCompilerAbisRequest": {

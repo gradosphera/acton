@@ -4,7 +4,7 @@ type ToastVariant = "info" | "success" | "error"
 
 export interface ToastOptions {
   readonly title?: string
-  readonly description: string
+  readonly description: React.ReactNode
   readonly variant?: ToastVariant
   readonly durationMs?: number
 }

@@ -174,11 +174,11 @@ export const AccountDetails: React.FC<AccountDetailsProps> = ({
         codeHashes.length > 0
           ? await client
               .getCompilerAbis(codeHashes)
-              .catch((): Record<string, ContractABI | null> => ({}))
+              .catch((): Awaited<ReturnType<TonClient["getCompilerAbis"]>> => ({}))
           : {}
       const abiByCodeHash = new Map<string, ContractABI | undefined>()
       for (const codeHash of codeHashes) {
-        abiByCodeHash.set(codeHash, fetchedAbis[codeHash] ?? undefined)
+        abiByCodeHash.set(codeHash, fetchedAbis[codeHash]?.compiler_abi)
       }
 
       for (const address of requestedAddresses) {

@@ -389,7 +389,9 @@ pub(crate) enum Request {
     },
     GetCompilerAbis {
         code_hashes: Vec<Hash256>,
-        resp: oneshot::Sender<anyhow::Result<Vec<Option<Value>>>>,
+        resp: oneshot::Sender<
+            anyhow::Result<Vec<Option<acton_abi_catalog::ExtendedContractAbi<Value>>>>,
+        >,
     },
     DumpState {
         path: String,
@@ -975,7 +977,12 @@ impl Localnet {
     pub async fn get_compiler_abis(
         &self,
         code_hash_strs: Vec<String>,
-    ) -> anyhow::Result<Vec<(String, Option<Value>)>> {
+    ) -> anyhow::Result<
+        Vec<(
+            String,
+            Option<acton_abi_catalog::ExtendedContractAbi<Value>>,
+        )>,
+    > {
         let code_hashes = code_hash_strs
             .iter()
             .map(|code_hash| {
@@ -1338,7 +1345,10 @@ fn process_loop_request(node: &mut Node, req: Request) {
                 .map(|code_hash| {
                     node.history
                         .get_compiler_abi(code_hash)
-                        .or_else(|| catalog_compiler_abi(code_hash))
+                        .map(|compiler_abi| {
+                            registered_compiler_abi_payload(code_hash, compiler_abi)
+                        })
+                        .or_else(|| catalog_compiler_abi_payload(code_hash))
                 })
                 .collect();
             let _ = resp.send(Ok(res));
@@ -1354,9 +1364,38 @@ fn process_loop_request(node: &mut Node, req: Request) {
     }
 }
 
-fn catalog_compiler_abi(code_hash: &Hash256) -> Option<Value> {
-    let abi = acton_abi_catalog::find_abi_by_code_hash(&code_hash.to_hex())?;
-    serde_json::to_value(abi.as_ref()).ok()
+fn registered_compiler_abi_payload(
+    code_hash: &Hash256,
+    compiler_abi: Value,
+) -> acton_abi_catalog::ExtendedContractAbi<Value> {
+    let display_name = compiler_abi
+        .get("contract_name")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .map(ToOwned::to_owned);
+
+    acton_abi_catalog::ExtendedContractAbi {
+        compiler_abi,
+        display_name,
+        code_hashes: vec![code_hash.to_hex()],
+        links: Vec::new(),
+    }
+}
+
+fn catalog_compiler_abi_payload(
+    code_hash: &Hash256,
+) -> Option<acton_abi_catalog::ExtendedContractAbi<Value>> {
+    let contract = acton_abi_catalog::find_contract_by_code_hash(&code_hash.to_hex())?;
+    let extended_abi = contract.extended_abi();
+    let compiler_abi = serde_json::to_value(&extended_abi.compiler_abi).ok()?;
+
+    Some(acton_abi_catalog::ExtendedContractAbi {
+        compiler_abi,
+        display_name: extended_abi.display_name,
+        code_hashes: extended_abi.code_hashes,
+        links: extended_abi.links,
+    })
 }
 
 fn handle_send_boc(

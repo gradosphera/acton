@@ -162,6 +162,38 @@
   box-shadow: 0 0 0 2px var(--litenode-focus);
 }
 
+.addressCopyButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  color: var(--tonscan-text-secondary);
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  cursor: pointer;
+  transition:
+    background-color var(--transition-duration-fast),
+    color var(--transition-duration-fast);
+}
+
+.addressCopyButton:hover {
+  color: var(--tonscan-text-primary);
+  background: var(--tonscan-bg-secondary);
+}
+
+.addressCopyButton:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--litenode-focus);
+}
+
+.addressCopyButtonCopied {
+  color: var(--tonscan-text-primary);
+}
+
 .jettonDescription {
   color: var(--tonscan-text-secondary);
   font-size: var(--font-size-sm);
@@ -222,6 +254,19 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.jettonAddressValue {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.jettonAddressValue .jettonValue {
+  flex: 0 1 auto;
+  max-width: calc(100% - 28px);
 }
 
 .jettonLink {

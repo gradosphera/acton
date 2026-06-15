@@ -763,9 +763,10 @@
 .content {
   min-height: 100%;
   width: 100%;
+  flex: 0 0 auto;
   max-width: 1200px;
   margin-inline: auto;
-  padding: 32px 36px 48px;
+  padding: 32px 36px 72px;
   display: flex;
   flex-direction: column;
   gap: 24px;
@@ -774,6 +775,11 @@
 }
 
 .contentEmbedded {
+  min-height: 0;
+  height: 100%;
+  flex: 1 1 auto;
+  max-width: none;
+  margin-inline: 0;
   padding: 0;
   gap: 0;
 }
@@ -781,6 +787,7 @@
 .embeddedPage {
   min-width: 0;
   min-height: 0;
+  height: 100%;
   flex: 1 1 auto;
   overflow: visible;
 }
@@ -1319,6 +1326,209 @@
   box-shadow: none;
 }
 
+.faucetDropdownField {
+  position: relative;
+  z-index: 4;
+}
+
+.faucetDropdownFieldOpen {
+  z-index: 40;
+}
+
+.fieldInput.faucetDropdownInput {
+  padding-right: 166px;
+}
+
+.faucetDropdownTrigger {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  max-width: 154px;
+  height: 34px;
+  padding: 0 8px 0 10px;
+  border: 1px solid var(--litenode-border-subtle);
+  border-radius: 9px;
+  background: var(--litenode-surface-subtle);
+  color: var(--litenode-text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.faucetDropdownTrigger:hover,
+.faucetDropdownTriggerOpen {
+  border-color: var(--litenode-border-strong);
+  background: var(--litenode-surface-hover);
+  color: var(--litenode-text);
+}
+
+.faucetDropdownTrigger:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--litenode-focus);
+}
+
+.faucetDropdownTriggerLabel {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.faucetDropdownTriggerImage {
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  flex: 0 0 auto;
+  object-fit: cover;
+}
+
+.faucetDropdownChevron {
+  flex: 0 0 auto;
+  transition: transform 150ms ease;
+}
+
+.faucetDropdownChevronOpen {
+  transform: rotate(180deg);
+}
+
+.faucetDropdownMenu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  max-height: 286px;
+  padding: 6px;
+  border: 1px solid var(--litenode-border);
+  border-radius: 16px;
+  background: var(--litenode-surface);
+  box-shadow: var(--litenode-shadow-popover);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+}
+
+.faucetDropdownState {
+  padding: 18px 14px;
+  color: var(--litenode-text-muted);
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+
+.faucetDropdownOption {
+  width: 100%;
+  min-height: 54px;
+  padding: 8px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--litenode-text);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease;
+}
+
+.faucetDropdownOption:hover {
+  background: var(--litenode-surface-hover);
+  color: var(--litenode-text-strong);
+}
+
+.faucetDropdownOption:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--litenode-focus);
+}
+
+.faucetDropdownOptionSelected {
+  background: var(--litenode-surface-active);
+}
+
+.faucetDropdownOptionImage,
+.faucetDropdownOptionAvatar {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--litenode-border-subtle);
+  border-radius: 10px;
+  flex: 0 0 auto;
+}
+
+.faucetDropdownOptionImage {
+  object-fit: cover;
+  background: var(--litenode-surface-subtle);
+}
+
+.faucetDropdownOptionAvatar {
+  background: var(--litenode-surface-subtle);
+  color: var(--litenode-text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.faucetDropdownOptionBody {
+  min-width: 0;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.faucetDropdownOptionTitle,
+.faucetDropdownOptionSubtitle {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.faucetDropdownOptionTitle {
+  color: var(--litenode-text-strong);
+  font-size: 0.9rem;
+  font-weight: 650;
+}
+
+.faucetDropdownOptionSubtitle {
+  color: var(--litenode-text-muted);
+  font-size: 0.78rem;
+}
+
+.faucetDropdownBadge {
+  max-width: 90px;
+  padding: 0;
+  color: var(--litenode-text-subtle);
+  font-size: 0.72rem;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.faucetDropdownCheck {
+  flex: 0 0 auto;
+  margin-right: 6px;
+  color: var(--litenode-accent);
+}
+
 .amountRow {
   display: block;
 }
@@ -1829,7 +2039,7 @@
 
   .content {
     height: auto;
-    padding: 18px 16px 28px;
+    padding: 18px 16px 48px;
     gap: 18px;
     overflow: visible;
   }
@@ -1895,7 +2105,7 @@
   }
 
   .content {
-    padding: 16px 12px 24px;
+    padding: 16px 12px 40px;
   }
 
   .contentEmbedded {

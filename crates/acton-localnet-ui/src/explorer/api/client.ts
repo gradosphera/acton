@@ -1,6 +1,6 @@
-import type {ContractABI} from "@ton/tolk-abi-to-typescript"
 import {Cell} from "@ton/core"
 
+import type {ExtendedContractABI} from "./compilerAbi"
 import type {
   AccountStatesResponse,
   ApiResponse,
@@ -33,6 +33,10 @@ interface FaucetResponse {
   readonly ok?: boolean
   readonly success?: boolean
   readonly error?: string
+}
+
+interface SendInternalMessageResponse {
+  readonly hash: string
 }
 
 interface TransactionStreamHandlers {
@@ -218,6 +222,12 @@ export class TonClient {
     return this.request(url, "Failed to fetch traces")
   }
 
+  async getTracesByMessageHash(msgHash: string): Promise<V3TracesResponse> {
+    const url = this.buildUrl(this.v3BaseUrl, "/traces")
+    url.searchParams.append("msg_hash", msgHash)
+    return this.request(url, "Failed to fetch traces")
+  }
+
   async getRecentTransactions(limit = 10): Promise<V3TransactionsResponse> {
     const url = this.buildUrl(this.v3BaseUrl, "/transactions")
     url.searchParams.append("limit", limit.toString())
@@ -321,7 +331,7 @@ export class TonClient {
 
   async getCompilerAbis(
     codeHashes: readonly string[],
-  ): Promise<Record<string, ContractABI | null>> {
+  ): Promise<Record<string, ExtendedContractABI | null>> {
     const uniqueCodeHashes = [...new Set(codeHashes.filter(Boolean))]
     if (uniqueCodeHashes.length === 0) {
       return {}
@@ -331,7 +341,10 @@ export class TonClient {
     for (const codeHash of uniqueCodeHashes) {
       url.searchParams.append("code_hash", codeHash)
     }
-    return this.request<Record<string, ContractABI | null>>(url, "Failed to fetch compiler ABI")
+    return this.request<Record<string, ExtendedContractABI | null>>(
+      url,
+      "Failed to fetch compiler ABI",
+    )
   }
 
   async getNodeInfo(): Promise<LocalnetNodeInfo> {
@@ -381,13 +394,18 @@ export class TonClient {
     })
   }
 
-  async sendInternalMessage(boc: string): Promise<void> {
+  async sendInternalMessage(boc: string): Promise<string> {
     const url = this.buildUrl(this.addressNameBaseUrl, "/acton_sendInternalMessage")
-    await this.request<unknown>(url, "Failed to send internal message", {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({boc}),
-    })
+    const response = await this.request<SendInternalMessageResponse>(
+      url,
+      "Failed to send internal message",
+      {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({boc}),
+      },
+    )
+    return response.hash
   }
 
   getEndpoints(): {readonly apiV2: string; readonly apiV3: string; readonly admin: string} {

@@ -1,11 +1,13 @@
 import type {ContractABI} from "@ton/tolk-abi-to-typescript"
 import {Check, Copy, Edit2, Info, QrCode, X} from "lucide-react"
 import type React from "react"
-import {useEffect, useId, useRef, useState} from "react"
+import {useCallback, useEffect, useId, useLayoutEffect, useRef, useState} from "react"
+import {createPortal} from "react-dom"
 import {QRCodeSVG} from "qrcode.react"
 
 import type {FullAccountState, JettonMaster, JettonWallet} from "../api/types"
 import {TonClient} from "../api/client"
+import type {ContractAbiLink, ExtendedContractABI} from "../api/compilerAbi"
 import {useAddressBook, useAddressName} from "../hooks/useAddressBook"
 import {useNetworkInfo} from "../hooks/useNetworkInfo"
 
@@ -18,7 +20,7 @@ const TOKEN_PLACEHOLDER_IMAGE = "/token-placeholder.svg"
 interface AccountInfoProps {
   readonly address: string
   readonly state?: FullAccountState
-  readonly compilerAbi?: ContractABI
+  readonly extendedContractAbi?: ExtendedContractABI
   readonly contractInterfaces?: readonly string[]
   readonly jettonWallets: JettonWallet[]
   readonly accountLoading?: boolean
@@ -42,7 +44,7 @@ interface CollectiblePreview {
 export const AccountInfo: React.FC<AccountInfoProps> = ({
   address,
   state,
-  compilerAbi,
+  extendedContractAbi,
   contractInterfaces,
   jettonWallets,
   accountLoading = false,
@@ -159,10 +161,16 @@ export const AccountInfo: React.FC<AccountInfoProps> = ({
     setCopied(true)
   }
 
+  const compilerAbi = extendedContractAbi?.compiler_abi
   const contractTypeLabels = getContractTypeLabels(compilerAbi, contractInterfaces)
   const contractDescription = compilerAbi?.description?.trim()
-  const contractDescriptionTitle = compilerAbi?.contract_name?.trim() || contractTypeLabels[0]
+  const contractDescriptionTitle =
+    extendedContractAbi?.display_name?.trim() ||
+    compilerAbi?.contract_name?.trim() ||
+    contractTypeLabels[0]
   const contractDescriptionUrl = contractDescription && getExternalUrl(contractDescription)
+  const contractLinks = getContractAbiLinks(extendedContractAbi)
+  const hasContractDescriptionPopover = Boolean(contractDescription || contractLinks.length > 0)
   const statusInfo = getStatusInfo(state?.state)
   const shortAddress = formatAddress(displayAddress, true, addressFormat)
   const addressRowText = hasContextCard ? shortAddress : displayAddress
@@ -472,40 +480,52 @@ export const AccountInfo: React.FC<AccountInfoProps> = ({
                     {contractTypeLabels.map((label, index) => (
                       <span key={`${label}-${index}`} className={styles.contractTypeItem}>
                         <span className={styles.primaryValue}>{label}</span>
-                        {index === 0 && contractDescription && (
-                          <span className={styles.contractDescription}>
-                            <button
-                              type="button"
-                              className={styles.contractDescriptionButton}
-                              aria-label="Show contract description"
-                              aria-describedby={contractDescriptionId}
-                            >
-                              <Info size={12} />
-                            </button>
-                            <span
-                              id={contractDescriptionId}
-                              className={styles.contractDescriptionPopover}
-                              role="tooltip"
-                            >
+                        {index === 0 && hasContractDescriptionPopover && (
+                          <ContractDescriptionTooltip id={contractDescriptionId}>
+                            <>
                               <span className={styles.contractDescriptionTitle}>
                                 {contractDescriptionTitle}
                               </span>
-                              {contractDescriptionUrl ? (
-                                <a
-                                  className={styles.contractDescriptionLink}
-                                  href={contractDescriptionUrl}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                >
-                                  {contractDescription}
-                                </a>
-                              ) : (
-                                <span className={styles.contractDescriptionText}>
-                                  {contractDescription}
+                              {contractDescription && (
+                                <>
+                                  {contractDescriptionUrl ? (
+                                    <a
+                                      className={styles.contractDescriptionLink}
+                                      href={contractDescriptionUrl}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                    >
+                                      {contractDescription}
+                                    </a>
+                                  ) : (
+                                    <span className={styles.contractDescriptionText}>
+                                      {contractDescription}
+                                    </span>
+                                  )}
+                                </>
+                              )}
+                              {contractLinks.length > 0 && (
+                                <span className={styles.contractDescriptionLinks}>
+                                  {contractLinks.map(link => (
+                                    <a
+                                      key={`${link.kind ?? "link"}-${link.url}`}
+                                      className={styles.contractDescriptionLinkItem}
+                                      href={link.url}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                    >
+                                      <span className={styles.contractDescriptionLinkKind}>
+                                        {formatContractLinkKind(link.kind)}
+                                      </span>
+                                      <span className={styles.contractDescriptionLinkTitle}>
+                                        {link.url}
+                                      </span>
+                                    </a>
+                                  ))}
                                 </span>
                               )}
-                            </span>
-                          </span>
+                            </>
+                          </ContractDescriptionTooltip>
                         )}
                         {index < contractTypeLabels.length - 1 && (
                           <span className={styles.contractTypeSeparator}>,</span>
@@ -578,6 +598,292 @@ export const AccountInfo: React.FC<AccountInfoProps> = ({
   )
 }
 
+type ContractDescriptionPlacement = "right" | "left" | "bottom" | "top"
+
+interface RectSnapshot {
+  readonly left: number
+  readonly top: number
+  readonly right: number
+  readonly bottom: number
+  readonly width: number
+  readonly height: number
+}
+
+interface ContractDescriptionPosition {
+  readonly left: number
+  readonly top: number
+  readonly placement: ContractDescriptionPlacement
+  readonly arrowX: number
+  readonly arrowY: number
+}
+
+interface ContractDescriptionTooltipProps {
+  readonly id: string
+  readonly children: React.ReactNode
+}
+
+const CONTRACT_DESCRIPTION_MARGIN = 12
+const CONTRACT_DESCRIPTION_GAP = 12
+const CONTRACT_DESCRIPTION_ARROW_MIN = 16
+
+function ContractDescriptionTooltip({
+  id,
+  children,
+}: ContractDescriptionTooltipProps): React.JSX.Element {
+  const triggerRef = useRef<HTMLButtonElement | null>(null)
+  const popoverRef = useRef<HTMLSpanElement | null>(null)
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const [isOpen, setIsOpen] = useState(false)
+  const [triggerRect, setTriggerRect] = useState<RectSnapshot | undefined>()
+  const [position, setPosition] = useState<ContractDescriptionPosition | undefined>()
+
+  const clearCloseTimer = useCallback((): void => {
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current)
+      closeTimerRef.current = undefined
+    }
+  }, [])
+
+  const openPopover = useCallback((): void => {
+    clearCloseTimer()
+
+    if (isOpen) {
+      return
+    }
+
+    const rect = triggerRef.current?.getBoundingClientRect()
+    if (rect) {
+      setTriggerRect(snapshotRect(rect))
+      setPosition(undefined)
+    }
+    setIsOpen(true)
+  }, [clearCloseTimer, isOpen])
+
+  const closePopover = useCallback((): void => {
+    clearCloseTimer()
+
+    closeTimerRef.current = setTimeout(() => {
+      setIsOpen(false)
+      setPosition(undefined)
+    }, 120)
+  }, [clearCloseTimer])
+
+  const forceClosePopover = useCallback((): void => {
+    clearCloseTimer()
+    setIsOpen(false)
+    setPosition(undefined)
+  }, [clearCloseTimer])
+
+  useLayoutEffect(() => {
+    if (!isOpen || !triggerRect || !popoverRef.current) return
+
+    const popoverRect = popoverRef.current.getBoundingClientRect()
+    setPosition(
+      calculateContractDescriptionPosition(triggerRect, popoverRect.width, popoverRect.height),
+    )
+  }, [isOpen, triggerRect, children])
+
+  useEffect(() => {
+    if (!isOpen) return
+
+    const updateTriggerRect = (): void => {
+      const rect = triggerRef.current?.getBoundingClientRect()
+      if (rect) {
+        setTriggerRect(snapshotRect(rect))
+      }
+    }
+
+    const handlePointerDown = (event: MouseEvent): void => {
+      const target = event.target as Node
+      if (triggerRef.current?.contains(target) || popoverRef.current?.contains(target)) {
+        return
+      }
+      forceClosePopover()
+    }
+
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === "Escape") {
+        forceClosePopover()
+      }
+    }
+
+    window.addEventListener("resize", updateTriggerRect)
+    window.addEventListener("scroll", updateTriggerRect, true)
+    document.addEventListener("mousedown", handlePointerDown)
+    document.addEventListener("keydown", handleKeyDown)
+
+    return () => {
+      window.removeEventListener("resize", updateTriggerRect)
+      window.removeEventListener("scroll", updateTriggerRect, true)
+      document.removeEventListener("mousedown", handlePointerDown)
+      document.removeEventListener("keydown", handleKeyDown)
+    }
+  }, [forceClosePopover, isOpen])
+
+  useEffect(() => {
+    return () => {
+      if (closeTimerRef.current) {
+        clearTimeout(closeTimerRef.current)
+      }
+    }
+  }, [])
+
+  const popoverStyle = {
+    left: position?.left ?? CONTRACT_DESCRIPTION_MARGIN,
+    top: position?.top ?? CONTRACT_DESCRIPTION_MARGIN,
+    "--contract-description-arrow-x": `${position?.arrowX ?? CONTRACT_DESCRIPTION_ARROW_MIN}px`,
+    "--contract-description-arrow-y": `${position?.arrowY ?? CONTRACT_DESCRIPTION_ARROW_MIN}px`,
+  } as React.CSSProperties
+
+  return (
+    <span className={styles.contractDescription}>
+      <button
+        ref={triggerRef}
+        type="button"
+        className={styles.contractDescriptionButton}
+        aria-label="Show contract description"
+        aria-describedby={isOpen ? id : undefined}
+        aria-expanded={isOpen}
+        onMouseEnter={openPopover}
+        onMouseLeave={closePopover}
+        onFocus={openPopover}
+        onBlur={closePopover}
+        onClick={() => {
+          if (isOpen) {
+            forceClosePopover()
+          } else {
+            openPopover()
+          }
+        }}
+      >
+        <Info size={12} />
+      </button>
+      {isOpen &&
+        createPortal(
+          <span
+            ref={popoverRef}
+            id={id}
+            className={styles.contractDescriptionPopover}
+            data-placement={position?.placement ?? "right"}
+            data-positioned={position ? "true" : "false"}
+            role="tooltip"
+            style={popoverStyle}
+            onMouseEnter={clearCloseTimer}
+            onMouseLeave={closePopover}
+          >
+            <span className={styles.contractDescriptionPopoverContent}>{children}</span>
+          </span>,
+          document.body,
+        )}
+    </span>
+  )
+}
+
+function snapshotRect(rect: DOMRect): RectSnapshot {
+  return {
+    left: rect.left,
+    top: rect.top,
+    right: rect.right,
+    bottom: rect.bottom,
+    width: rect.width,
+    height: rect.height,
+  }
+}
+
+function calculateContractDescriptionPosition(
+  triggerRect: RectSnapshot,
+  popoverWidth: number,
+  popoverHeight: number,
+): ContractDescriptionPosition {
+  const viewportWidth = window.innerWidth
+  const viewportHeight = window.innerHeight
+  const triggerCenterX = triggerRect.left + triggerRect.width / 2
+  const triggerCenterY = triggerRect.top + triggerRect.height / 2
+
+  const candidates: Array<{
+    readonly placement: ContractDescriptionPlacement
+    readonly left: number
+    readonly top: number
+    readonly preference: number
+  }> = [
+    {
+      placement: "right",
+      left: triggerRect.right + CONTRACT_DESCRIPTION_GAP,
+      top: triggerCenterY - popoverHeight / 2,
+      preference: 0,
+    },
+    {
+      placement: "left",
+      left: triggerRect.left - popoverWidth - CONTRACT_DESCRIPTION_GAP,
+      top: triggerCenterY - popoverHeight / 2,
+      preference: 1,
+    },
+    {
+      placement: "bottom",
+      left: triggerCenterX - popoverWidth / 2,
+      top: triggerRect.bottom + CONTRACT_DESCRIPTION_GAP,
+      preference: 2,
+    },
+    {
+      placement: "top",
+      left: triggerCenterX - popoverWidth / 2,
+      top: triggerRect.top - popoverHeight - CONTRACT_DESCRIPTION_GAP,
+      preference: 3,
+    },
+  ]
+
+  const best = candidates
+    .map(candidate => {
+      const horizontalOverflow =
+        Math.max(CONTRACT_DESCRIPTION_MARGIN - candidate.left, 0) +
+        Math.max(candidate.left + popoverWidth - (viewportWidth - CONTRACT_DESCRIPTION_MARGIN), 0)
+      const verticalOverflow =
+        Math.max(CONTRACT_DESCRIPTION_MARGIN - candidate.top, 0) +
+        Math.max(candidate.top + popoverHeight - (viewportHeight - CONTRACT_DESCRIPTION_MARGIN), 0)
+
+      return {
+        ...candidate,
+        score: horizontalOverflow * 2 + verticalOverflow * 2 + candidate.preference,
+      }
+    })
+    .sort((a, b) => a.score - b.score)[0]
+
+  const left = clamp(
+    best.left,
+    CONTRACT_DESCRIPTION_MARGIN,
+    viewportWidth - popoverWidth - CONTRACT_DESCRIPTION_MARGIN,
+  )
+  const top = clamp(
+    best.top,
+    CONTRACT_DESCRIPTION_MARGIN,
+    viewportHeight - popoverHeight - CONTRACT_DESCRIPTION_MARGIN,
+  )
+
+  return {
+    left,
+    top,
+    placement: best.placement,
+    arrowX: clamp(
+      triggerCenterX - left,
+      CONTRACT_DESCRIPTION_ARROW_MIN,
+      popoverWidth - CONTRACT_DESCRIPTION_ARROW_MIN,
+    ),
+    arrowY: clamp(
+      triggerCenterY - top,
+      CONTRACT_DESCRIPTION_ARROW_MIN,
+      popoverHeight - CONTRACT_DESCRIPTION_ARROW_MIN,
+    ),
+  }
+}
+
+function clamp(value: number, min: number, max: number): number {
+  if (max < min) {
+    return min
+  }
+
+  return Math.min(Math.max(value, min), max)
+}
+
 function getContractTypeLabels(
   compilerAbi?: ContractABI,
   interfaces?: readonly string[],
@@ -623,6 +929,35 @@ function getExternalUrl(value: string): string | undefined {
   } catch {
     return undefined
   }
+}
+
+function getContractAbiLinks(extendedContractAbi?: ExtendedContractABI): ContractAbiLink[] {
+  return (extendedContractAbi?.links ?? [])
+    .map(link => normalizeContractAbiLink(link))
+    .filter((link): link is ContractAbiLink => link !== undefined)
+}
+
+function normalizeContractAbiLink(link: ContractAbiLink): ContractAbiLink | undefined {
+  const rawUrl = link.url.trim()
+  const url = getExternalUrl(rawUrl)
+  if (!url) {
+    return undefined
+  }
+
+  const title = link.title.trim()
+  const kind = link.kind.trim()
+  const scope = link.scope.trim()
+
+  return {
+    title: title || url,
+    url,
+    kind: kind || "link",
+    scope,
+  }
+}
+
+function formatContractLinkKind(kind: string): string {
+  return kind.replaceAll("_", " ")
 }
 
 function getStatusInfo(state?: FullAccountState["state"]): {

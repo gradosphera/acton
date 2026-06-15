@@ -163,10 +163,10 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({client}) => {
             codeHashes.length > 0
               ? await client
                   .getCompilerAbis(codeHashes)
-                  .catch((): Record<string, ContractData["abi"] | null> => ({}))
+                  .catch((): Awaited<ReturnType<TonClient["getCompilerAbis"]>> => ({}))
               : {}
           for (const codeHash of codeHashes) {
-            abiByCodeHash.set(codeHash, fetchedAbis[codeHash] ?? undefined)
+            abiByCodeHash.set(codeHash, fetchedAbis[codeHash]?.compiler_abi)
           }
 
           for (const tx of processed) {
