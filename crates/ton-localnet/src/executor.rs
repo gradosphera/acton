@@ -1,7 +1,7 @@
 use crate::types::{BocBytes, Lt};
 use anyhow::Context;
 use ton_executor::ExecutorVerbosity;
-use ton_executor::message::{EmulationResult, Executor, RunTransactionArgs};
+use ton_executor::message::{EmulationResult, Executor, PrevBlocksInfo, RunTransactionArgs};
 use tycho_types::boc::Boc;
 use tycho_types::cell::{Cell, CellBuilder};
 use tycho_types::models::{ComputePhase, Transaction, TxInfo};
@@ -12,6 +12,7 @@ pub struct ExecContext {
     pub gen_utime: u32,
     pub rand_seed: Option<[u8; 32]>,
     pub ignore_chksig: bool,
+    pub prev_blocks_info: PrevBlocksInfo,
 }
 
 #[derive(Clone, Debug)]
@@ -94,6 +95,7 @@ impl TvmExecutor for TvmEmulatorAdapter {
             random_seed: ctx.rand_seed,
             ignore_chksig: ctx.ignore_chksig,
             debug_enabled: false,
+            prev_blocks_info: Some(ctx.prev_blocks_info.clone()),
             ..Default::default()
         };
 

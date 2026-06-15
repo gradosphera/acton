@@ -1,5 +1,5 @@
 use crate::executor::{ExecContext, TvmExecutor};
-use crate::localnet::compute_normalized_ext_in_hash;
+use crate::localnet::{LocalnetBlockId, compute_normalized_ext_in_hash};
 use crate::remote::{
     RemoteProvider, account_meta_from_shard_account, fetch_remote_library,
     fetch_remote_shard_account,
@@ -21,6 +21,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::broadcast;
+use ton_executor::message::{PrevBlockId, PrevBlocksInfo};
 use tycho_types::boc::Boc;
 use tycho_types::boc::BocRepr;
 use tycho_types::cell::{Cell, CellBuilder, CellFamily, Store};
@@ -53,6 +54,7 @@ pub struct Node {
 }
 
 const CASCADE_TX_HARD_LIMIT: usize = 10_000;
+const PREV_BLOCKS_LIMIT: usize = 16;
 
 struct TransactionCommit {
     tx_meta: TxMeta,
@@ -464,6 +466,47 @@ impl Node {
         Ok(block_meta)
     }
 
+    #[must_use]
+    pub fn prev_blocks_info_at(&self, seqno: Seqno) -> PrevBlocksInfo {
+        let zero_block = PrevBlockId::from(LocalnetBlockId::first());
+        let mut last_mc_blocks = self
+            .history
+            .blocks
+            .iter()
+            .rev()
+            .filter(|block| block.seqno <= seqno)
+            .take(PREV_BLOCKS_LIMIT)
+            .map(|block| block.block_id().into())
+            .collect::<Vec<_>>();
+
+        if last_mc_blocks.len() < PREV_BLOCKS_LIMIT {
+            last_mc_blocks.push(zero_block.clone());
+        }
+
+        // Localnet does not model key blocks, so use the latest known MC-like block.
+        let prev_key_block = last_mc_blocks[0].clone();
+        let mut last_mc_blocks_100 = self
+            .history
+            .blocks
+            .iter()
+            .rev()
+            .filter(|block| block.seqno <= seqno && block.seqno % 100 == 0)
+            .take(PREV_BLOCKS_LIMIT)
+            .map(|block| block.block_id().into())
+            .collect::<Vec<_>>();
+
+        if last_mc_blocks_100.len() < PREV_BLOCKS_LIMIT {
+            last_mc_blocks_100.push(zero_block);
+        }
+
+        PrevBlocksInfo::new(last_mc_blocks, prev_key_block, last_mc_blocks_100)
+    }
+
+    #[must_use]
+    pub fn prev_blocks_info_before_block(&self, seqno: Seqno) -> PrevBlocksInfo {
+        self.prev_blocks_info_at(seqno.saturating_sub(1))
+    }
+
     fn execute_message_in_block(
         &mut self,
         msg_hash: Hash256,
@@ -502,6 +545,7 @@ impl Node {
             gen_utime,
             rand_seed: None,
             ignore_chksig: false,
+            prev_blocks_info: self.prev_blocks_info_before_block(seqno),
         };
         let global_libs = self.build_vm_global_libs_boc()?;
 
@@ -1602,6 +1646,7 @@ impl Node {
             gen_utime,
             rand_seed: None,
             ignore_chksig,
+            prev_blocks_info: self.prev_blocks_info_at(block_seqno),
         };
 
         let exec_result = self.executor.execute(
@@ -2050,6 +2095,7 @@ mod tests {
     #[derive(Clone)]
     struct RecordingExecutor {
         recorded_libs: Arc<Mutex<Vec<Option<BocBytes>>>>,
+        recorded_prev_blocks_info: Arc<Mutex<Vec<PrevBlocksInfo>>>,
     }
 
     impl TvmExecutor for RecordingExecutor {
@@ -2057,7 +2103,7 @@ mod tests {
             &self,
             _shard_account: &BocBytes,
             _in_msg: &BocBytes,
-            _ctx: &ExecContext,
+            ctx: &ExecContext,
             _config: &BocBytes,
             libs: Option<&BocBytes>,
         ) -> anyhow::Result<ExecResult> {
@@ -2065,6 +2111,10 @@ mod tests {
                 .lock()
                 .expect("recorded libs mutex poisoned")
                 .push(libs.cloned());
+            self.recorded_prev_blocks_info
+                .lock()
+                .expect("recorded prev blocks info mutex poisoned")
+                .push(ctx.prev_blocks_info.clone());
             anyhow::bail!("forced executor failure")
         }
     }
@@ -2072,6 +2122,18 @@ mod tests {
     fn make_test_node(executor: Box<dyn TvmExecutor>) -> Node {
         let config_boc = BocBytes::from_base64(DEFAULT_CONFIG).expect("must decode default config");
         Node::new(executor, config_boc, StateSource::Local).expect("must create test node")
+    }
+
+    fn block_meta(seqno: Seqno) -> BlockMeta {
+        BlockMeta {
+            seqno,
+            prev_seqno: (seqno > 1).then_some(seqno - 1),
+            gen_utime: seqno,
+            start_lt: u64::from(seqno),
+            end_lt: u64::from(seqno),
+            tx_hashes: Vec::new(),
+            block_hash: Hash256([seqno as u8; 32]),
+        }
     }
 
     #[test]
@@ -2612,6 +2674,61 @@ mod tests {
                 .len(),
             0
         );
+    }
+
+    #[test]
+    fn prev_blocks_info_before_block_uses_existing_blocks_and_zero_anchor() {
+        let mut node = make_test_node(Box::new(NoopExecutor));
+        node.history.blocks.push(block_meta(1));
+        node.history.blocks.push(block_meta(2));
+
+        let info = node.prev_blocks_info_before_block(3);
+        let seqnos = info
+            .last_mc_blocks
+            .iter()
+            .map(|block| block.seqno)
+            .collect::<Vec<_>>();
+        let sparse_seqnos = info
+            .last_mc_blocks_100
+            .iter()
+            .map(|block| block.seqno)
+            .collect::<Vec<_>>();
+
+        assert_eq!(seqnos, vec![2, 1, 0]);
+        assert_eq!(info.prev_key_block.seqno, 2);
+        assert_eq!(sparse_seqnos, vec![0]);
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
+    #[test]
+    fn mined_transaction_receives_prev_blocks_info_for_previous_block() {
+        let recorded_libs = Arc::new(Mutex::new(Vec::<Option<BocBytes>>::new()));
+        let recorded_prev_blocks_info = Arc::new(Mutex::new(Vec::<PrevBlocksInfo>::new()));
+        let executor = RecordingExecutor {
+            recorded_libs: Arc::clone(&recorded_libs),
+            recorded_prev_blocks_info: Arc::clone(&recorded_prev_blocks_info),
+        };
+        let mut node = make_test_node(Box::new(executor));
+        node.mine_block().expect("block 1 must be mined");
+        node.mine_block().expect("block 2 must be mined");
+
+        node.faucet(&test_addr(0x68), 1)
+            .expect("faucet message must be queued");
+        node.mine_block()
+            .expect("block with forced executor failure must still be mined");
+
+        let calls = recorded_prev_blocks_info
+            .lock()
+            .expect("recorded prev blocks info mutex poisoned");
+        assert!(!calls.is_empty(), "executor must be invoked");
+        let seqnos = calls[0]
+            .last_mc_blocks
+            .iter()
+            .map(|block| block.seqno)
+            .collect::<Vec<_>>();
+
+        assert_eq!(seqnos, vec![2, 1, 0]);
+        assert_eq!(calls[0].prev_key_block.seqno, 2);
     }
 
     #[test]
@@ -3418,8 +3535,10 @@ mod tests {
     #[test]
     fn next_transaction_receives_global_libs_via_set_libs_argument() {
         let recorded_libs = Arc::new(Mutex::new(Vec::<Option<BocBytes>>::new()));
+        let recorded_prev_blocks_info = Arc::new(Mutex::new(Vec::<PrevBlocksInfo>::new()));
         let executor = RecordingExecutor {
             recorded_libs: Arc::clone(&recorded_libs),
+            recorded_prev_blocks_info,
         };
         let mut node = make_test_node(Box::new(executor));
 

@@ -159,6 +159,43 @@ get fun addTen(value: int): int {
 }
 ";
 
+const PREVBLOCKS_GETTER_CONTRACT: &str = r#"
+fun onInternalMessage(_: InMessage) {}
+fun onBouncedMessage(_: InMessageBounced) {}
+
+@pure
+fun prevMcBlocks(): tuple
+    asm "PREVMCBLOCKS"
+
+@pure
+fun prevKeyBlock(): tuple
+    asm "PREVKEYBLOCK"
+
+@pure
+fun prevMcBlocks100(): tuple
+    asm "PREVMCBLOCKS_100"
+
+fun blockSeqno(block: tuple): int {
+    return block.get(2) as int;
+}
+
+get fun prevMcBlocksCount(): int {
+    return prevMcBlocks().size();
+}
+
+get fun latestPrevMcSeqno(): int {
+    return blockSeqno(prevMcBlocks().first() as tuple);
+}
+
+get fun prevKeySeqno(): int {
+    return blockSeqno(prevKeyBlock());
+}
+
+get fun prevMcBlocks100FirstSeqno(): int {
+    return blockSeqno(prevMcBlocks100().first() as tuple);
+}
+"#;
+
 const V3_DEPLOY_GETTER_SCRIPT: &str = r#"
 import "../../lib/build"
 import "../../lib/emulation/network"
@@ -3476,6 +3513,75 @@ fn localnet_supports_v3_run_get_method() {
 }
 
 #[test]
+fn localnet_contracts_can_read_prevblocks_instructions() {
+    let project = ProjectBuilder::new("localnet-prevblocks-get-method")
+        .contract("getter", PREVBLOCKS_GETTER_CONTRACT)
+        .script_file("deploy_getter", V3_DEPLOY_GETTER_SCRIPT)
+        .build();
+
+    fs::write(project.path().join("wallets.toml"), DEPLOYER_WALLET_CONFIG)
+        .expect("Failed to write wallets.toml");
+
+    let node = project
+        .localnet()
+        .before_start(super::super::support::project::ActonCommand::build)
+        .args(["--accounts", "deployer"])
+        .start();
+    append_localnet_network(project.path(), &node.base_url());
+
+    let script_result = project
+        .acton()
+        .script("scripts/deploy_getter.tolk")
+        .verify_network("localnet")
+        .run();
+    let script_stdout = String::from_utf8(script_result.output.get_output().stdout.clone())
+        .expect("Failed to decode deploy script stdout");
+    let script_stderr = String::from_utf8(script_result.output.get_output().stderr.clone())
+        .expect("Failed to decode deploy script stderr");
+    let script_status = script_result.output.get_output().status.code().unwrap_or(1);
+
+    assert_eq!(
+        script_status, 0,
+        "Deploy script failed with status {script_status}\nstdout:\n{script_stdout}\nstderr:\n{script_stderr}"
+    );
+
+    let getter_address = extract_marker_value(&script_stdout, "GETTER_CONTRACT=");
+    wait_until_address_state_active(&node, &getter_address, Duration::from_secs(12));
+    let query_seqno = latest_masterchain_seqno(&node) as u32;
+
+    let prev_count =
+        run_v3_get_num_at_seqno(&node, &getter_address, "prevMcBlocksCount", query_seqno);
+    let latest_prev_seqno =
+        run_v3_get_num_at_seqno(&node, &getter_address, "latestPrevMcSeqno", query_seqno);
+    let prev_key_seqno =
+        run_v3_get_num_at_seqno(&node, &getter_address, "prevKeySeqno", query_seqno);
+    let sparse_first_seqno = run_v3_get_num_at_seqno(
+        &node,
+        &getter_address,
+        "prevMcBlocks100FirstSeqno",
+        query_seqno,
+    );
+
+    let snapshot = json!({
+        "prev_mc_blocks_count_positive": prev_count > 0,
+        "latest_prev_mc_seqno_matches_query_seqno": latest_prev_seqno == i64::from(query_seqno),
+        "prev_key_seqno_matches_latest_prev_mc_seqno": prev_key_seqno == latest_prev_seqno,
+        "prev_mc_blocks_100_has_zero_anchor": sparse_first_seqno == 0,
+    });
+
+    let snapshot_json = format!(
+        "{}\n",
+        serde_json::to_string_pretty(&snapshot).expect("snapshot JSON must serialize")
+    );
+    assertion().eq(
+        snapshot_json,
+        snapbox::file!("snapshots/localnet/test_localnet_prevblocks_get_methods.summary.json"),
+    );
+
+    node.stop();
+}
+
+#[test]
 fn localnet_registers_and_serves_compiler_abi_for_localnet_deploys() {
     let project = ProjectBuilder::new("localnet-compiler-abi-registry")
         .contract("getter", V3_GETTER_CONTRACT)
@@ -3732,6 +3838,38 @@ fn response_payload(response: &Value) -> &Value {
             serde_json::to_string_pretty(response).unwrap_or_default()
         )
     }
+}
+
+fn run_v3_get_num_at_seqno(
+    node: &crate::support::localnet::LocalnetHandle,
+    address: &str,
+    method: &str,
+    seqno: u32,
+) -> i64 {
+    let response = node.post_json(
+        "/api/v3/runGetMethod",
+        &json!({
+            "address": address,
+            "method": method,
+            "seqno": seqno,
+            "stack": [],
+        }),
+    );
+
+    assert!(
+        is_success_response(&response),
+        "v3 runGetMethod {method} failed: {}",
+        serde_json::to_string_pretty(&response).unwrap_or_default()
+    );
+
+    let payload = response_payload(&response);
+    assert_eq!(payload["exit_code"].as_i64(), Some(0));
+    assert_eq!(payload["stack"][0]["type"].as_str(), Some("num"));
+    payload["stack"][0]["value"]
+        .as_str()
+        .expect("numeric get-method result must be a string")
+        .parse::<i64>()
+        .expect("numeric get-method result must parse")
 }
 
 fn pretty_json_for_snapshot(value: &Value, project_path: &Path) -> String {

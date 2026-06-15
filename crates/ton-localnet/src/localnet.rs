@@ -16,6 +16,7 @@ use tokio::time::Instant;
 use ton_executor::DEFAULT_CONFIG;
 use ton_executor::ExecutorVerbosity;
 use ton_executor::get::{GetExecutor, GetMethodResult, RunGetMethodArgs};
+use ton_executor::message::PrevBlockId;
 use tvm_ffi::json_stack::json_to_legacy_item;
 use tvm_ffi::stack::Tuple;
 use tycho_types::boc::Boc;
@@ -43,6 +44,18 @@ impl LocalnetBlockId {
             seqno: 0,
             root_hash: Hash256([0; 32]),
             file_hash: Hash256([0; 32]),
+        }
+    }
+}
+
+impl From<LocalnetBlockId> for PrevBlockId {
+    fn from(block_id: LocalnetBlockId) -> Self {
+        Self {
+            workchain: block_id.workchain,
+            shard: block_id.shard,
+            seqno: block_id.seqno,
+            root_hash: block_id.root_hash.0,
+            file_hash: block_id.file_hash.0,
         }
     }
 }
@@ -1781,7 +1794,10 @@ fn handle_run_get_method(
         verbosity: ExecutorVerbosity::Short,
         libs,
         extra_currencies: Default::default(),
-        prev_blocks_info: None,
+        prev_blocks_info: Some(
+            node.prev_blocks_info_at(seqno)
+                .to_stack_entry_boc_base64()?,
+        ),
     };
 
     let stack_cell = stack
