@@ -23,6 +23,8 @@ import {HomeAddressLabel} from "../HomeAddressLabel"
 
 import styles from "../DashboardPage.module.css"
 
+const HOME_RECENT_TRANSACTIONS_REFRESH_MS = 2000
+
 interface HomePageProps {
   readonly client: TonClient
 }
@@ -75,13 +77,16 @@ export const HomePage: React.FC<HomePageProps> = ({client}) => {
 
   React.useEffect(() => {
     let cancelled = false
+    let timeoutId: ReturnType<typeof setTimeout> | undefined
 
-    void (async () => {
-      setHomeState(current => ({
-        ...current,
-        isLoading: true,
-        error: undefined,
-      }))
+    const loadHomeState = async (showLoading: boolean) => {
+      if (showLoading) {
+        setHomeState(current => ({
+          ...current,
+          isLoading: true,
+          error: undefined,
+        }))
+      }
 
       try {
         const transactionsResponse = await client.getRecentTransactions(8)
@@ -100,31 +105,40 @@ export const HomePage: React.FC<HomePageProps> = ({client}) => {
           }
         }
 
-        if (cancelled) {
-          return
+        if (!cancelled) {
+          setHomeState({
+            transactions,
+            accountBalances,
+            isLoading: false,
+          })
         }
-
-        setHomeState({
-          transactions,
-          accountBalances,
-          isLoading: false,
-        })
       } catch (error) {
-        if (cancelled) {
-          return
+        if (!cancelled) {
+          const message = error instanceof Error ? error.message : "Failed to load dashboard"
+          setHomeState(current => ({
+            transactions: current.transactions,
+            accountBalances: current.accountBalances,
+            isLoading: false,
+            error: current.transactions.length === 0 ? message : undefined,
+          }))
         }
-
-        setHomeState({
-          transactions: [],
-          accountBalances: {},
-          isLoading: false,
-          error: error instanceof Error ? error.message : "Failed to load dashboard",
-        })
+      } finally {
+        if (!cancelled) {
+          timeoutId = globalThis.setTimeout(
+            () => void loadHomeState(false),
+            HOME_RECENT_TRANSACTIONS_REFRESH_MS,
+          )
+        }
       }
-    })()
+    }
+
+    void loadHomeState(true)
 
     return () => {
       cancelled = true
+      if (timeoutId !== undefined) {
+        globalThis.clearTimeout(timeoutId)
+      }
     }
   }, [client])
 

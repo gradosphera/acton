@@ -6,6 +6,8 @@ import type {LocalnetNodeInfo} from "../api/types"
 
 import {NetworkInfoContext, type NetworkInfoContextValue} from "./useNetworkInfo"
 
+const NODE_INFO_REFRESH_MS = 1000
+
 interface NetworkInfoProviderProps {
   readonly client: TonClient
   readonly children: React.ReactNode
@@ -16,6 +18,7 @@ export const NetworkInfoProvider: React.FC<NetworkInfoProviderProps> = ({client,
 
   useEffect(() => {
     let cancelled = false
+    let timeoutId: ReturnType<typeof setTimeout> | undefined
 
     const loadNodeInfo = async () => {
       try {
@@ -27,6 +30,10 @@ export const NetworkInfoProvider: React.FC<NetworkInfoProviderProps> = ({client,
         if (!cancelled) {
           setNodeInfo(undefined)
         }
+      } finally {
+        if (!cancelled) {
+          timeoutId = globalThis.setTimeout(() => void loadNodeInfo(), NODE_INFO_REFRESH_MS)
+        }
       }
     }
 
@@ -34,6 +41,9 @@ export const NetworkInfoProvider: React.FC<NetworkInfoProviderProps> = ({client,
 
     return () => {
       cancelled = true
+      if (timeoutId !== undefined) {
+        globalThis.clearTimeout(timeoutId)
+      }
     }
   }, [client])
 

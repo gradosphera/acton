@@ -8,7 +8,7 @@
         {
           "api_family": "v2",
           "call_type": "read",
-          "duration_ms": "[DURATION_MS]",
+          "duration_ns": "[DURATION_NS]",
           "http_method": "GET",
           "method": "getMasterchainInfo",
           "path": "/v2/getMasterchainInfo",
@@ -31,7 +31,7 @@
         {
           "api_family": "v2",
           "call_type": "read",
-          "duration_ms": "[DURATION_MS]",
+          "duration_ns": "[DURATION_NS]",
           "http_method": "GET",
           "method": "getMasterchainInfo",
           "path": "/v2/getMasterchainInfo",
@@ -44,7 +44,7 @@
         {
           "api_family": "control",
           "call_type": "read",
-          "duration_ms": "[DURATION_MS]",
+          "duration_ns": "[DURATION_NS]",
           "http_method": "GET",
           "method": "acton_getStartupWallets",
           "path": "/acton_getStartupWallets",
@@ -57,7 +57,7 @@
         {
           "api_family": "v2",
           "call_type": "read",
-          "duration_ms": "[DURATION_MS]",
+          "duration_ns": "[DURATION_NS]",
           "http_method": "GET",
           "method": "getMasterchainInfo",
           "path": "/v2/getMasterchainInfo",
@@ -70,7 +70,7 @@
         {
           "api_family": "json_rpc",
           "call_type": "read",
-          "duration_ms": "[DURATION_MS]",
+          "duration_ns": "[DURATION_NS]",
           "http_method": "POST",
           "method": "getMasterchainInfo",
           "path": "/api/v2/jsonRPC",
@@ -83,7 +83,7 @@
         {
           "api_family": "json_rpc",
           "call_type": "read",
-          "duration_ms": "[DURATION_MS]",
+          "duration_ns": "[DURATION_NS]",
           "http_method": "POST",
           "method": "missingMethod",
           "path": "/api/v2/jsonRPC",
