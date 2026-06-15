@@ -18,7 +18,7 @@ use ton_executor::ExecutorVerbosity;
 use ton_executor::get::{GetExecutor, GetMethodResult, RunGetMethodArgs};
 use ton_executor::message::PrevBlockId;
 use tvm_ffi::json_stack::json_to_legacy_item;
-use tvm_ffi::stack::Tuple;
+use tvm_ffi::stack::{Tuple, TupleItem};
 use tycho_types::boc::Boc;
 use tycho_types::cell::{Cell, CellBuilder, CellFamily, Store};
 use tycho_types::dict::Dict;
@@ -1771,11 +1771,22 @@ fn handle_run_get_method(
 ) -> anyhow::Result<LocalnetRunGetMethodResult> {
     let seqno = account_query_seqno(node, seqno);
     let meta = node.get_address_information_at_block(&address, seqno);
-    let meta = meta.ok_or_else(|| anyhow::anyhow!("Account {address} not found"))?;
     let block_id = block_id_for_query_seqno(node, seqno)?;
-    let last_transaction_id = meta.last_tx_id();
 
-    let code_boc = node.get_cell_or_empty(meta.code_hash).to_base64();
+    let Some(meta) = meta else {
+        return no_code_run_get_method_result(
+            method_id,
+            block_id,
+            LocalnetTransactionId::default(),
+        );
+    };
+
+    let last_transaction_id = meta.last_tx_id();
+    let Some(code_hash) = meta.code_hash else {
+        return no_code_run_get_method_result(method_id, block_id, last_transaction_id);
+    };
+
+    let code_boc = node.get_cell_or_empty(Some(code_hash)).to_base64();
     let data_boc = node.get_cell_or_empty(meta.data_hash).to_base64();
     let libs = node
         .build_vm_global_libs_boc()?
@@ -1822,6 +1833,24 @@ fn handle_run_get_method(
         }),
         GetMethodResult::Error(e) => anyhow::bail!("Get method error: {e:?}"),
     }
+}
+
+fn no_code_run_get_method_result(
+    method_id: i32,
+    block_id: LocalnetBlockId,
+    last_transaction_id: LocalnetTransactionId,
+) -> anyhow::Result<LocalnetRunGetMethodResult> {
+    let stack = Tuple(vec![TupleItem::Int(method_id.into())])
+        .serialize()
+        .context("Failed to serialize no-code get-method stack to BoC")?;
+    Ok(LocalnetRunGetMethodResult {
+        gas_used: 0,
+        stack: BocBytes::from(Boc::encode(stack)),
+        exit_code: -13,
+        vm_log: Arc::from(""),
+        block_id,
+        last_transaction_id,
+    })
 }
 
 pub(crate) fn convert_to_tx_struct(

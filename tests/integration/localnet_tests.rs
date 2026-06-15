@@ -3513,6 +3513,76 @@ fn localnet_supports_v3_run_get_method() {
 }
 
 #[test]
+fn localnet_run_get_method_on_missing_account_returns_vm_exit_code() {
+    let project = ProjectBuilder::new("localnet-run-get-method-missing-account").build();
+    let node = project.localnet().start();
+
+    let (v3_status, v3_response) = node.post_json_with_status(
+        "/api/v3/runGetMethod",
+        &json!({
+            "address": "EQDzA78rXj_YgEpIn43GrHcPgffSdYWiBFVZfAAD9SKdc7Vn",
+            "method": "get_verification_record",
+            "stack": []
+        }),
+    );
+    let (v2_status, v2_response) = node.post_json_with_status(
+        "/api/v2/runGetMethod",
+        &json!({
+            "address": "EQDzA78rXj_YgEpIn43GrHcPgffSdYWiBFVZfAAD9SKdc7Vn",
+            "method": "get_verification_record",
+            "stack": []
+        }),
+    );
+    let v2_payload = response_payload(&v2_response);
+    let (no_code_status, no_code_response) = node.post_json_with_status(
+        "/api/v3/runGetMethod",
+        &json!({
+            "address": "0:5555555555555555555555555555555555555555555555555555555555555555",
+            "method": "get_verification_record",
+            "stack": []
+        }),
+    );
+
+    let snapshot = json!({
+        "v3": {
+            "status": v3_status,
+            "has_error": v3_response.get("error").is_some(),
+            "gas_used": v3_response["gas_used"],
+            "exit_code": v3_response["exit_code"],
+            "stack": v3_response["stack"],
+        },
+        "v2": {
+            "status": v2_status,
+            "ok": v2_response["ok"],
+            "gas_used": v2_payload["gas_used"],
+            "exit_code": v2_payload["exit_code"],
+            "stack": v2_payload["stack"],
+            "last_transaction_id": v2_payload["last_transaction_id"],
+        },
+        "existing_no_code": {
+            "status": no_code_status,
+            "has_error": no_code_response.get("error").is_some(),
+            "gas_used": no_code_response["gas_used"],
+            "exit_code": no_code_response["exit_code"],
+            "stack": no_code_response["stack"],
+        },
+    });
+
+    let snapshot_json = format!(
+        "{}\n",
+        serde_json::to_string_pretty(&snapshot).expect("snapshot JSON must serialize")
+    );
+    assertion().eq(
+        snapshot_json,
+        snapbox::file!(
+            "snapshots/localnet/test_localnet_run_get_method_missing_account.summary.json"
+        ),
+    );
+
+    node.stop();
+}
+
+#[test]
 fn localnet_contracts_can_read_prevblocks_instructions() {
     let project = ProjectBuilder::new("localnet-prevblocks-get-method")
         .contract("getter", PREVBLOCKS_GETTER_CONTRACT)
