@@ -3792,12 +3792,13 @@ fn localnet_contracts_can_read_prevblocks_instructions() {
         "prevMcBlocks100FirstSeqno",
         query_seqno,
     );
+    let expected_sparse_first_seqno = i64::from(query_seqno - (query_seqno % 100));
 
     let snapshot = json!({
         "prev_mc_blocks_count_positive": prev_count > 0,
         "latest_prev_mc_seqno_matches_query_seqno": latest_prev_seqno == i64::from(query_seqno),
         "prev_key_seqno_matches_latest_prev_mc_seqno": prev_key_seqno == latest_prev_seqno,
-        "prev_mc_blocks_100_has_zero_anchor": sparse_first_seqno == 0,
+        "prev_mc_blocks_100_first_seqno_matches_expected": sparse_first_seqno == expected_sparse_first_seqno,
     });
 
     let snapshot_json = format!(
