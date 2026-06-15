@@ -98,7 +98,7 @@ pub struct ApiCallRecord {
     pub method: String,
     pub request_id: Value,
     pub timestamp_ms: u128,
-    pub duration_ms: u128,
+    pub duration_ns: u128,
 }
 
 #[derive(Clone, Copy, Debug, Serialize)]
@@ -192,7 +192,7 @@ impl ApiCallLog {
             method: input.method,
             request_id: input.request_id,
             timestamp_ms,
-            duration_ms: start.duration_start.elapsed().as_millis(),
+            duration_ns: start.duration_start.elapsed().as_nanos(),
         };
 
         let mut entries = self

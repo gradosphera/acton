@@ -197,7 +197,7 @@ export interface ApiCallRecord {
   readonly method: string
   readonly request_id: unknown
   readonly timestamp_ms: number
-  readonly duration_ms: number
+  readonly duration_ns: number
 }
 
 export interface ApiCallLogResponse {

@@ -26,6 +26,9 @@ const DEFAULT_STATUS_FILTER: StatusFilter = {
   failed: true,
 }
 
+const NANOSECONDS_PER_MICROSECOND = 1000
+const NANOSECONDS_PER_MILLISECOND = NANOSECONDS_PER_MICROSECOND * 1000
+
 export const ApiCallsPage: React.FC<ApiCallsPageProps> = ({client}) => {
   const [calls, setCalls] = React.useState<readonly ApiCallRecord[]>([])
   const [statusFilter, setStatusFilter] = React.useState<StatusFilter>(DEFAULT_STATUS_FILTER)
@@ -166,7 +169,9 @@ export const ApiCallsPage: React.FC<ApiCallsPageProps> = ({client}) => {
                     <TableCell className={styles.rpcCodeCell}>{call.status_code}</TableCell>
                     <TableCell className={styles.rpcTypeCell}>{call.call_type}</TableCell>
                     <TableCell className={styles.rpcMethodCell}>{call.method}</TableCell>
-                    <TableCell className={styles.rpcDurationCell}>{call.duration_ms} ms</TableCell>
+                    <TableCell className={styles.rpcDurationCell}>
+                      {formatApiCallDuration(call.duration_ns)}
+                    </TableCell>
                     <TableCell className={styles.rpcTimestampCell}>
                       {formatTimestamp(call.timestamp_ms)}
                     </TableCell>
@@ -190,4 +195,31 @@ function formatTimestamp(timestampMs: number): string {
     dateStyle: "medium",
     timeStyle: "medium",
   }).format(new Date(timestampMs))
+}
+
+function formatApiCallDuration(durationNs: number): string {
+  if (!Number.isFinite(durationNs) || durationNs < 0) {
+    return "Unknown"
+  }
+
+  if (durationNs < NANOSECONDS_PER_MICROSECOND) {
+    return `${Math.round(durationNs)} ns`
+  }
+
+  if (durationNs < NANOSECONDS_PER_MILLISECOND) {
+    return `${formatDurationValue(durationNs / NANOSECONDS_PER_MICROSECOND)} µs`
+  }
+
+  const durationMs = durationNs / NANOSECONDS_PER_MILLISECOND
+  if (durationMs < 10) {
+    return `${formatDurationValue(durationMs)} ms`
+  }
+
+  return `${Math.round(durationMs)} ms`
+}
+
+function formatDurationValue(value: number): string {
+  return value.toLocaleString(undefined, {
+    maximumFractionDigits: value < 10 ? 2 : value < 100 ? 1 : 0,
+  })
 }
