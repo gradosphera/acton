@@ -357,6 +357,9 @@ fun SendResultList.hideTraceFromUi(self): void {
 /// (`childTxs`, `parentLt`, `outActions`) are left empty/null; `outMessages`, `externals`,
 /// and `gasUsed` are derived from the transaction itself.
 ///
+/// If the matched root transaction is already known to have failed, the method returns
+/// `null` immediately and prints a warning instead of waiting for the remaining attempts.
+///
 /// In emulation mode (without `--net`), this method returns the first [SendResult] immediately
 /// (or `null` if the list is empty), because the trace is already fully processed locally.
 /// Use [SendResultList.waitForTrace] when you need the complete descendant transaction chain.
@@ -416,6 +419,8 @@ fun SendResultList.waitForFirstTransaction(
 /// the method returns `self` as-is (or `null` if the list is empty).
 ///
 /// Returns `null` if the chain cannot be fetched within the given attempt budget.
+/// If the matched root transaction is already known to have failed, the method returns
+/// `null` immediately and prints a warning.
 fun SendResultList.waitForTrace(
     self,
     quiet: bool = false,

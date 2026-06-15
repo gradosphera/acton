@@ -43,9 +43,9 @@ pub async fn get_traces(
     };
 
     if let Some(msg_hash) = msg_hash {
-        handle_v3_result(node.get_traces_by_message_hash(msg_hash), v3::map_traces).await
+        handle_v3_traces_result(node.get_traces_by_message_hash(msg_hash)).await
     } else if let Some(tx_hash) = tx_hash {
-        handle_v3_result(node.get_traces(tx_hash), v3::map_traces).await
+        handle_v3_traces_result(node.get_traces(tx_hash)).await
     } else {
         v3_bad_request("Either `msg_hash` or `tx_hash` is required")
     }
@@ -1012,6 +1012,29 @@ where
         Ok(res) => (StatusCode::OK, Json(mapper(&res))).into_response(),
         Err(e) => request_error(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
     }
+}
+
+async fn handle_v3_traces_result(
+    result: impl Future<Output = anyhow::Result<TraceNode>>,
+) -> Response {
+    match result.await {
+        Ok(trace) => (StatusCode::OK, Json(v3::map_traces(&trace))).into_response(),
+        Err(e) if is_trace_not_found_error(&e) => (
+            StatusCode::OK,
+            Json(json!({
+                "address_book": {},
+                "metadata": {},
+                "traces": [],
+            })),
+        )
+            .into_response(),
+        Err(e) => request_error(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+    }
+}
+
+fn is_trace_not_found_error(error: &anyhow::Error) -> bool {
+    let message = error.to_string();
+    message.starts_with("Trace not found for message ") || message == "Root transaction not found"
 }
 
 fn v3_bad_request(error: impl Into<String>) -> Response {

@@ -84,6 +84,18 @@ fun onInternalMessage(in: InMessage) {
 fun onBouncedMessage(_: InMessageBounced) {}
 "#;
 
+const ACCEPT_THEN_THROW_EXTERNAL_CONTRACT: &str = r#"
+import "@stdlib/gas-payments"
+
+fun onExternalMessage() {
+    acceptExternalMessage();
+    throw 10;
+}
+
+fun onInternalMessage(_: InMessage) {}
+fun onBouncedMessage(_: InMessageBounced) {}
+"#;
+
 const WAIT_FOR_TRACE_SCRIPT: &str = r#"
 import "../../lib/build"
 import "../../lib/emulation/network"
@@ -245,6 +257,59 @@ fun main() {
     }));
 
     println(txs.waitForTrace(false, 1, 1));
+}
+"#;
+
+const UNFUNDED_WALLET_WAIT_FOR_FIRST_TRANSACTION_SCRIPT: &str = r#"
+import "../../lib/emulation/network"
+import "../../lib/emulation/scripts"
+import "../../lib/io"
+
+fun main() {
+    val wallet = scripts.wallet("deployer");
+    val txs = net.send(wallet.address, createMessage({
+        bounce: false,
+        value: ton("0.1"),
+        dest: address("EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ"),
+    }));
+
+    println(txs.waitForFirstTransaction(false, 1, 1));
+}
+"#;
+
+const FAILED_ROOT_WAIT_FOR_FIRST_TRANSACTION_SCRIPT: &str = r#"
+import "../../lib/build"
+import "../../lib/emulation/network"
+import "../../lib/emulation/scripts"
+import "../../lib/io"
+
+fun main() {
+    val wallet = scripts.wallet("deployer");
+
+    val targetInit = ContractState {
+        code: build("accept_then_throw_external"),
+        data: createEmptyCell(),
+    };
+    val targetAddress = AutoDeployAddress {
+        stateInit: targetInit,
+    }.calculateAddress();
+
+    if (net.send(wallet.address, createMessage({
+        bounce: false,
+        value: ton("0.1"),
+        dest: {
+            stateInit: targetInit,
+        },
+    })).waitForFirstTransaction(true, 40, 25) == null) {
+        println("DEPLOY_NULL");
+        return;
+    }
+
+    val result = net.sendExternal(
+        net.createExternalMessage(targetAddress, createEmptyCell()),
+    );
+
+    println(result.waitForFirstTransaction(false, 40, 100));
 }
 "#;
 
@@ -3909,7 +3974,10 @@ fun main() {
 
     write_localnet_wallet_config(&project, "deployer");
 
-    let node = project.localnet().args(["--accounts", "deployer"]).start();
+    let node = project
+        .localnet()
+        .args(["--accounts", "deployer", "--block-interval-ms", "2000"])
+        .start();
     append_localnet_network(project.path(), &format!("{}/api/v2", node.base_url()));
 
     let deploy_output = project
@@ -4437,6 +4505,72 @@ fn test_script_wait_for_first_transaction_returns_root_on_localnet() {
     output.assert_snapshot_matches(
         "integration/snapshots/script/test_script_wait_for_first_transaction_returns_root_on_localnet.stdout.txt",
     );
+
+    node.stop();
+}
+
+#[test]
+fn test_script_unfunded_wallet_wait_for_first_transaction_repro_on_localnet() {
+    let project = ProjectBuilder::new("script-unfunded-wallet-wait-localnet")
+        .script_file(
+            "unfunded_wallet_wait",
+            UNFUNDED_WALLET_WAIT_FOR_FIRST_TRANSACTION_SCRIPT,
+        )
+        .build();
+
+    write_localnet_wallet_config(&project, "deployer");
+
+    let node = project.localnet().start();
+    append_localnet_network(project.path(), &node.base_url());
+
+    let output = project
+        .acton()
+        .script("scripts/unfunded_wallet_wait.tolk")
+        .verify_network("localnet")
+        .run()
+        .success();
+
+    output.assert_snapshot_matches(
+        "integration/snapshots/script/test_script_unfunded_wallet_wait_for_first_transaction_repro_on_localnet.stdout.txt",
+    );
+
+    node.stop();
+}
+
+#[test]
+fn test_script_wait_for_first_transaction_returns_null_when_root_tx_failed_on_localnet() {
+    let project = ProjectBuilder::new("script-wait-root-failed-localnet")
+        .contract(
+            "accept_then_throw_external",
+            ACCEPT_THEN_THROW_EXTERNAL_CONTRACT,
+        )
+        .script_file(
+            "wait_root_failed",
+            FAILED_ROOT_WAIT_FOR_FIRST_TRANSACTION_SCRIPT,
+        )
+        .build();
+
+    write_localnet_wallet_config(&project, "deployer");
+
+    let node = project.localnet().args(["--accounts", "deployer"]).start();
+    append_localnet_network(project.path(), &node.base_url());
+
+    let output = project
+        .acton()
+        .script("scripts/wait_root_failed.tolk")
+        .verify_network("localnet")
+        .run()
+        .success();
+
+    output
+        .assert_not_contains("Transaction successfully applied!")
+        .assert_stderr_contains("root transaction failed")
+        .assert_snapshot_matches(
+            "integration/snapshots/script/test_script_wait_for_first_transaction_returns_null_when_root_tx_failed_on_localnet.stdout.txt",
+        )
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/script/test_script_wait_for_first_transaction_returns_null_when_root_tx_failed_on_localnet.stderr.txt",
+        );
 
     node.stop();
 }

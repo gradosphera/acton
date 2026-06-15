@@ -2215,7 +2215,7 @@ fn localnet_uses_normalized_hash_for_send_boc_return_hash_and_v3_lookup() {
 
     let normalized_hash_query = encode_query_component(message_hash_norm);
 
-    let traces = wait_for_ok_status_response(
+    let traces = wait_for_non_empty_v3_traces_response(
         &node,
         &format!("/api/v3/traces?msg_hash={normalized_hash_query}"),
         Duration::from_secs(12),
@@ -2251,6 +2251,37 @@ fn localnet_uses_normalized_hash_for_send_boc_return_hash_and_v3_lookup() {
         Some(message_hash_norm),
         "Expected normalized hash in matched inbound message:\n{}",
         serde_json::to_string_pretty(&by_msg_hash).unwrap_or_default()
+    );
+
+    node.stop();
+}
+
+#[test]
+fn localnet_v3_traces_unknown_hashes_return_empty_traces() {
+    let project = ProjectBuilder::new("localnet-v3-traces-unknown-hashes").build();
+    let node = project.localnet().start();
+
+    let unknown_msg_hash = encode_query_component(&Hash256([0x42; 32]).to_base64());
+    let unknown_tx_hash = encode_query_component(&Hash256([0x43; 32]).to_base64());
+
+    let (msg_status, msg_response) =
+        node.get_json_with_status(&format!("/api/v3/traces?msg_hash={unknown_msg_hash}"));
+    let (tx_status, tx_response) =
+        node.get_json_with_status(&format!("/api/v3/traces?tx_hash={unknown_tx_hash}"));
+
+    let summary = json!({
+        "msg_hash": {
+            "status": msg_status,
+            "response": msg_response,
+        },
+        "tx_hash": {
+            "status": tx_status,
+            "response": tx_response,
+        },
+    });
+    snapbox::assert_data_eq!(
+        format!("{}\n", pretty_json_for_snapshot(&summary, project.path())),
+        snapbox::file!("snapshots/localnet/test_localnet_v3_traces_unknown_hashes.response.json")
     );
 
     node.stop();
@@ -4041,7 +4072,7 @@ fn wait_for_ok_response(
     }
 }
 
-fn wait_for_ok_status_response(
+fn wait_for_non_empty_v3_traces_response(
     node: &crate::support::localnet::LocalnetHandle,
     query: &str,
     timeout: Duration,
@@ -4049,12 +4080,17 @@ fn wait_for_ok_status_response(
     let deadline = Instant::now() + timeout;
     loop {
         let (status, response) = node.get_json_with_status(query);
-        if (200..300).contains(&status) && is_success_response(&response) {
+        if (200..300).contains(&status)
+            && is_success_response(&response)
+            && response_payload(&response)["traces"]
+                .as_array()
+                .is_some_and(|traces| !traces.is_empty())
+        {
             return response;
         }
         assert!(
             Instant::now() < deadline,
-            "Timed out waiting for successful response from `{query}`; last status={status}:\n{}",
+            "Timed out waiting for non-empty traces response from `{query}`; last status={status}:\n{}",
             serde_json::to_string_pretty(&response).unwrap_or_default()
         );
         thread::sleep(Duration::from_millis(200));

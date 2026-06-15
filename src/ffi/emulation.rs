@@ -15,8 +15,8 @@ use crate::retrace;
 use crate::tonconnect;
 use acton_config::color::OwoColorize;
 use acton_config::config::Explorer;
-use acton_debug::ChildDebugContextSpec;
 use acton_debug::replayer::StepMode;
+use acton_debug::{ChildDebugContextSpec, exit_codes};
 use anyhow::{Context as AnyhowContext, anyhow};
 use base64::Engine;
 use crc::{CRC_16_XMODEM, Crc};
@@ -3077,6 +3077,13 @@ fn wait_for_transaction_impl(
 
         match poll_send_result_v2(&api_client, &dest_address, &target_hash) {
             Ok(Some(polled)) => {
+                if let Some(reason) = &polled.root_failure {
+                    let link = transaction_link(ctx, &dest_address, &polled);
+                    warn_root_transaction_failed("waitForFirstTransaction", reason, Some(&link));
+                    stack.push(TupleItem::Null);
+                    return Ok(());
+                }
+
                 // Short settle delay so descendant transactions are more likely to be visible.
                 std::thread::sleep(Duration::from_millis(WAIT_FOR_TRANSACTION_SETTLE_DELAY_MS));
 
@@ -3113,6 +3120,74 @@ struct PolledSendResult {
     lt: u64,
     utime: u32,
     send_result: TupleItem,
+    root_failure: Option<String>,
+}
+
+fn root_transaction_failure_reason(tx: &Transaction) -> Option<String> {
+    let Ok(TxInfo::Ordinary(info)) = tx.load_info() else {
+        return None;
+    };
+
+    match &info.compute_phase {
+        ComputePhase::Skipped(phase) => {
+            return Some(format!("Compute phase was skipped: {:?}", phase.reason));
+        }
+        ComputePhase::Executed(phase) if !phase.success => {
+            return Some(format!(
+                "Compute phase failed with {}",
+                format_compute_exit_code(phase.exit_code)
+            ));
+        }
+        ComputePhase::Executed(_) => {}
+    }
+
+    if let Some(action) = &info.action_phase
+        && (!action.success || action.result_code != 0)
+    {
+        let no_funds = if action.no_funds {
+            " (not enough funds)"
+        } else {
+            ""
+        };
+        return Some(format!(
+            "Action phase failed with {}{no_funds}",
+            format_action_result_code(action.result_code)
+        ));
+    }
+
+    if info.aborted {
+        return Some("Transaction was aborted".to_owned());
+    }
+
+    None
+}
+
+fn format_compute_exit_code(code: i32) -> String {
+    format_known_exit_code(code, exit_codes::ExitCodePhase::Compute, "exit code")
+}
+
+fn format_action_result_code(code: i32) -> String {
+    format_known_exit_code(code, exit_codes::ExitCodePhase::Action, "result code")
+}
+
+fn format_known_exit_code(code: i32, phase: exit_codes::ExitCodePhase, code_label: &str) -> String {
+    let Some(info) = exit_codes::find_for_phase(code, phase) else {
+        return format!("{code_label} {code}");
+    };
+
+    format!("{code_label} {code} ({})", info.description)
+}
+
+fn warn_root_transaction_failed(wait_name: &str, reason: &str, explorer_link: Option<&str>) {
+    warn!("{wait_name}: root transaction failed: {reason}");
+    eprintln!(
+        "Warning: the broadcast message was included in a block, but its root transaction failed."
+    );
+    eprintln!("Acton stopped waiting for {wait_name}(); the script receives null.");
+    eprintln!("Reason: {reason}");
+    if let Some(link) = explorer_link {
+        eprintln!("Open transaction in explorer: {link}");
+    }
 }
 
 /// One polling step using toncenter v2 — a direct translation of the TON docs
@@ -3157,14 +3232,30 @@ fn poll_send_result_v2(
             lt: parsed_tx.lt,
             utime: parsed_tx.now,
             send_result,
+            root_failure: root_transaction_failure_reason(&parsed_tx),
         }));
     }
     Ok(None)
 }
 
 fn transaction_link(ctx: &mut Context, address_str: &str, polled: &PolledSendResult) -> String {
+    transaction_link_from_parts(
+        ctx,
+        address_str,
+        polled.tx_hash_hex.as_str(),
+        polled.lt,
+        polled.utime,
+    )
+}
+
+fn transaction_link_from_parts(
+    ctx: &mut Context,
+    address_str: &str,
+    tx_hash_hex: &str,
+    lt: u64,
+    utime: u32,
+) -> String {
     let network = ctx.network();
-    let tx_hash_hex = polled.tx_hash_hex.as_str();
     match &network {
         Network::Localnet => {
             if let Some(url) = localnet_transaction_link(ctx, tx_hash_hex) {
@@ -3189,14 +3280,10 @@ fn transaction_link(ctx: &mut Context, address_str: &str, polled: &PolledSendRes
     let explorer = ctx.env.explorer.unwrap_or(Explorer::Tonscan);
     match explorer {
         Explorer::Tonscan => format!("https://{network_prefix}tonscan.org/tx/{tx_hash_hex}"),
-        Explorer::Toncx => format!(
-            "https://{network_prefix}ton.cx/tx/{}:{tx_hash_hex}:{address_str}",
-            polled.lt
-        ),
-        Explorer::Dton => format!(
-            "https://{network_prefix}dton.io/tx/{tx_hash_hex}?time={}",
-            polled.utime
-        ),
+        Explorer::Toncx => {
+            format!("https://{network_prefix}ton.cx/tx/{lt}:{tx_hash_hex}:{address_str}")
+        }
+        Explorer::Dton => format!("https://{network_prefix}dton.io/tx/{tx_hash_hex}?time={utime}"),
         Explorer::Tonviewer => {
             format!("https://{network_prefix}tonviewer.com/transaction/{tx_hash_hex}")
         }
@@ -4085,6 +4172,18 @@ fn wait_for_trace_impl(
                      be fetched in full"
                 );
             }
+            Ok(TracePollOutcome::RootFailed {
+                reason,
+                tx_hash_hex,
+                address,
+                lt,
+                utime,
+            }) => {
+                let link = transaction_link_from_parts(ctx, &address, &tx_hash_hex, lt, utime);
+                warn_root_transaction_failed("waitForTrace", &reason, Some(&link));
+                stack.push(TupleItem::Null);
+                return Ok(());
+            }
             Err(err) => {
                 // Surface the failure on each attempt, and hold on to the last one so we can
                 // include it in the bail message if errors persist through timeout.
@@ -4122,6 +4221,13 @@ enum TracePollOutcome {
     Settled(Vec<TupleItem>),
     NotYet,
     Incomplete,
+    RootFailed {
+        reason: String,
+        tx_hash_hex: String,
+        address: String,
+        lt: u64,
+        utime: u32,
+    },
 }
 
 /// One polling step for a full trace.
@@ -4153,6 +4259,21 @@ fn poll_send_results_by_trace(
     };
     if has_unmatched_internal_out_messages(&transactions) {
         return Ok(TracePollOutcome::NotYet);
+    }
+    if let Some((root, reason)) = transactions.first().and_then(|root| {
+        root_transaction_failure_reason(&root.transaction).map(|reason| (root, reason))
+    }) {
+        let tx_hash_hex = parse_hash_bytes(&root.hash)
+            .map_or_else(|_| root.hash.clone(), |hash| hex::encode(hash.as_slice()));
+        let lt = root.summary.lt.parse().unwrap_or(root.transaction.lt);
+        let utime = root.summary.now;
+        return Ok(TracePollOutcome::RootFailed {
+            reason,
+            tx_hash_hex,
+            address: root.summary.account.clone(),
+            lt,
+            utime,
+        });
     }
     let results = transactions
         .iter()
