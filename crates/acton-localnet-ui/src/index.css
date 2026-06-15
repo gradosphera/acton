@@ -67,7 +67,7 @@
   --tonscan-text: var(--litenode-text);
   --tonscan-text-primary: var(--litenode-text);
   --tonscan-text-secondary: var(--litenode-text-muted);
-  --tonscan-accent: #0070f3;
+  --tonscan-accent: #4e96ff;
   --tonscan-link: var(--tonscan-accent);
   --tonscan-success: #22c55e;
   --tonscan-error: #ef4444;
@@ -136,7 +136,7 @@
   --litenode-workspace-to: #71717a;
   --litenode-workspace-dot: rgba(9, 9, 11, 0.36);
 
-  --tonscan-accent: #38bdf8;
+  --tonscan-accent: #4e96ff;
   --tonscan-card-bg: var(--litenode-surface-raised);
   --tonscan-success: #22c55e;
   --tonscan-error: #ef4444;

@@ -350,15 +350,18 @@ export const AccountInfo: React.FC<AccountInfoProps> = ({
                         onClick={onMoreAssetsClick}
                         disabled={!canOpenTokens}
                       >
-                        {firstMaster?.jetton_content?.image ? (
-                          <img
-                            src={firstMaster.jetton_content.image}
-                            alt={firstMaster.jetton_content.symbol || "Jetton"}
-                            className={styles.assetIconImage}
-                          />
-                        ) : (
-                          <div className={styles.assetIcon} />
-                        )}
+                        <img
+                          src={firstMaster?.jetton_content?.image || TOKEN_PLACEHOLDER_IMAGE}
+                          alt={firstMaster?.jetton_content?.symbol || "Jetton"}
+                          className={styles.assetIconImage}
+                          onError={event => {
+                            const image = event.currentTarget
+                            if (image.getAttribute("src") === TOKEN_PLACEHOLDER_IMAGE) {
+                              return
+                            }
+                            image.src = TOKEN_PLACEHOLDER_IMAGE
+                          }}
+                        />
                         <span className={styles.primaryValue}>
                           {formatTokenAmount(firstWallet.balance, firstWalletDecimals)}{" "}
                           {firstWalletSymbol}

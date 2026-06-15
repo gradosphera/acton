@@ -136,6 +136,11 @@
 
 .contractDescriptionPopover {
   --contract-description-popover-bg: color-mix(in srgb, var(--tonscan-card-bg) 92%, transparent);
+  --contract-description-popover-border: color-mix(
+    in srgb,
+    var(--tonscan-border) 84%,
+    var(--contract-description-popover-bg)
+  );
 
   position: fixed;
   z-index: 10000;
@@ -145,7 +150,7 @@
   padding: 0;
   color: var(--tonscan-text-primary);
   background: var(--contract-description-popover-bg);
-  border: 1px solid var(--tonscan-border);
+  border: 1px solid var(--contract-description-popover-border);
   border-radius: 12px;
   box-shadow: var(--litenode-shadow-popover);
   overflow: visible;
@@ -201,7 +206,7 @@
   top: var(--contract-description-arrow-y);
   left: -8px;
   border-top: 8px solid transparent;
-  border-right: 8px solid var(--tonscan-border);
+  border-right: 8px solid var(--contract-description-popover-border);
   border-bottom: 8px solid transparent;
   transform: translateY(-50%);
 }
@@ -224,7 +229,7 @@
   right: -8px;
   border-top: 8px solid transparent;
   border-bottom: 8px solid transparent;
-  border-left: 8px solid var(--tonscan-border);
+  border-left: 8px solid var(--contract-description-popover-border);
   transform: translateY(-50%);
 }
 
@@ -245,7 +250,7 @@
   top: -8px;
   left: var(--contract-description-arrow-x);
   border-right: 8px solid transparent;
-  border-bottom: 8px solid var(--tonscan-border);
+  border-bottom: 8px solid var(--contract-description-popover-border);
   border-left: 8px solid transparent;
   transform: translateX(-50%);
 }
@@ -266,7 +271,7 @@
 .contractDescriptionPopover[data-placement="top"]::before {
   bottom: -8px;
   left: var(--contract-description-arrow-x);
-  border-top: 8px solid var(--tonscan-border);
+  border-top: 8px solid var(--contract-description-popover-border);
   border-right: 8px solid transparent;
   border-left: 8px solid transparent;
   transform: translateX(-50%);
@@ -557,15 +562,6 @@
 .collectiblesLink:focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px var(--litenode-focus);
-}
-
-.assetIcon {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: var(--litenode-neutral-bg);
-  border: 1px solid var(--litenode-border-control);
-  flex: 0 0 auto;
 }
 
 .assetIconImage {
