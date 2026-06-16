@@ -2,9 +2,10 @@ use super::utils::handle_result;
 use crate::api::toncenter_v2 as v2;
 use crate::localnet::Localnet;
 use crate::server::models::{
-    FaucetRequest, GetApiCallsRequest, GetVerifiedSourceRequest, MineBlocksRequest,
-    RegisterCompilerAbisRequest, SendBocRequest, SetAddressNameRequest,
-    SetNetworkConditionsRequest, SetShardAccountRequest, StatePathRequest,
+    FaucetRequest, GetApiCallsRequest, GetVerifiedSourceRequest, IncreaseTimeRequest,
+    MineBlocksRequest, RegisterCompilerAbisRequest, SendBocRequest, SetAddressNameRequest,
+    SetNetworkConditionsRequest, SetNextBlockTimestampRequest, SetShardAccountRequest,
+    SetTimeRequest, StatePathRequest,
 };
 use crate::server::{
     ApiCallLog, NetworkConditions, NetworkConditionsInfo, StartupWallet, StateSourceInfo,
@@ -40,6 +41,9 @@ pub async fn faucet(
 struct LocalnetAdminStatus {
     uptime_seconds: u64,
     last_block_seqno: u64,
+    current_unix_time: u32,
+    time_offset_seconds: i64,
+    next_block_timestamp: Option<u32>,
     #[serde(flatten)]
     state_source: StateSourceInfo,
     network_conditions: NetworkConditionsInfo,
@@ -53,10 +57,14 @@ pub async fn get_status(
     handle_result(
         async move {
             let masterchain_info = node.get_masterchain_info().await?;
+            let clock_info = node.clock_info().await?;
 
             Ok(LocalnetAdminStatus {
                 uptime_seconds: node.uptime_seconds(),
                 last_block_seqno: u64::from(masterchain_info.last.seqno),
+                current_unix_time: clock_info.current_unix_time,
+                time_offset_seconds: clock_info.time_offset_seconds,
+                next_block_timestamp: clock_info.next_block_timestamp,
                 state_source: state_source.as_ref().clone(),
                 network_conditions: network_conditions.info(),
             })
@@ -101,6 +109,36 @@ pub async fn mine_blocks(State(node): State<Arc<Localnet>>, body: Bytes) -> Json
         },
         |res| serde_json::to_value(res).unwrap_or(Value::Null),
     )
+    .await
+}
+
+pub async fn increase_time(
+    State(node): State<Arc<Localnet>>,
+    Json(payload): Json<IncreaseTimeRequest>,
+) -> Json<Value> {
+    handle_result(node.increase_time(payload.seconds), |res| {
+        serde_json::to_value(res).unwrap_or(Value::Null)
+    })
+    .await
+}
+
+pub async fn set_time(
+    State(node): State<Arc<Localnet>>,
+    Json(payload): Json<SetTimeRequest>,
+) -> Json<Value> {
+    handle_result(node.set_time(payload.timestamp), |res| {
+        serde_json::to_value(res).unwrap_or(Value::Null)
+    })
+    .await
+}
+
+pub async fn set_next_block_timestamp(
+    State(node): State<Arc<Localnet>>,
+    Json(payload): Json<SetNextBlockTimestampRequest>,
+) -> Json<Value> {
+    handle_result(node.set_next_block_timestamp(payload.timestamp), |res| {
+        serde_json::to_value(res).unwrap_or(Value::Null)
+    })
     .await
 }
 

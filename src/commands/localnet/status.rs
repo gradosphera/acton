@@ -8,6 +8,9 @@ pub(crate) struct LocalnetStatusOutput {
     pub port: u16,
     pub uptime_seconds: Option<u64>,
     pub last_block_seqno: Option<u64>,
+    pub current_unix_time: Option<u32>,
+    pub time_offset_seconds: Option<i64>,
+    pub next_block_timestamp: Option<u32>,
     pub state_source: Option<String>,
     pub fork_network: Option<String>,
     pub fork_block_number: Option<u64>,
@@ -24,6 +27,9 @@ struct LocalnetStatusEnvelope {
 struct LocalnetStatusResult {
     uptime_seconds: u64,
     last_block_seqno: u64,
+    current_unix_time: u32,
+    time_offset_seconds: i64,
+    next_block_timestamp: Option<u32>,
     state_source: String,
     fork_network: Option<String>,
     fork_block_number: Option<u64>,
@@ -42,6 +48,9 @@ pub async fn localnet_status_cmd(
         port,
         uptime_seconds: None,
         last_block_seqno: None,
+        current_unix_time: None,
+        time_offset_seconds: None,
+        next_block_timestamp: None,
         state_source: None,
         fork_network: None,
         fork_block_number: None,
@@ -99,6 +108,9 @@ async fn parse_status_response(
         port,
         uptime_seconds: Some(result.uptime_seconds),
         last_block_seqno: Some(result.last_block_seqno),
+        current_unix_time: Some(result.current_unix_time),
+        time_offset_seconds: Some(result.time_offset_seconds),
+        next_block_timestamp: result.next_block_timestamp,
         state_source: Some(result.state_source),
         fork_network: result.fork_network,
         fork_block_number: result.fork_block_number,
@@ -129,6 +141,19 @@ fn print_localnet_status(status: &LocalnetStatusOutput) {
     }
     if let Some(uptime_seconds) = status.uptime_seconds {
         println!("{} {}s", "Uptime:".white().bold(), uptime_seconds);
+    }
+    if let Some(current_unix_time) = status.current_unix_time {
+        println!("{} {}", "Virtual time:".white().bold(), current_unix_time);
+    }
+    if let Some(time_offset_seconds) = status.time_offset_seconds {
+        println!("{} {}s", "Time offset:".white().bold(), time_offset_seconds);
+    }
+    if let Some(next_block_timestamp) = status.next_block_timestamp {
+        println!(
+            "{} {}",
+            "Next block timestamp:".white().bold(),
+            next_block_timestamp
+        );
     }
 
     let source = match (

@@ -8,11 +8,12 @@ use super::handlers::{
     get_libraries, get_masterchain_info, get_nft_items, get_out_msg_queue_size,
     get_pending_transactions_v3, get_shard_account_cell, get_shards, get_startup_wallets,
     get_status, get_traces, get_transactions, get_transactions_by_message_v3, get_transactions_std,
-    get_transactions_v3, get_verified_source, json_rpc, load_state, lookup_block, mine_blocks,
-    pack_address, register_compiler_abis, run_get_method, run_get_method_std, run_get_method_v3,
-    send_boc, send_boc_return_hash, send_internal_message, send_message_v3, set_address_name,
-    set_network_conditions, set_shard_account, streaming_sse, streaming_ws, try_locate_result_tx,
-    try_locate_source_tx, try_locate_tx, unpack_address,
+    get_transactions_v3, get_verified_source, increase_time, json_rpc, load_state, lookup_block,
+    mine_blocks, pack_address, register_compiler_abis, run_get_method, run_get_method_std,
+    run_get_method_v3, send_boc, send_boc_return_hash, send_internal_message, send_message_v3,
+    set_address_name, set_network_conditions, set_next_block_timestamp, set_shard_account,
+    set_time, streaming_sse, streaming_ws, try_locate_result_tx, try_locate_source_tx,
+    try_locate_tx, unpack_address,
 };
 use crate::server::{
     ApiCallAlreadyRecorded, ApiCallFamily, ApiCallInput, ApiCallLog, ApiCallType,
@@ -143,6 +144,12 @@ pub fn create_router(state: ServerState, rate_limit_rps: Option<u32>) -> Router 
         .route("/acton_getStartupWallets", get(get_startup_wallets))
         .route("/acton_setNetworkConditions", post(set_network_conditions))
         .route("/acton_mine", post(mine_blocks))
+        .route("/acton_increaseTime", post(increase_time))
+        .route("/acton_setTime", post(set_time))
+        .route(
+            "/acton_setNextBlockTimestamp",
+            post(set_next_block_timestamp),
+        )
         .route("/acton_getApiCalls", get(get_api_calls))
         .route("/acton_nodeInfo", get(get_status))
         .layer(middleware::from_fn(move |request, next| {

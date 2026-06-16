@@ -12,10 +12,14 @@ use std::fs::File;
 use std::io::{BufReader, BufWriter};
 use std::path::Path;
 
+const NODE_STATE_SNAPSHOT_VERSION: u32 = 2;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct NodeStateSnapshot {
     pub version: u32,
     pub globals: SnapshotGlobals,
+    pub time_offset_seconds: i64,
+    pub next_block_timestamp: Option<u32>,
     pub latest_accounts: Vec<(Addr, AccountMeta)>,
     pub history_blocks: Vec<BlockMeta>,
     pub history_deltas_by_seqno: Vec<Vec<AccountDelta>>,
@@ -141,7 +145,7 @@ impl Node {
         let cas_entries = self.export_cas_entries()?;
 
         Ok(NodeStateSnapshot {
-            version: 1,
+            version: NODE_STATE_SNAPSHOT_VERSION,
             globals: SnapshotGlobals {
                 head_seqno: self.globals.head_seqno,
                 global_lt: self.globals.global_lt,
@@ -150,6 +154,8 @@ impl Node {
                 queue_policy: self.globals.queue_policy,
                 checkpoint_every: self.globals.checkpoint_every,
             },
+            time_offset_seconds: self.time_offset_seconds,
+            next_block_timestamp: self.next_block_timestamp,
             latest_accounts,
             history_blocks: self.history.blocks.clone(),
             history_deltas_by_seqno: self.history.deltas_by_seqno.clone(),
@@ -205,7 +211,7 @@ impl Node {
     }
 
     fn apply_snapshot(&mut self, snapshot: NodeStateSnapshot) -> anyhow::Result<()> {
-        if snapshot.version != 1 {
+        if snapshot.version != NODE_STATE_SNAPSHOT_VERSION {
             anyhow::bail!("Unsupported snapshot version: {}", snapshot.version);
         }
 
@@ -245,6 +251,11 @@ impl Node {
             queue_policy: snapshot.globals.queue_policy,
             checkpoint_every: snapshot.globals.checkpoint_every,
         };
+        self.time_offset_seconds = snapshot.time_offset_seconds;
+        self.next_block_timestamp = snapshot.next_block_timestamp;
+        if let Some(latest_block) = self.history.blocks.last() {
+            self.bump_offset_to_at_least(latest_block.gen_utime)?;
+        }
 
         self.latest
             .accounts

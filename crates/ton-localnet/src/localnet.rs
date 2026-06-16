@@ -1,5 +1,5 @@
 use crate::executor::TvmEmulatorAdapter;
-use crate::node::{Node, StateSource};
+use crate::node::{Node, NodeClockInfo, StateSource};
 use crate::storage;
 use crate::storage::{AccountStatus, BlockMeta, MsgMeta, TransactionInfo};
 use crate::streaming::StreamingCommitEvent;
@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashSet;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime};
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio::time::Instant;
 use ton_executor::DEFAULT_CONFIG;
@@ -411,6 +411,21 @@ pub(crate) enum Request {
     MineBlocks {
         count: u32,
         resp: oneshot::Sender<anyhow::Result<LocalnetMineResult>>,
+    },
+    GetClockInfo {
+        resp: oneshot::Sender<anyhow::Result<NodeClockInfo>>,
+    },
+    IncreaseTime {
+        seconds: u64,
+        resp: oneshot::Sender<anyhow::Result<NodeClockInfo>>,
+    },
+    SetTime {
+        timestamp: u32,
+        resp: oneshot::Sender<anyhow::Result<NodeClockInfo>>,
+    },
+    SetNextBlockTimestamp {
+        timestamp: u32,
+        resp: oneshot::Sender<anyhow::Result<NodeClockInfo>>,
     },
 }
 
@@ -1034,6 +1049,34 @@ impl Localnet {
         rx.await?
     }
 
+    pub async fn clock_info(&self) -> anyhow::Result<NodeClockInfo> {
+        let (resp, rx) = oneshot::channel();
+        self.tx.send(Request::GetClockInfo { resp }).await?;
+        rx.await?
+    }
+
+    pub async fn increase_time(&self, seconds: u64) -> anyhow::Result<NodeClockInfo> {
+        let (resp, rx) = oneshot::channel();
+        self.tx
+            .send(Request::IncreaseTime { seconds, resp })
+            .await?;
+        rx.await?
+    }
+
+    pub async fn set_time(&self, timestamp: u32) -> anyhow::Result<NodeClockInfo> {
+        let (resp, rx) = oneshot::channel();
+        self.tx.send(Request::SetTime { timestamp, resp }).await?;
+        rx.await?
+    }
+
+    pub async fn set_next_block_timestamp(&self, timestamp: u32) -> anyhow::Result<NodeClockInfo> {
+        let (resp, rx) = oneshot::channel();
+        self.tx
+            .send(Request::SetNextBlockTimestamp { timestamp, resp })
+            .await?;
+        rx.await?
+    }
+
     pub(crate) fn parse_addr(s: &str) -> anyhow::Result<Addr> {
         let (int_addr, _) = StdAddr::from_str_ext(s, StdAddrFormat::any()).map_err(|_| {
             anyhow::anyhow!("Invalid address, only standard internal address is allowed")
@@ -1419,6 +1462,22 @@ fn process_loop_request(node: &mut Node, req: Request) {
             let res = handle_mine_blocks(node, count);
             let _ = resp.send(res);
         }
+        Request::GetClockInfo { resp } => {
+            let res = node.clock_info();
+            let _ = resp.send(res);
+        }
+        Request::IncreaseTime { seconds, resp } => {
+            let res = node.increase_time(seconds);
+            let _ = resp.send(res);
+        }
+        Request::SetTime { timestamp, resp } => {
+            let res = node.set_time(timestamp);
+            let _ = resp.send(res);
+        }
+        Request::SetNextBlockTimestamp { timestamp, resp } => {
+            let res = node.set_next_block_timestamp(timestamp);
+            let _ = resp.send(res);
+        }
     }
 }
 
@@ -1485,7 +1544,7 @@ fn handle_get_address_info(
     let seqno = account_query_seqno(node, seqno);
     let meta = node.get_address_information_at_block(&address, seqno);
     let block_id = block_id_for_query_seqno(node, seqno)?;
-    let sync_utime = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
+    let sync_utime = u64::from(node.now_unix()?);
 
     let Some(meta) = meta else {
         return Ok(LocalnetAccountState::empty(address, block_id, sync_utime));
@@ -1894,7 +1953,7 @@ fn handle_run_get_method(
         data: data_boc,
         method_id,
         address: address.to_string(),
-        unixtime: SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as i64,
+        unixtime: i64::from(node.now_unix()?),
         balance: meta.balance.to_string(),
         rand_seed: "0000000000000000000000000000000000000000000000000000000000000000".to_owned(),
         gas_limit: "10000000".to_owned(),

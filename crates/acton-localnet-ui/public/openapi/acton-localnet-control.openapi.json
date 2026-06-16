@@ -325,6 +325,84 @@
         }
       }
     },
+    "/acton_increaseTime": {
+      "post": {
+        "tags": ["Localnet Control"],
+        "operationId": "increaseTime",
+        "summary": "Increase virtual time",
+        "description": "Adds seconds to the localnet virtual clock. Future blocks use this adjusted time until it is changed again.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IncreaseTimeRequest"
+              },
+              "example": {
+                "seconds": 3600
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/TimeControlResponse"
+          }
+        }
+      }
+    },
+    "/acton_setTime": {
+      "post": {
+        "tags": ["Localnet Control"],
+        "operationId": "setTime",
+        "summary": "Set virtual time",
+        "description": "Sets the localnet virtual clock to a Unix timestamp. The timestamp must not be lower than the latest mined block time.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetTimeRequest"
+              },
+              "example": {
+                "timestamp": 1710000000
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/TimeControlResponse"
+          }
+        }
+      }
+    },
+    "/acton_setNextBlockTimestamp": {
+      "post": {
+        "tags": ["Localnet Control"],
+        "operationId": "setNextBlockTimestamp",
+        "summary": "Set next block timestamp",
+        "description": "Sets a one-shot Unix timestamp for the next mined block. The timestamp is consumed by the next automatic or manually mined block and must not be lower than the latest mined block time.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetNextBlockTimestampRequest"
+              },
+              "example": {
+                "timestamp": 1710000600
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/TimeControlResponse"
+          }
+        }
+      }
+    },
     "/acton_setNetworkConditions": {
       "post": {
         "tags": ["Localnet Control"],
@@ -657,6 +735,28 @@
                   "properties": {
                     "result": {
                       "$ref": "#/components/schemas/NetworkConditions"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      },
+      "TimeControlResponse": {
+        "description": "Successful virtual time update response.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/SuccessEnvelope"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "result": {
+                      "$ref": "#/components/schemas/LocalnetTimeInfo"
                     }
                   }
                 }
@@ -1052,6 +1152,62 @@
           }
         }
       },
+      "IncreaseTimeRequest": {
+        "type": "object",
+        "required": ["seconds"],
+        "properties": {
+          "seconds": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Seconds to add to the virtual localnet clock."
+          }
+        }
+      },
+      "SetTimeRequest": {
+        "type": "object",
+        "required": ["timestamp"],
+        "properties": {
+          "timestamp": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Unix timestamp to use for the current virtual localnet time."
+          }
+        }
+      },
+      "SetNextBlockTimestampRequest": {
+        "type": "object",
+        "required": ["timestamp"],
+        "properties": {
+          "timestamp": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Unix timestamp to use for the next mined block only."
+          }
+        }
+      },
+      "LocalnetTimeInfo": {
+        "type": "object",
+        "required": [
+          "current_unix_time",
+          "time_offset_seconds",
+          "next_block_timestamp"
+        ],
+        "properties": {
+          "current_unix_time": {
+            "type": "integer",
+            "description": "Current virtual Unix timestamp used by localnet."
+          },
+          "time_offset_seconds": {
+            "type": "integer",
+            "description": "Signed offset applied to wall-clock time in seconds."
+          },
+          "next_block_timestamp": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Pending one-shot timestamp for the next mined block, if configured."
+          }
+        }
+      },
       "SetNetworkConditionsRequest": {
         "type": "object",
         "required": ["response_delay_ms"],
@@ -1136,6 +1292,9 @@
           "state_source",
           "fork_network",
           "fork_block_number",
+          "current_unix_time",
+          "time_offset_seconds",
+          "next_block_timestamp",
           "network_conditions"
         ],
         "properties": {
@@ -1158,6 +1317,19 @@
           "fork_block_number": {
             "type": "integer",
             "nullable": true
+          },
+          "current_unix_time": {
+            "type": "integer",
+            "description": "Current virtual Unix timestamp used by localnet."
+          },
+          "time_offset_seconds": {
+            "type": "integer",
+            "description": "Signed offset applied to wall-clock time in seconds."
+          },
+          "next_block_timestamp": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Pending one-shot timestamp for the next mined block, if configured."
           },
           "network_conditions": {
             "$ref": "#/components/schemas/NetworkConditions"

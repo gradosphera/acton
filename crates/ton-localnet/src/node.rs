@@ -51,10 +51,19 @@ pub struct Node {
     pub global_libs_boc: Option<BocBytes>,
     pub global_libs_dirty: bool,
     pub streaming_events: Option<broadcast::Sender<StreamingCommitEvent>>,
+    pub time_offset_seconds: i64,
+    pub next_block_timestamp: Option<u32>,
 }
 
 const CASCADE_TX_HARD_LIMIT: usize = 10_000;
 const PREV_BLOCKS_LIMIT: usize = 16;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NodeClockInfo {
+    pub current_unix_time: u32,
+    pub time_offset_seconds: i64,
+    pub next_block_timestamp: Option<u32>,
+}
 
 struct TransactionCommit {
     tx_meta: TxMeta,
@@ -273,6 +282,7 @@ impl Node {
         globals.head_seqno = head_seqno;
         // Approximation of global LT
         globals.global_lt = history.blocks.last().map_or(0, |b| b.end_lt);
+        let time_offset_seconds = initial_time_offset_for_blocks(&history.blocks)?;
 
         let mut node = Self {
             cas,
@@ -288,6 +298,8 @@ impl Node {
             global_libs_boc: None,
             global_libs_dirty: true,
             streaming_events: None,
+            time_offset_seconds,
+            next_block_timestamp: None,
         };
         node.rebuild_global_libraries_from_accounts()?;
         Ok(node)
@@ -363,7 +375,7 @@ impl Node {
     pub fn mine_block(&mut self) -> anyhow::Result<BlockMeta> {
         let seqno = self.globals.head_seqno + 1;
         let prev_lt = self.globals.global_lt;
-        let gen_utime = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as u32;
+        let gen_utime = self.next_block_gen_utime()?;
         let initial_pending = self.pool.external.len() + self.pool.internal.len();
 
         let mut tx_commits = Vec::new();
@@ -1743,7 +1755,7 @@ impl Node {
             if seqno == 0 {
                 return Ok((
                     self.globals.global_lt.saturating_add(self.globals.lt_step),
-                    SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as u32,
+                    self.now_unix()?,
                     self.globals.head_seqno,
                 ));
             }
@@ -1760,9 +1772,87 @@ impl Node {
 
         Ok((
             self.globals.global_lt.saturating_add(self.globals.lt_step),
-            SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as u32,
+            self.now_unix()?,
             self.globals.head_seqno,
         ))
+    }
+
+    pub fn now_unix(&self) -> anyhow::Result<u32> {
+        unix_now_with_offset(self.time_offset_seconds)
+    }
+
+    pub fn clock_info(&self) -> anyhow::Result<NodeClockInfo> {
+        Ok(NodeClockInfo {
+            current_unix_time: self.now_unix()?,
+            time_offset_seconds: self.time_offset_seconds,
+            next_block_timestamp: self.next_block_timestamp,
+        })
+    }
+
+    pub fn increase_time(&mut self, seconds: u64) -> anyhow::Result<NodeClockInfo> {
+        anyhow::ensure!(seconds > 0, "seconds must be greater than 0");
+        let current = u64::from(self.now_unix()?);
+        let next = current
+            .checked_add(seconds)
+            .context("localnet time overflow")?;
+        anyhow::ensure!(
+            next <= u64::from(u32::MAX),
+            "localnet time cannot exceed {}",
+            u32::MAX
+        );
+        let seconds = i64::try_from(seconds).context("localnet time delta is too large")?;
+        self.time_offset_seconds = self
+            .time_offset_seconds
+            .checked_add(seconds)
+            .context("localnet time offset overflow")?;
+        self.clock_info()
+    }
+
+    pub fn set_time(&mut self, timestamp: u32) -> anyhow::Result<NodeClockInfo> {
+        self.ensure_timestamp_not_before_latest_block(timestamp)?;
+        self.time_offset_seconds = i64::from(timestamp) - system_unix_now_i64()?;
+        self.clock_info()
+    }
+
+    pub fn set_next_block_timestamp(&mut self, timestamp: u32) -> anyhow::Result<NodeClockInfo> {
+        self.ensure_timestamp_not_before_latest_block(timestamp)?;
+        self.next_block_timestamp = Some(timestamp);
+        self.clock_info()
+    }
+
+    fn next_block_gen_utime(&mut self) -> anyhow::Result<u32> {
+        if let Some(timestamp) = self.next_block_timestamp {
+            self.ensure_timestamp_not_before_latest_block(timestamp)?;
+            self.next_block_timestamp = None;
+            self.bump_offset_to_at_least(timestamp)?;
+            return Ok(timestamp);
+        }
+
+        self.now_unix()
+    }
+
+    fn ensure_timestamp_not_before_latest_block(&self, timestamp: u32) -> anyhow::Result<()> {
+        let latest = self.latest_block_timestamp();
+        anyhow::ensure!(
+            timestamp >= latest,
+            "timestamp {timestamp} is before latest block timestamp {latest}"
+        );
+        Ok(())
+    }
+
+    fn latest_block_timestamp(&self) -> u32 {
+        self.history
+            .blocks
+            .last()
+            .map_or(0, |block| block.gen_utime)
+    }
+
+    pub(crate) fn bump_offset_to_at_least(&mut self, timestamp: u32) -> anyhow::Result<()> {
+        let required = i64::from(timestamp) - system_unix_now_i64()?;
+        if self.time_offset_seconds < required {
+            self.time_offset_seconds = required;
+        }
+        Ok(())
     }
 
     fn empty_shard_account_boc() -> anyhow::Result<BocBytes> {
@@ -1971,6 +2061,27 @@ fn parse_msg_meta_with_kind(boc: &[u8], hash: Hash256) -> anyhow::Result<(MsgMet
 
 fn parse_msg_meta_from_cell(cell: &Cell, hash: Hash256) -> anyhow::Result<MsgMeta> {
     Ok(parse_msg_meta_with_kind_from_cell(cell, hash)?.0)
+}
+
+fn initial_time_offset_for_blocks(blocks: &[BlockMeta]) -> anyhow::Result<i64> {
+    let Some(latest_block) = blocks.last() else {
+        return Ok(0);
+    };
+    let required = i64::from(latest_block.gen_utime) - system_unix_now_i64()?;
+    Ok(required.max(0))
+}
+
+fn unix_now_with_offset(offset_seconds: i64) -> anyhow::Result<u32> {
+    let now = system_unix_now_i64()?
+        .checked_add(offset_seconds)
+        .context("localnet time offset overflow")?;
+    anyhow::ensure!(now >= 0, "localnet time cannot be before unix epoch");
+    u32::try_from(now).context("localnet time cannot exceed u32::MAX")
+}
+
+fn system_unix_now_i64() -> anyhow::Result<i64> {
+    let seconds = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
+    i64::try_from(seconds).context("system unix time is too large")
 }
 
 fn parse_msg_meta_with_kind_from_cell(

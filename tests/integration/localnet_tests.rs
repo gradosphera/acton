@@ -620,6 +620,131 @@ fn localnet_no_mining_mines_only_on_request() {
 }
 
 #[test]
+fn localnet_manual_mining_time_controls_update_blocks_and_transactions() {
+    let project = ProjectBuilder::new("localnet-time-controls").build();
+    let acton_toml_path = project.path().join("Acton.toml");
+    let mut acton_toml =
+        fs::read_to_string(&acton_toml_path).expect("failed to read generated Acton.toml");
+    acton_toml.push_str("\n[localnet]\nno-mining = true\n");
+    fs::write(&acton_toml_path, acton_toml).expect("failed to enable no-mining in Acton.toml");
+
+    let node = project.localnet().require_auth().start();
+    let token = node
+        .auth_token()
+        .expect("protected localnet test must expose auth token");
+
+    let first_mine = node.post_json("/acton_mine", &json!({}));
+    let first_seqno = response_payload(&first_mine)["last_block_seqno"]
+        .as_u64()
+        .expect("mine response must expose last_block_seqno") as u32;
+    let first_gen_utime = block_header_gen_utime(&node, first_seqno);
+
+    let increase = node.post_json("/acton_increaseTime", &json!({ "seconds": 3600 }));
+    let increase_payload = response_payload(&increase);
+    let second_mine = node.post_json("/acton_mine", &json!({}));
+    let second_seqno = response_payload(&second_mine)["last_block_seqno"]
+        .as_u64()
+        .expect("mine response must expose last_block_seqno") as u32;
+    let second_gen_utime = block_header_gen_utime(&node, second_seqno);
+
+    let target = "0:3333333333333333333333333333333333333333333333333333333333333333";
+    let next_block_timestamp = second_gen_utime + 7200;
+    let next_block_timestamp_arg = next_block_timestamp.to_string();
+    project
+        .acton()
+        .arg("localnet")
+        .arg("set-next-block-timestamp")
+        .arg(&next_block_timestamp_arg)
+        .arg("--port")
+        .arg(&node.port().to_string())
+        .env("ACTON_LOCALNET_AUTH_TOKEN", token)
+        .run()
+        .success();
+    let pending_status = node.get_json("/acton_nodeInfo");
+    let fund = node.post_json(
+        "/acton_fundAccount",
+        &json!({
+            "address": target,
+            "amount": 1_000_000_000_u64
+        }),
+    );
+    let next_timestamp_mine = node.post_json("/acton_mine", &json!({}));
+    let tx_block_seqno = response_payload(&next_timestamp_mine)["last_block_seqno"]
+        .as_u64()
+        .expect("mine response must expose last_block_seqno") as u32;
+    let tx_block_gen_utime = block_header_gen_utime(&node, tx_block_seqno);
+    let tx_response = wait_for_v3_transactions_response(
+        &node,
+        &format!("/api/v3/transactions?account={target}&limit=10"),
+        Duration::from_secs(3),
+    );
+    let txs = v3_transactions_from_response(&tx_response);
+    let faucet_tx_now = txs
+        .first()
+        .and_then(|tx| tx["now"].as_u64())
+        .expect("faucet transaction must expose now") as u32;
+    let cleared_status = node.get_json("/acton_nodeInfo");
+
+    let set_time_target = tx_block_gen_utime + 1800;
+    let set_time = node.post_json("/acton_setTime", &json!({ "timestamp": set_time_target }));
+    let set_time_mine = node.post_json("/acton_mine", &json!({}));
+    let set_time_seqno = response_payload(&set_time_mine)["last_block_seqno"]
+        .as_u64()
+        .expect("mine response must expose last_block_seqno") as u32;
+    let set_time_block_gen_utime = block_header_gen_utime(&node, set_time_seqno);
+
+    let mut invalid_backwards = node.post_json(
+        "/acton_setNextBlockTimestamp",
+        &json!({ "timestamp": set_time_block_gen_utime - 1 }),
+    );
+    normalize_extra_for_snapshot(&mut invalid_backwards);
+    let mut invalid_zero_increase = node.post_json("/acton_increaseTime", &json!({ "seconds": 0 }));
+    normalize_extra_for_snapshot(&mut invalid_zero_increase);
+
+    let snapshot = json!({
+        "increase_time": {
+            "ok": increase["ok"].as_bool(),
+            "offset_at_least_requested": increase_payload["time_offset_seconds"]
+                .as_i64()
+                .is_some_and(|offset| offset >= 3600),
+            "block_advanced_by_requested_delta": second_gen_utime >= first_gen_utime + 3600,
+        },
+        "next_block_timestamp": {
+            "pending_matches_requested_timestamp": pending_status["result"]["next_block_timestamp"]
+                .as_u64()
+                == Some(u64::from(next_block_timestamp)),
+            "fund_ok": fund["ok"].as_bool(),
+            "block_matches_requested_timestamp": tx_block_gen_utime == next_block_timestamp,
+            "tx_now_matches_block": faucet_tx_now == tx_block_gen_utime,
+            "pending_cleared_after_mine": cleared_status["result"]["next_block_timestamp"].is_null(),
+        },
+        "set_time": {
+            "ok": set_time["ok"].as_bool(),
+            "block_at_or_after_requested_time": set_time_block_gen_utime >= set_time_target,
+        },
+        "invalid_backwards": {
+            "ok": invalid_backwards["ok"].as_bool(),
+            "code": invalid_backwards["code"].as_i64(),
+            "error_contains_latest_block": invalid_backwards["error"]
+                .as_str()
+                .is_some_and(|error| error.contains("before latest block timestamp")),
+        },
+        "invalid_zero_increase": {
+            "ok": invalid_zero_increase["ok"].as_bool(),
+            "code": invalid_zero_increase["code"].as_i64(),
+            "error": invalid_zero_increase["error"].as_str(),
+        }
+    });
+
+    assertion().eq(
+        format!("{}\n", pretty_json_for_snapshot(&snapshot, project.path())),
+        snapbox::file!("snapshots/localnet/test_localnet_time_controls.summary.json"),
+    );
+
+    node.stop();
+}
+
+#[test]
 fn localnet_no_mining_bootstraps_startup_accounts_in_fork_mode() {
     let project = ProjectBuilder::new("localnet-no-mining-startup-accounts-fork").build();
     fs::write(project.path().join("wallets.toml"), DEPLOYER_WALLET_CONFIG)
@@ -4345,6 +4470,39 @@ fn normalize_localnet_status_json(payload: &mut Value, expected_port: u16) {
             serde_json::to_string_pretty(payload).unwrap_or_default()
         ),
     }
+
+    match payload.get_mut("current_unix_time") {
+        Some(value) if value.as_u64().is_some() => {
+            *value = json!("[CURRENT_UNIX_TIME]");
+        }
+        Some(value) if value.is_null() => {}
+        _ => panic!(
+            "Expected localnet status current_unix_time to be a number or null, got:\n{}",
+            serde_json::to_string_pretty(payload).unwrap_or_default()
+        ),
+    }
+
+    match payload.get_mut("time_offset_seconds") {
+        Some(value) if value.as_i64().is_some() => {
+            *value = json!("[TIME_OFFSET_SECONDS]");
+        }
+        Some(value) if value.is_null() => {}
+        _ => panic!(
+            "Expected localnet status time_offset_seconds to be a number or null, got:\n{}",
+            serde_json::to_string_pretty(payload).unwrap_or_default()
+        ),
+    }
+
+    match payload.get_mut("next_block_timestamp") {
+        Some(value) if value.as_u64().is_some() => {
+            *value = json!("[NEXT_BLOCK_TIMESTAMP]");
+        }
+        Some(value) if value.is_null() => {}
+        _ => panic!(
+            "Expected localnet status next_block_timestamp to be a number or null, got:\n{}",
+            serde_json::to_string_pretty(payload).unwrap_or_default()
+        ),
+    }
 }
 
 fn normalize_localnet_status_stdout(stdout: &str, port: u16) -> String {
@@ -4360,6 +4518,15 @@ fn normalize_localnet_status_stdout(stdout: &str, port: u16) -> String {
             } else if trimmed.starts_with("Last block seqno: ") {
                 let indent = &line[..line.len() - trimmed.len()];
                 format!("{indent}Last block seqno: [LAST_BLOCK_SEQNO]")
+            } else if trimmed.starts_with("Virtual time: ") {
+                let indent = &line[..line.len() - trimmed.len()];
+                format!("{indent}Virtual time: [CURRENT_UNIX_TIME]")
+            } else if trimmed.starts_with("Time offset: ") {
+                let indent = &line[..line.len() - trimmed.len()];
+                format!("{indent}Time offset: [TIME_OFFSET_SECONDS]s")
+            } else if trimmed.starts_with("Next block timestamp: ") {
+                let indent = &line[..line.len() - trimmed.len()];
+                format!("{indent}Next block timestamp: [NEXT_BLOCK_TIMESTAMP]")
             } else {
                 line.to_owned()
             }
@@ -4457,6 +4624,17 @@ fn latest_masterchain_seqno(node: &crate::support::localnet::LocalnetHandle) -> 
     response["result"]["last"]["seqno"]
         .as_i64()
         .expect("masterchain seqno must be integer")
+}
+
+fn block_header_gen_utime(node: &crate::support::localnet::LocalnetHandle, seqno: u32) -> u32 {
+    let response = wait_for_ok_response(
+        node,
+        &format!("/api/v2/getBlockHeader?seqno={seqno}"),
+        Duration::from_secs(5),
+    );
+    response_payload(&response)["gen_utime"]
+        .as_u64()
+        .expect("block header must expose gen_utime") as u32
 }
 
 fn wait_for_masterchain_seqno_at_least(

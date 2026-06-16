@@ -1199,6 +1199,52 @@ pub enum LocalnetCommand {
         #[arg(long, help = "Localnet API token (default: ACTON_LOCALNET_AUTH_TOKEN)")]
         auth_token: Option<String>,
     },
+    #[command(about = "Increase localnet virtual time")]
+    IncreaseTime {
+        #[arg(
+            help = "Seconds to add to localnet virtual time",
+            value_name = "SECONDS",
+            value_parser = clap::value_parser!(u64).range(1..)
+        )]
+        seconds: u64,
+        #[arg(
+            long,
+            short,
+            help = "Localnet server port (default: [localnet].port or 5411)"
+        )]
+        port: Option<u16>,
+        #[arg(long, help = "Localnet API token (default: ACTON_LOCALNET_AUTH_TOKEN)")]
+        auth_token: Option<String>,
+    },
+    #[command(about = "Set localnet virtual unix time")]
+    SetTime {
+        #[arg(help = "Unix timestamp in seconds", value_name = "TIMESTAMP")]
+        timestamp: u32,
+        #[arg(
+            long,
+            short,
+            help = "Localnet server port (default: [localnet].port or 5411)"
+        )]
+        port: Option<u16>,
+        #[arg(long, help = "Localnet API token (default: ACTON_LOCALNET_AUTH_TOKEN)")]
+        auth_token: Option<String>,
+    },
+    #[command(about = "Set timestamp for the next localnet block")]
+    SetNextBlockTimestamp {
+        #[arg(
+            help = "Unix timestamp in seconds for the next mined block",
+            value_name = "TIMESTAMP"
+        )]
+        timestamp: u32,
+        #[arg(
+            long,
+            short,
+            help = "Localnet server port (default: [localnet].port or 5411)"
+        )]
+        port: Option<u16>,
+        #[arg(long, help = "Localnet API token (default: ACTON_LOCALNET_AUTH_TOKEN)")]
+        auth_token: Option<String>,
+    },
     #[command(about = "Inspect localnet status")]
     Status {
         #[arg(
@@ -2486,6 +2532,51 @@ fn main() {
                     .expect("Failed to build tokio runtime");
                 rt.block_on(async {
                     commands::localnet::localnet_mine_cmd(blocks, port, auth_token).await
+                })
+            }
+            LocalnetCommand::IncreaseTime {
+                seconds,
+                port,
+                auth_token,
+            } => {
+                let port = resolve_localnet_port(port);
+                let rt = tokio::runtime::Builder::new_multi_thread()
+                    .enable_all()
+                    .build()
+                    .expect("Failed to build tokio runtime");
+                rt.block_on(async {
+                    commands::localnet::localnet_increase_time_cmd(seconds, port, auth_token).await
+                })
+            }
+            LocalnetCommand::SetTime {
+                timestamp,
+                port,
+                auth_token,
+            } => {
+                let port = resolve_localnet_port(port);
+                let rt = tokio::runtime::Builder::new_multi_thread()
+                    .enable_all()
+                    .build()
+                    .expect("Failed to build tokio runtime");
+                rt.block_on(async {
+                    commands::localnet::localnet_set_time_cmd(timestamp, port, auth_token).await
+                })
+            }
+            LocalnetCommand::SetNextBlockTimestamp {
+                timestamp,
+                port,
+                auth_token,
+            } => {
+                let port = resolve_localnet_port(port);
+                let rt = tokio::runtime::Builder::new_multi_thread()
+                    .enable_all()
+                    .build()
+                    .expect("Failed to build tokio runtime");
+                rt.block_on(async {
+                    commands::localnet::localnet_set_next_block_timestamp_cmd(
+                        timestamp, port, auth_token,
+                    )
+                    .await
                 })
             }
             LocalnetCommand::Status {

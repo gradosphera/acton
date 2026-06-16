@@ -394,17 +394,102 @@ pub async fn localnet_mine_cmd(
     port: u16,
     auth_token: Option<String>,
 ) -> anyhow::Result<()> {
+    let result = post_localnet_control(
+        port,
+        auth_token,
+        "acton_mine",
+        serde_json::json!({ "blocks": blocks }),
+        "Mining",
+    )
+    .await?;
+    let blocks_mined = result
+        .get("blocks_mined")
+        .and_then(serde_json::Value::as_u64)
+        .unwrap_or_else(|| u64::from(blocks));
+    let last_block_seqno = result
+        .get("last_block_seqno")
+        .and_then(serde_json::Value::as_u64)
+        .unwrap_or_default();
+    println!(
+        "{} mined {} localnet block{}; latest seqno {}",
+        "Successfully".green().bold(),
+        blocks_mined,
+        if blocks_mined == 1 { "" } else { "s" },
+        last_block_seqno
+    );
+
+    Ok(())
+}
+
+pub async fn localnet_increase_time_cmd(
+    seconds: u64,
+    port: u16,
+    auth_token: Option<String>,
+) -> anyhow::Result<()> {
+    let result = post_localnet_control(
+        port,
+        auth_token,
+        "acton_increaseTime",
+        serde_json::json!({ "seconds": seconds }),
+        "Increase time",
+    )
+    .await?;
+    print_clock_update("increased localnet time", &result);
+    Ok(())
+}
+
+pub async fn localnet_set_time_cmd(
+    timestamp: u32,
+    port: u16,
+    auth_token: Option<String>,
+) -> anyhow::Result<()> {
+    let result = post_localnet_control(
+        port,
+        auth_token,
+        "acton_setTime",
+        serde_json::json!({ "timestamp": timestamp }),
+        "Set time",
+    )
+    .await?;
+    print_clock_update("set localnet time", &result);
+    Ok(())
+}
+
+pub async fn localnet_set_next_block_timestamp_cmd(
+    timestamp: u32,
+    port: u16,
+    auth_token: Option<String>,
+) -> anyhow::Result<()> {
+    let result = post_localnet_control(
+        port,
+        auth_token,
+        "acton_setNextBlockTimestamp",
+        serde_json::json!({ "timestamp": timestamp }),
+        "Set next block timestamp",
+    )
+    .await?;
+    print_clock_update("set next block timestamp", &result);
+    Ok(())
+}
+
+async fn post_localnet_control(
+    port: u16,
+    auth_token: Option<String>,
+    path: &str,
+    body: serde_json::Value,
+    action: &str,
+) -> anyhow::Result<serde_json::Value> {
     let client = crate::http::client_builder()
         .user_agent(crate::build_info::user_agent())
         .build()?;
     let auth_token = resolve_localnet_auth_token(auth_token);
     let request = client
-        .post(format!("http://127.0.0.1:{port}/acton_mine"))
-        .json(&serde_json::json!({ "blocks": blocks }));
+        .post(format!("http://127.0.0.1:{port}/{path}"))
+        .json(&body);
     let res = with_localnet_auth(request, auth_token.as_deref())
         .send()
         .await
-        .context("Failed to reach localnet mining endpoint")?;
+        .with_context(|| format!("Failed to reach localnet control endpoint /{path}"))?;
 
     if res.status().is_success() {
         let json: serde_json::Value = res.json().await?;
@@ -413,36 +498,55 @@ pub async fn localnet_mine_cmd(
             .and_then(serde_json::Value::as_bool)
             .unwrap_or(false)
         {
-            let result = json.get("result").unwrap_or(&serde_json::Value::Null);
-            let blocks_mined = result
-                .get("blocks_mined")
-                .and_then(serde_json::Value::as_u64)
-                .unwrap_or_else(|| u64::from(blocks));
-            let last_block_seqno = result
-                .get("last_block_seqno")
-                .and_then(serde_json::Value::as_u64)
-                .unwrap_or_default();
-            println!(
-                "{} mined {} localnet block{}; latest seqno {}",
-                "Successfully".green().bold(),
-                blocks_mined,
-                if blocks_mined == 1 { "" } else { "s" },
-                last_block_seqno
-            );
+            Ok(json
+                .get("result")
+                .cloned()
+                .unwrap_or(serde_json::Value::Null))
         } else {
             let error = json
                 .get("error")
                 .and_then(|v| v.as_str())
                 .unwrap_or("Unknown error");
-            anyhow::bail!("Mining failed: {error}");
+            anyhow::bail!("{action} failed: {error}");
         }
     } else {
         let status = res.status();
         let body = res.text().await.unwrap_or_default();
-        anyhow::bail!("Mining failed with status {status}: {body}");
+        anyhow::bail!("{action} failed with status {status}: {body}");
     }
+}
 
-    Ok(())
+fn print_clock_update(action: &str, result: &serde_json::Value) {
+    let current = result
+        .get("current_unix_time")
+        .and_then(serde_json::Value::as_u64)
+        .unwrap_or_default();
+    let offset = result
+        .get("time_offset_seconds")
+        .and_then(serde_json::Value::as_i64)
+        .unwrap_or_default();
+    let pending = result
+        .get("next_block_timestamp")
+        .and_then(serde_json::Value::as_u64);
+
+    if let Some(pending) = pending {
+        println!(
+            "{} {}; virtual time {}, offset {}s, next block timestamp {}",
+            "Successfully".green().bold(),
+            action,
+            current,
+            offset,
+            pending
+        );
+    } else {
+        println!(
+            "{} {}; virtual time {}, offset {}s",
+            "Successfully".green().bold(),
+            action,
+            current,
+            offset
+        );
+    }
 }
 
 fn localnet_auth_token() -> String {

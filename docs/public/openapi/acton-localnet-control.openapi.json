@@ -286,6 +286,84 @@
         }
       }
     },
+    "/acton_increaseTime": {
+      "post": {
+        "tags": ["Localnet Control"],
+        "operationId": "increaseTime",
+        "summary": "Increase localnet virtual time",
+        "description": "Adds seconds to the localnet virtual unix clock used for future blocks, live emulation, get methods, and TonCenter-compatible time fields.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IncreaseTimeRequest"
+              },
+              "example": {
+                "seconds": 3600
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/TimeControlResponse"
+          }
+        }
+      }
+    },
+    "/acton_setTime": {
+      "post": {
+        "tags": ["Localnet Control"],
+        "operationId": "setTime",
+        "summary": "Set localnet virtual time",
+        "description": "Sets the localnet virtual unix clock. The timestamp cannot be lower than the latest mined block timestamp.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetTimeRequest"
+              },
+              "example": {
+                "timestamp": 1893456000
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/TimeControlResponse"
+          }
+        }
+      }
+    },
+    "/acton_setNextBlockTimestamp": {
+      "post": {
+        "tags": ["Localnet Control"],
+        "operationId": "setNextBlockTimestamp",
+        "summary": "Set next localnet block timestamp",
+        "description": "Sets a one-shot unix timestamp for the next mined localnet block. The timestamp cannot be lower than the latest mined block timestamp.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetNextBlockTimestampRequest"
+              },
+              "example": {
+                "timestamp": 1893456000
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/TimeControlResponse"
+          }
+        }
+      }
+    },
     "/acton_setNetworkConditions": {
       "post": {
         "tags": ["Localnet Control"],
@@ -591,6 +669,28 @@
           }
         }
       },
+      "TimeControlResponse": {
+        "description": "Successful localnet virtual time update response.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/SuccessEnvelope"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "result": {
+                      "$ref": "#/components/schemas/LocalnetTimeInfo"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      },
       "NodeInfoResponse": {
         "description": "Successful node status response.",
         "content": {
@@ -858,6 +958,62 @@
           }
         }
       },
+      "IncreaseTimeRequest": {
+        "type": "object",
+        "required": ["seconds"],
+        "properties": {
+          "seconds": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Seconds to add to the localnet virtual clock."
+          }
+        }
+      },
+      "SetTimeRequest": {
+        "type": "object",
+        "required": ["timestamp"],
+        "properties": {
+          "timestamp": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Unix timestamp in seconds for the localnet virtual clock."
+          }
+        }
+      },
+      "SetNextBlockTimestampRequest": {
+        "type": "object",
+        "required": ["timestamp"],
+        "properties": {
+          "timestamp": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Unix timestamp in seconds for the next mined localnet block."
+          }
+        }
+      },
+      "LocalnetTimeInfo": {
+        "type": "object",
+        "required": [
+          "current_unix_time",
+          "time_offset_seconds",
+          "next_block_timestamp"
+        ],
+        "properties": {
+          "current_unix_time": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "time_offset_seconds": {
+            "type": "integer",
+            "description": "Offset in seconds applied to wall-clock unix time."
+          },
+          "next_block_timestamp": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Pending one-shot timestamp for the next mined block, if configured."
+          }
+        }
+      },
       "SetNetworkConditionsRequest": {
         "type": "object",
         "required": ["response_delay_ms"],
@@ -939,6 +1095,9 @@
         "required": [
           "uptime_seconds",
           "last_block_seqno",
+          "current_unix_time",
+          "time_offset_seconds",
+          "next_block_timestamp",
           "state_source",
           "fork_network",
           "fork_block_number",
@@ -952,6 +1111,17 @@
           "last_block_seqno": {
             "type": "integer",
             "minimum": 0
+          },
+          "current_unix_time": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "time_offset_seconds": {
+            "type": "integer"
+          },
+          "next_block_timestamp": {
+            "type": "integer",
+            "nullable": true
           },
           "state_source": {
             "type": "string",

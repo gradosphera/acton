@@ -139,6 +139,90 @@ Acton reads `ACTON_LOCALNET_AUTH_TOKEN`.
 
 {{/options}}
 
+### acton localnet increase-time
+
+Increase the localnet virtual clock.
+
+#### Synopsis
+
+`acton localnet increase-time` [_options_] _seconds_
+
+#### Options
+
+{{#options command="acton localnet increase-time"}}
+
+{{#option "_seconds_" }}
+Seconds to add to the virtual localnet clock.
+{{/option}}
+
+{{#option "`-p`, `--port` _port_" }}
+Localnet server port.
+{{/option}}
+
+{{#option "`--auth-token` _token_" }}
+Localnet API token for a server started with `--require-auth`. If omitted,
+Acton reads `ACTON_LOCALNET_AUTH_TOKEN`.
+{{/option}}
+
+{{/options}}
+
+### acton localnet set-time
+
+Set the localnet virtual clock.
+
+#### Synopsis
+
+`acton localnet set-time` [_options_] _timestamp_
+
+#### Options
+
+{{#options command="acton localnet set-time"}}
+
+{{#option "_timestamp_" }}
+Unix timestamp in seconds. The timestamp cannot be lower than the latest mined
+block time.
+{{/option}}
+
+{{#option "`-p`, `--port` _port_" }}
+Localnet server port.
+{{/option}}
+
+{{#option "`--auth-token` _token_" }}
+Localnet API token for a server started with `--require-auth`. If omitted,
+Acton reads `ACTON_LOCALNET_AUTH_TOKEN`.
+{{/option}}
+
+{{/options}}
+
+### acton localnet set-next-block-timestamp
+
+Set a one-shot timestamp for the next localnet block.
+
+#### Synopsis
+
+`acton localnet set-next-block-timestamp` [_options_] _timestamp_
+
+#### Options
+
+{{#options command="acton localnet set-next-block-timestamp"}}
+
+{{#option "_timestamp_" }}
+Unix timestamp in seconds for the next mined block. The timestamp is consumed
+by the next automatic or manually mined block and cannot be lower than the
+latest mined block time.
+{{/option}}
+
+{{#option "`-p`, `--port` _port_" }}
+Localnet server port.
+{{/option}}
+
+{{#option "`--auth-token` _token_" }}
+Localnet API token for a server started with `--require-auth`. If omitted,
+Acton reads `ACTON_LOCALNET_AUTH_TOKEN`.
+{{/option}}
+
+{{/options}}
+
 ### acton localnet status
 
 Inspect the current localnet status.
@@ -239,6 +323,10 @@ and prints a fresh token.
 - `--no-mining` or `[localnet].no-mining = true` disables automatic block
   production; use `acton localnet mine [N]` or `POST /acton_mine` to create
   blocks manually
+- localnet has a virtual clock for block and transaction time; use
+  `acton localnet increase-time`, `acton localnet set-time`, or
+  `acton localnet set-next-block-timestamp` to move it without waiting for real
+  time
 - messages accepted through `send_boc`, `acton_sendInternalMessage`, or the
   faucet are queued and included on a later automatic or manually mined block
 - a block can include multiple transactions; locally generated internal
@@ -279,6 +367,12 @@ tooling:
   base64-encoded internal message BOC through the local internal queue
 - `POST /acton_mine` with optional `{"blocks":N}` mines queued and/or empty
   blocks manually; `N` defaults to `1`
+- `POST /acton_increaseTime` with `{"seconds":3600}` adds seconds to the
+  virtual localnet clock
+- `POST /acton_setTime` with `{"timestamp":1710000000}` sets the current
+  virtual Unix time
+- `POST /acton_setNextBlockTimestamp` with `{"timestamp":1710000600}` sets a
+  one-shot timestamp for the next mined block
 - `POST /acton_setNetworkConditions` with `{"response_delay_ms":300}` updates
   simulated network latency; use `0` to disable response delay
 

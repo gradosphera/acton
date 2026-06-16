@@ -203,6 +203,21 @@ pub struct MineBlocksRequest {
 }
 
 #[derive(Deserialize)]
+pub struct IncreaseTimeRequest {
+    pub seconds: u64,
+}
+
+#[derive(Deserialize)]
+pub struct SetTimeRequest {
+    pub timestamp: u32,
+}
+
+#[derive(Deserialize)]
+pub struct SetNextBlockTimestampRequest {
+    pub timestamp: u32,
+}
+
+#[derive(Deserialize)]
 pub struct GetApiCallsRequest {
     pub limit: Option<usize>,
 }

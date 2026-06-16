@@ -127,6 +127,72 @@ Localnet server port.
 Localnet API token for a server started with \fB\-\-require\-auth\fR\&. If omitted,
 Acton reads \fBACTON_LOCALNET_AUTH_TOKEN\fR\&.
 .RE
+.SS "acton localnet increase-time"
+Increase the localnet virtual clock.
+.SS "Synopsis"
+\fBacton localnet increase\-time\fR [\fIoptions\fR] \fIseconds\fR
+.SS "Options"
+.sp
+\fIseconds\fR
+.RS 4
+Seconds to add to the virtual localnet clock.
+.RE
+.sp
+\fB\-p\fR, \fB\-\-port\fR \fIport\fR
+.RS 4
+Localnet server port.
+.RE
+.sp
+\fB\-\-auth\-token\fR \fItoken\fR
+.RS 4
+Localnet API token for a server started with \fB\-\-require\-auth\fR\&. If omitted,
+Acton reads \fBACTON_LOCALNET_AUTH_TOKEN\fR\&.
+.RE
+.SS "acton localnet set-time"
+Set the localnet virtual clock.
+.SS "Synopsis"
+\fBacton localnet set\-time\fR [\fIoptions\fR] \fItimestamp\fR
+.SS "Options"
+.sp
+\fItimestamp\fR
+.RS 4
+Unix timestamp in seconds. The timestamp cannot be lower than the latest mined
+block time.
+.RE
+.sp
+\fB\-p\fR, \fB\-\-port\fR \fIport\fR
+.RS 4
+Localnet server port.
+.RE
+.sp
+\fB\-\-auth\-token\fR \fItoken\fR
+.RS 4
+Localnet API token for a server started with \fB\-\-require\-auth\fR\&. If omitted,
+Acton reads \fBACTON_LOCALNET_AUTH_TOKEN\fR\&.
+.RE
+.SS "acton localnet set-next-block-timestamp"
+Set a one\-shot timestamp for the next localnet block.
+.SS "Synopsis"
+\fBacton localnet set\-next\-block\-timestamp\fR [\fIoptions\fR] \fItimestamp\fR
+.SS "Options"
+.sp
+\fItimestamp\fR
+.RS 4
+Unix timestamp in seconds for the next mined block. The timestamp is consumed
+by the next automatic or manually mined block and cannot be lower than the
+latest mined block time.
+.RE
+.sp
+\fB\-p\fR, \fB\-\-port\fR \fIport\fR
+.RS 4
+Localnet server port.
+.RE
+.sp
+\fB\-\-auth\-token\fR \fItoken\fR
+.RS 4
+Localnet API token for a server started with \fB\-\-require\-auth\fR\&. If omitted,
+Acton reads \fBACTON_LOCALNET_AUTH_TOKEN\fR\&.
+.RE
 .SS "acton localnet status"
 Inspect the current localnet status.
 .SS "Synopsis"
@@ -241,6 +307,13 @@ blocks manually
 .RE
 .sp
 .RS 4
+\h'-04'\(bu\h'+03'localnet has a virtual clock for block and transaction time; use
+\fBacton localnet increase\-time\fR, \fBacton localnet set\-time\fR, or
+\fBacton localnet set\-next\-block\-timestamp\fR to move it without waiting for real
+time
+.RE
+.sp
+.RS 4
 \h'-04'\(bu\h'+03'messages accepted through \fBsend_boc\fR, \fBacton_sendInternalMessage\fR, or the
 faucet are queued and included on a later automatic or manually mined block
 .RE
@@ -323,6 +396,21 @@ base64\-encoded internal message BOC through the local internal queue
 .RS 4
 \h'-04'\(bu\h'+03'\fBPOST /acton_mine\fR with optional \fB{"blocks":N}\fR mines queued and/or empty
 blocks manually; \fBN\fR defaults to \fB1\fR
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fBPOST /acton_increaseTime\fR with \fB{"seconds":3600}\fR adds seconds to the
+virtual localnet clock
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fBPOST /acton_setTime\fR with \fB{"timestamp":1710000000}\fR sets the current
+virtual Unix time
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fBPOST /acton_setNextBlockTimestamp\fR with \fB{"timestamp":1710000600}\fR sets a
+one\-shot timestamp for the next mined block
 .RE
 .sp
 .RS 4

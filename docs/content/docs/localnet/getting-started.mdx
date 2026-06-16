@@ -67,6 +67,33 @@ You can also store the mode in `Acton.toml`:
 no-mining = true
 ```
 
+## Control Time
+
+Localnet uses a virtual clock for block and transaction timestamps. Move it
+forward without waiting for wall-clock time:
+
+```bash
+acton localnet increase-time 3600
+acton localnet mine
+```
+
+Set the current virtual Unix time:
+
+```bash
+acton localnet set-time 1710000000
+```
+
+Set a one-shot timestamp for only the next mined block:
+
+```bash
+acton localnet set-next-block-timestamp 1710000600
+acton localnet mine
+```
+
+The requested timestamp cannot be lower than the latest mined block time.
+`acton localnet status` reports the current virtual time, offset, and any
+pending next-block timestamp.
+
 ## Simulate API Latency
 
 Use `--response-delay-ms` when you need local API requests to behave more like
