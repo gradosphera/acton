@@ -1193,6 +1193,7 @@ impl Project {
             verify_address: None,
             verify_wallet: None,
             verify_network: None,
+            verify_new: false,
             test_fail_fast: false,
             test_no_capture: false,
             script_fork_net: None,
@@ -1251,6 +1252,7 @@ pub(crate) struct ActonCommand {
     pub(crate) verify_address: Option<String>,
     pub(crate) verify_wallet: Option<String>,
     pub(crate) verify_network: Option<String>,
+    pub(crate) verify_new: bool,
     pub(crate) test_fail_fast: bool,
     pub(crate) test_no_capture: bool,
     pub(crate) script_fork_net: Option<String>,
@@ -1722,6 +1724,11 @@ impl ActonCommand {
         self
     }
 
+    pub(crate) fn new_verifier(mut self) -> Self {
+        self.verify_new = true;
+        self
+    }
+
     pub(crate) fn fork_net(mut self, network: &str) -> Self {
         self.script_fork_net = Some(network.to_string());
         self
@@ -1941,6 +1948,10 @@ impl ActonCommand {
 
         if let Some(network) = self.verify_network {
             self.cmd = self.cmd.arg("--net").arg(network);
+        }
+
+        if self.verify_new {
+            self.cmd = self.cmd.arg("--new");
         }
 
         if let Some(network) = self.script_fork_net {

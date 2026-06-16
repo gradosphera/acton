@@ -835,6 +835,8 @@ enum Commands {
         compiler_version: Option<String>,
         #[arg(long, help = "Run verification without sending the final transaction")]
         dry_run: bool,
+        #[arg(long = "new", hide = true, help = "Use the new Acton verifier service")]
+        new_verifier: bool,
         #[arg(
             long,
             help = "Use TON Connect wallet approval for the verification transaction",
@@ -2288,6 +2290,7 @@ fn main() {
             dry_run,
             tonconnect,
             tonconnect_port,
+            new_verifier,
         } => verify_cmd(
             contract_id,
             address,
@@ -2295,6 +2298,7 @@ fn main() {
             wallet,
             compiler_version,
             dry_run,
+            new_verifier,
             tonconnect,
             tonconnect_port,
         ),
