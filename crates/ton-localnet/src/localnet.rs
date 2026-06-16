@@ -1,5 +1,6 @@
 use crate::executor::TvmEmulatorAdapter;
 use crate::node::{Node, NodeClockInfo, StateSource};
+use crate::node_snapshot::NodeStateSnapshot;
 use crate::storage;
 use crate::storage::{AccountStatus, BlockMeta, MsgMeta, TransactionInfo};
 use crate::streaming::StreamingCommitEvent;
@@ -179,6 +180,12 @@ pub struct LocalnetMineResult {
     pub blocks_mined: u32,
     pub last_block_seqno: Seqno,
     pub blocks: Vec<LocalnetBlockId>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct LocalnetRecoveryPointResult {
+    pub id: u64,
+    pub block_seqno: Seqno,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -408,6 +415,13 @@ pub(crate) enum Request {
         path: String,
         resp: oneshot::Sender<anyhow::Result<()>>,
     },
+    CreateRecoveryPoint {
+        resp: oneshot::Sender<anyhow::Result<LocalnetRecoveryPointResult>>,
+    },
+    RevertRecoveryPoint {
+        id: u64,
+        resp: oneshot::Sender<anyhow::Result<LocalnetRecoveryPointResult>>,
+    },
     MineBlocks {
         count: u32,
         resp: oneshot::Sender<anyhow::Result<LocalnetMineResult>>,
@@ -433,6 +447,48 @@ pub struct Localnet {
     tx: mpsc::Sender<Request>,
     events_tx: broadcast::Sender<StreamingCommitEvent>,
     started_at: SystemTime,
+}
+
+#[derive(Default)]
+struct RecoveryPoints {
+    next_id: u64,
+    points: Vec<RecoveryPoint>,
+}
+
+struct RecoveryPoint {
+    id: u64,
+    snapshot: NodeStateSnapshot,
+}
+
+impl RecoveryPoints {
+    fn create(&mut self, node: &Node) -> anyhow::Result<LocalnetRecoveryPointResult> {
+        let snapshot = node.build_snapshot()?;
+        self.next_id = self
+            .next_id
+            .checked_add(1)
+            .context("Recovery point id overflow")?;
+        let id = self.next_id;
+        let block_seqno = snapshot.globals.head_seqno;
+        self.points.push(RecoveryPoint { id, snapshot });
+        Ok(LocalnetRecoveryPointResult { id, block_seqno })
+    }
+
+    fn revert(&mut self, node: &mut Node, id: u64) -> anyhow::Result<LocalnetRecoveryPointResult> {
+        let index = self
+            .points
+            .iter()
+            .position(|point| point.id == id)
+            .with_context(|| format!("Recovery point {id} not found"))?;
+        let snapshot = self.points[index].snapshot.clone();
+        let block_seqno = snapshot.globals.head_seqno;
+        node.apply_snapshot(snapshot)?;
+        self.points.truncate(index);
+        Ok(LocalnetRecoveryPointResult { id, block_seqno })
+    }
+
+    fn clear(&mut self) {
+        self.points.clear();
+    }
 }
 
 pub const DEFAULT_BLOCK_INTERVAL_MS: u64 = 500;
@@ -1043,6 +1099,23 @@ impl Localnet {
         rx.await?
     }
 
+    pub async fn create_recovery_point(&self) -> anyhow::Result<LocalnetRecoveryPointResult> {
+        let (resp, rx) = oneshot::channel();
+        self.tx.send(Request::CreateRecoveryPoint { resp }).await?;
+        rx.await?
+    }
+
+    pub async fn revert_recovery_point(
+        &self,
+        id: u64,
+    ) -> anyhow::Result<LocalnetRecoveryPointResult> {
+        let (resp, rx) = oneshot::channel();
+        self.tx
+            .send(Request::RevertRecoveryPoint { id, resp })
+            .await?;
+        rx.await?
+    }
+
     pub async fn mine_blocks(&self, count: u32) -> anyhow::Result<LocalnetMineResult> {
         let (resp, rx) = oneshot::channel();
         self.tx.send(Request::MineBlocks { count, resp }).await?;
@@ -1097,6 +1170,7 @@ fn run_node_loop(
     auto_mining: bool,
 ) -> anyhow::Result<()> {
     let mut node = create_node(events_tx, state_source, db_path)?;
+    let mut recovery_points = RecoveryPoints::default();
     tracing::info!(
         "TON localnet started, block interval: {}ms, auto mining: {}",
         block_interval.as_millis(),
@@ -1105,7 +1179,7 @@ fn run_node_loop(
 
     if !auto_mining {
         while let Some(req) = rx.blocking_recv() {
-            process_loop_request(&mut node, req);
+            process_loop_request(&mut node, &mut recovery_points, req);
         }
         return Ok(());
     }
@@ -1138,6 +1212,7 @@ async fn run_node_loop_async(
     block_interval: Duration,
 ) -> anyhow::Result<()> {
     let mut next_block_at = Instant::now() + block_interval;
+    let mut recovery_points = RecoveryPoints::default();
 
     loop {
         if Instant::now() >= next_block_at {
@@ -1154,7 +1229,7 @@ async fn run_node_loop_async(
                 let Some(req) = req else {
                     return Ok(());
                 };
-                process_loop_request(&mut node, req);
+                process_loop_request(&mut node, &mut recovery_points, req);
             }
         }
     }
@@ -1188,7 +1263,7 @@ fn handle_mine_blocks(node: &mut Node, count: u32) -> anyhow::Result<LocalnetMin
     })
 }
 
-fn process_loop_request(node: &mut Node, req: Request) {
+fn process_loop_request(node: &mut Node, recovery_points: &mut RecoveryPoints, req: Request) {
     tracing::debug!("Node loop processing request: {:?}", req);
     match req {
         Request::SendBoc { boc, resp } => {
@@ -1456,6 +1531,17 @@ fn process_loop_request(node: &mut Node, req: Request) {
         }
         Request::LoadState { path, resp } => {
             let res = node.load_state_from_path(path);
+            if res.is_ok() {
+                recovery_points.clear();
+            }
+            let _ = resp.send(res);
+        }
+        Request::CreateRecoveryPoint { resp } => {
+            let res = recovery_points.create(node);
+            let _ = resp.send(res);
+        }
+        Request::RevertRecoveryPoint { id, resp } => {
+            let res = recovery_points.revert(node, id);
             let _ = resp.send(res);
         }
         Request::MineBlocks { count, resp } => {

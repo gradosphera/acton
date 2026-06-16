@@ -383,6 +383,16 @@ the current node state with a JSON state snapshot
 .RE
 .sp
 .RS 4
+\h'-04'\(bu\h'+03'\fBPOST /acton_snapshot\fR creates a runtime in\-memory recovery point and returns
+its id
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fBPOST /acton_revert\fR with \fB{"id":1}\fR restores a runtime recovery point and
+invalidates that point plus every newer point
+.RE
+.sp
+.RS 4
 \h'-04'\(bu\h'+03'\fBPOST /acton_setShardAccount\fR with
 \fB{"address":"<ADDR>","shard_account":"<BASE64_BOC>"}\fR replaces the selected
 account state with a base64\-encoded \fBShardAccount\fR BOC

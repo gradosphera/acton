@@ -3,9 +3,9 @@ use crate::api::toncenter_v2 as v2;
 use crate::localnet::Localnet;
 use crate::server::models::{
     FaucetRequest, GetApiCallsRequest, GetVerifiedSourceRequest, IncreaseTimeRequest,
-    MineBlocksRequest, RegisterCompilerAbisRequest, SendBocRequest, SetAddressNameRequest,
-    SetNetworkConditionsRequest, SetNextBlockTimestampRequest, SetShardAccountRequest,
-    SetTimeRequest, StatePathRequest,
+    MineBlocksRequest, RegisterCompilerAbisRequest, RevertRecoveryPointRequest, SendBocRequest,
+    SetAddressNameRequest, SetNetworkConditionsRequest, SetNextBlockTimestampRequest,
+    SetShardAccountRequest, SetTimeRequest, StatePathRequest,
 };
 use crate::server::{
     ApiCallLog, NetworkConditions, NetworkConditionsInfo, StartupWallet, StateSourceInfo,
@@ -109,6 +109,23 @@ pub async fn mine_blocks(State(node): State<Arc<Localnet>>, body: Bytes) -> Json
         },
         |res| serde_json::to_value(res).unwrap_or(Value::Null),
     )
+    .await
+}
+
+pub async fn create_recovery_point(State(node): State<Arc<Localnet>>) -> Json<Value> {
+    handle_result(node.create_recovery_point(), |res| {
+        serde_json::to_value(res).unwrap_or(Value::Null)
+    })
+    .await
+}
+
+pub async fn revert_recovery_point(
+    State(node): State<Arc<Localnet>>,
+    Json(payload): Json<RevertRecoveryPointRequest>,
+) -> Json<Value> {
+    handle_result(node.revert_recovery_point(payload.id), |res| {
+        serde_json::to_value(res).unwrap_or(Value::Null)
+    })
     .await
 }
 

@@ -233,6 +233,45 @@
         }
       }
     },
+    "/acton_snapshot": {
+      "post": {
+        "tags": ["Localnet Control"],
+        "operationId": "createRecoveryPoint",
+        "summary": "Create runtime recovery point",
+        "description": "Creates an in-memory recovery point for the current localnet state. Recovery points are process-local and are not persisted across restart.",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/RecoveryPointResponse"
+          }
+        }
+      }
+    },
+    "/acton_revert": {
+      "post": {
+        "tags": ["Localnet Control"],
+        "operationId": "revertRecoveryPoint",
+        "summary": "Revert runtime recovery point",
+        "description": "Restores a previously created recovery point and invalidates that point plus every newer recovery point.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevertRecoveryPointRequest"
+              },
+              "example": {
+                "id": 1
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/RecoveryPointResponse"
+          }
+        }
+      }
+    },
     "/acton_setShardAccount": {
       "post": {
         "tags": ["Localnet Control"],
@@ -721,6 +760,28 @@
           }
         }
       },
+      "RecoveryPointResponse": {
+        "description": "Successful runtime recovery point response.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/SuccessEnvelope"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "result": {
+                      "$ref": "#/components/schemas/RecoveryPointResult"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      },
       "NetworkConditionsResponse": {
         "description": "Successful simulated network conditions response.",
         "content": {
@@ -1149,6 +1210,32 @@
             "items": {
               "$ref": "#/components/schemas/LocalnetBlockId"
             }
+          }
+        }
+      },
+      "RevertRecoveryPointRequest": {
+        "type": "object",
+        "required": ["id"],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Recovery point id returned by /acton_snapshot."
+          }
+        }
+      },
+      "RecoveryPointResult": {
+        "type": "object",
+        "required": ["id", "block_seqno"],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "block_seqno": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Latest block seqno captured by the recovery point."
           }
         }
       },

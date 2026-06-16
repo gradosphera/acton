@@ -32,6 +32,8 @@ pub(crate) struct NodeStateSnapshot {
     #[serde(default)]
     pub history_nft_items: Vec<(Addr, NftItemMeta)>,
     #[serde(default)]
+    pub history_asset_detection_checked: Vec<Addr>,
+    #[serde(default)]
     pub history_compiler_abis: Vec<(Hash256, Value)>,
     pub cas_entries: Vec<(Hash256, BocBytes)>,
     pub pool_external: VecDeque<Hash256>,
@@ -72,7 +74,7 @@ impl Node {
         self.apply_snapshot(snapshot)
     }
 
-    fn build_snapshot(&self) -> anyhow::Result<NodeStateSnapshot> {
+    pub(crate) fn build_snapshot(&self) -> anyhow::Result<NodeStateSnapshot> {
         let mut latest_accounts = self
             .latest
             .accounts
@@ -134,6 +136,14 @@ impl Node {
             .map(|(addr, meta)| (*addr, meta.clone()))
             .collect::<Vec<_>>();
 
+        let mut history_asset_detection_checked = self
+            .history
+            .asset_detection_checked
+            .iter()
+            .copied()
+            .collect::<Vec<_>>();
+        history_asset_detection_checked.sort();
+
         let mut history_compiler_abis = self
             .history
             .compiler_abis
@@ -166,6 +176,7 @@ impl Node {
             history_jetton_masters,
             history_jetton_wallets,
             history_nft_items,
+            history_asset_detection_checked,
             history_compiler_abis,
             cas_entries,
             pool_external: self.pool.external.clone(),
@@ -210,10 +221,12 @@ impl Node {
         }
     }
 
-    fn apply_snapshot(&mut self, snapshot: NodeStateSnapshot) -> anyhow::Result<()> {
+    pub(crate) fn apply_snapshot(&mut self, snapshot: NodeStateSnapshot) -> anyhow::Result<()> {
         if snapshot.version != NODE_STATE_SNAPSHOT_VERSION {
             anyhow::bail!("Unsupported snapshot version: {}", snapshot.version);
         }
+
+        self.replace_persistent_state(&snapshot)?;
 
         let cas_by_hash = snapshot
             .cas_entries
@@ -236,8 +249,11 @@ impl Node {
         self.history.jetton_masters = snapshot.history_jetton_masters.into_iter().collect();
         self.history.jetton_wallets = snapshot.history_jetton_wallets.into_iter().collect();
         self.history.nft_items = snapshot.history_nft_items.into_iter().collect();
-        self.history
-            .replace_compiler_abis(snapshot.history_compiler_abis.into_iter().collect())?;
+        self.history.asset_detection_checked = snapshot
+            .history_asset_detection_checked
+            .into_iter()
+            .collect();
+        self.history.compiler_abis = snapshot.history_compiler_abis.into_iter().collect();
 
         self.pool.external = snapshot.pool_external;
         self.pool.internal = snapshot.pool_internal;
@@ -273,6 +289,81 @@ impl Node {
 
         self.rebuild_indexes();
         self.rebuild_global_libraries_from_accounts()?;
+        Ok(())
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
+    fn replace_persistent_state(&self, snapshot: &NodeStateSnapshot) -> anyhow::Result<()> {
+        let Some(conn) = &self.conn else {
+            return Ok(());
+        };
+
+        {
+            let mut conn = conn.lock().expect("Failed to lock DB connection");
+            let tx = conn.transaction()?;
+
+            tx.execute("DELETE FROM cas", [])?;
+            tx.execute("DELETE FROM blocks", [])?;
+            tx.execute("DELETE FROM transactions", [])?;
+            tx.execute("DELETE FROM messages", [])?;
+            tx.execute("DELETE FROM accounts", [])?;
+            tx.execute("DELETE FROM compiler_abis", [])?;
+
+            for (hash, boc) in &snapshot.cas_entries {
+                tx.execute(
+                    "INSERT OR REPLACE INTO cas (hash, boc) VALUES (?1, ?2)",
+                    rusqlite::params![hash.0.to_vec(), boc],
+                )?;
+            }
+
+            for block in &snapshot.history_blocks {
+                let block_data = serde_json::to_vec(block)?;
+                tx.execute(
+                    "INSERT OR REPLACE INTO blocks (seqno, data) VALUES (?1, ?2)",
+                    rusqlite::params![block.seqno, block_data],
+                )?;
+            }
+
+            for (hash, tx_meta) in &snapshot.history_tx_by_hash {
+                let tx_data = serde_json::to_vec(tx_meta)?;
+                tx.execute(
+                    "INSERT OR REPLACE INTO transactions (hash, data, account, lt, seqno) VALUES (?1, ?2, ?3, ?4, ?5)",
+                    rusqlite::params![
+                        hash.0.to_vec(),
+                        tx_data,
+                        tx_meta.account.addr.to_vec(),
+                        tx_meta.lt,
+                        tx_meta.block_seqno,
+                    ],
+                )?;
+            }
+
+            for (hash, msg_meta) in &snapshot.history_msg_by_hash {
+                let msg_data = serde_json::to_vec(msg_meta)?;
+                tx.execute(
+                    "INSERT OR REPLACE INTO messages (hash, data) VALUES (?1, ?2)",
+                    rusqlite::params![hash.0.to_vec(), msg_data],
+                )?;
+            }
+
+            for (address, account_meta) in &snapshot.latest_accounts {
+                let account_data = serde_json::to_vec(account_meta)?;
+                tx.execute(
+                    "INSERT OR REPLACE INTO accounts (address, data) VALUES (?1, ?2)",
+                    rusqlite::params![address.addr.to_vec(), account_data],
+                )?;
+            }
+
+            for (code_hash, compiler_abi) in &snapshot.history_compiler_abis {
+                let data = serde_json::to_vec(compiler_abi)?;
+                tx.execute(
+                    "INSERT OR REPLACE INTO compiler_abis (code_hash, data) VALUES (?1, ?2)",
+                    rusqlite::params![code_hash.0.to_vec(), data],
+                )?;
+            }
+
+            tx.commit()?;
+        }
         Ok(())
     }
 

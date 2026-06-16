@@ -360,6 +360,10 @@ tooling:
   JSON state snapshot without stopping the server
 - `POST /acton_loadState` with `{"path":"snapshots/localnet.json"}` replaces
   the current node state with a JSON state snapshot
+- `POST /acton_snapshot` creates a runtime in-memory recovery point and returns
+  its id
+- `POST /acton_revert` with `{"id":1}` restores a runtime recovery point and
+  invalidates that point plus every newer point
 - `POST /acton_setShardAccount` with
   `{"address":"<ADDR>","shard_account":"<BASE64_BOC>"}` replaces the selected
   account state with a base64-encoded `ShardAccount` BOC

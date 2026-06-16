@@ -203,6 +203,11 @@ pub struct MineBlocksRequest {
 }
 
 #[derive(Deserialize)]
+pub struct RevertRecoveryPointRequest {
+    pub id: u64,
+}
+
+#[derive(Deserialize)]
 pub struct IncreaseTimeRequest {
     pub seconds: u64,
 }

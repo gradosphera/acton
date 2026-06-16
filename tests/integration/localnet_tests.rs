@@ -745,6 +745,148 @@ fn localnet_manual_mining_time_controls_update_blocks_and_transactions() {
 }
 
 #[test]
+fn localnet_runtime_recovery_points_revert_state_and_persistent_db() {
+    let project = ProjectBuilder::new("localnet-recovery-points").build();
+    let db_path = project.path().join("localnet.sqlite");
+    let db_path_arg = db_path.display().to_string();
+
+    let node = project
+        .localnet()
+        .args(["--no-mining", "--db-path", db_path_arg.as_str()])
+        .start();
+
+    let first_mine = node.post_json("/acton_mine", &json!({}));
+    let first_seqno = response_payload(&first_mine)["last_block_seqno"]
+        .as_u64()
+        .expect("mine response must expose last_block_seqno") as u32;
+    let first_gen_utime = block_header_gen_utime(&node, first_seqno);
+
+    let older_snapshot = node.post_json("/acton_snapshot", &json!({}));
+    let older_snapshot_id = response_payload(&older_snapshot)["id"]
+        .as_u64()
+        .expect("snapshot response must expose id");
+
+    let next_block_timestamp = first_gen_utime + 300;
+    let set_next = node.post_json(
+        "/acton_setNextBlockTimestamp",
+        &json!({ "timestamp": next_block_timestamp }),
+    );
+    let snapshot = node.post_json("/acton_snapshot", &json!({}));
+    let snapshot_id = response_payload(&snapshot)["id"]
+        .as_u64()
+        .expect("snapshot response must expose id");
+
+    let target = "0:4444444444444444444444444444444444444444444444444444444444444444";
+    let fund = node.post_json(
+        "/acton_fundAccount",
+        &json!({
+            "address": target,
+            "amount": 1_000_000_000u128,
+        }),
+    );
+    let mine_faucet = node.post_json("/acton_mine", &json!({}));
+    let faucet_block_seqno = response_payload(&mine_faucet)["last_block_seqno"]
+        .as_u64()
+        .expect("mine response must expose last_block_seqno") as u32;
+    let faucet_block_gen_utime = block_header_gen_utime(&node, faucet_block_seqno);
+    let target_after_mine =
+        wait_for_address_balance_at_least(&node, target, 1_000_000_000, Duration::from_secs(3));
+
+    let newer_snapshot = node.post_json("/acton_snapshot", &json!({}));
+    let newer_snapshot_id = response_payload(&newer_snapshot)["id"]
+        .as_u64()
+        .expect("snapshot response must expose id");
+    let increase_later = node.post_json("/acton_increaseTime", &json!({ "seconds": 60 }));
+    let status_after_later_change = node.get_json("/acton_nodeInfo");
+
+    let reverted = node.post_json("/acton_revert", &json!({ "id": snapshot_id }));
+    let seqno_after_revert = latest_masterchain_seqno(&node);
+    let target_after_revert =
+        node.get_json(&format!("/api/v2/getAddressInformation?address={target}"));
+    let status_after_revert = node.get_json("/acton_nodeInfo");
+
+    let mine_after_revert = node.post_json("/acton_mine", &json!({}));
+    let replayed_seqno = response_payload(&mine_after_revert)["last_block_seqno"]
+        .as_u64()
+        .expect("mine response must expose last_block_seqno") as u32;
+    let replayed_gen_utime = block_header_gen_utime(&node, replayed_seqno);
+    let target_after_empty_mine =
+        node.get_json(&format!("/api/v2/getAddressInformation?address={target}"));
+
+    let mut invalid_revert_same = node.post_json("/acton_revert", &json!({ "id": snapshot_id }));
+    normalize_extra_for_snapshot(&mut invalid_revert_same);
+    let mut invalid_revert_newer =
+        node.post_json("/acton_revert", &json!({ "id": newer_snapshot_id }));
+    normalize_extra_for_snapshot(&mut invalid_revert_newer);
+
+    let reverted_older = node.post_json("/acton_revert", &json!({ "id": older_snapshot_id }));
+    let seqno_after_revert_older = latest_masterchain_seqno(&node);
+    let status_after_revert_older = node.get_json("/acton_nodeInfo");
+    let target_after_revert_older =
+        node.get_json(&format!("/api/v2/getAddressInformation?address={target}"));
+
+    node.stop();
+
+    let restarted = project
+        .localnet()
+        .args(["--no-mining", "--db-path", db_path_arg.as_str()])
+        .start();
+    let restarted_seqno = latest_masterchain_seqno(&restarted);
+    let restarted_target =
+        restarted.get_json(&format!("/api/v2/getAddressInformation?address={target}"));
+    let restarted_block_2 = restarted.get_json("/api/v2/getBlockHeader?seqno=2");
+
+    let snapshot = json!({
+        "create": {
+            "older": summarize_admin_response(&older_snapshot),
+            "current": summarize_admin_response(&snapshot),
+            "newer": summarize_admin_response(&newer_snapshot),
+        },
+        "mutate_after_snapshot": {
+            "set_next_ok": set_next["ok"].as_bool(),
+            "fund_ok": fund["ok"].as_bool(),
+            "mine_ok": mine_faucet["ok"].as_bool(),
+            "faucet_block_used_pending_timestamp": faucet_block_gen_utime == next_block_timestamp,
+            "balance_after_mine": parse_address_balance(&target_after_mine).to_string(),
+            "increase_later_ok": increase_later["ok"].as_bool(),
+        },
+        "revert_current": {
+            "response": summarize_admin_response(&reverted),
+            "seqno_after_revert": seqno_after_revert,
+            "balance_after_revert": parse_address_balance(&target_after_revert).to_string(),
+            "pending_timestamp_restored": status_after_revert["result"]["next_block_timestamp"]
+                .as_u64()
+                == Some(u64::from(next_block_timestamp)),
+            "time_offset_rolled_back": status_after_later_change["result"]["time_offset_seconds"]
+                .as_i64()
+                > status_after_revert["result"]["time_offset_seconds"].as_i64(),
+            "empty_mine_used_restored_timestamp": replayed_gen_utime == next_block_timestamp,
+            "balance_after_empty_mine": parse_address_balance(&target_after_empty_mine).to_string(),
+        },
+        "recovery_point_invalidation": {
+            "same": summarize_admin_response(&invalid_revert_same),
+            "newer": summarize_admin_response(&invalid_revert_newer),
+            "older_still_reverts": summarize_admin_response(&reverted_older),
+            "seqno_after_revert_older": seqno_after_revert_older,
+            "pending_timestamp_after_revert_older": status_after_revert_older["result"]["next_block_timestamp"].clone(),
+            "balance_after_revert_older": parse_address_balance(&target_after_revert_older).to_string(),
+        },
+        "persistent_db_after_restart": {
+            "seqno": restarted_seqno,
+            "balance": parse_address_balance(&restarted_target).to_string(),
+            "block_2_removed": restarted_block_2["ok"].as_bool() == Some(false),
+        }
+    });
+
+    assertion().eq(
+        format!("{}\n", pretty_json_for_snapshot(&snapshot, project.path())),
+        snapbox::file!("snapshots/localnet/test_localnet_recovery_points.summary.json"),
+    );
+
+    restarted.stop();
+}
+
+#[test]
 fn localnet_no_mining_bootstraps_startup_accounts_in_fork_mode() {
     let project = ProjectBuilder::new("localnet-no-mining-startup-accounts-fork").build();
     fs::write(project.path().join("wallets.toml"), DEPLOYER_WALLET_CONFIG)
