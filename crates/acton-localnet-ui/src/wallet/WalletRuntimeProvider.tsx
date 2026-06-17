@@ -33,12 +33,14 @@ type WalletBalanceResult =
 interface WalletRuntimeProviderProps {
   readonly client: TonClient
   readonly host: string
+  readonly localnetApiToken?: string
   readonly children: React.ReactNode
 }
 
 export const WalletRuntimeProvider: React.FC<WalletRuntimeProviderProps> = ({
   client,
   host,
+  localnetApiToken,
   children,
 }) => {
   const {showToast} = useToast()
@@ -216,7 +218,7 @@ export const WalletRuntimeProvider: React.FC<WalletRuntimeProviderProps> = ({
 
   React.useEffect(() => {
     let cancelled = false
-    const nextWalletKit = createWalletKit(host)
+    const nextWalletKit = createWalletKit(host, localnetApiToken)
 
     const handleRequestError = (event: RequestErrorEvent) => {
       const fallback = "WalletKit request failed."
@@ -268,7 +270,7 @@ export const WalletRuntimeProvider: React.FC<WalletRuntimeProviderProps> = ({
       cancelled = true
       void nextWalletKit.close()
     }
-  }, [host, showErrorToast, showToast])
+  }, [host, localnetApiToken, showErrorToast, showToast])
 
   React.useEffect(() => {
     if (!walletKit) {

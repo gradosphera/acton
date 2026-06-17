@@ -1,4 +1,5 @@
 import {
+  ApiClientToncenter,
   LocalStorageAdapter,
   Network,
   Signer,
@@ -35,6 +36,32 @@ function getApiEndpoint(host: string): string {
   return getWalletOrigin()
 }
 
+function createLocalnetFetch(localnetApiToken?: string): typeof fetch | undefined {
+  const token = localnetApiToken?.trim()
+  if (!token) {
+    return undefined
+  }
+
+  const fetchWithLocalnetAuth: typeof fetch = (input, init) => {
+    const headers = new Headers(init?.headers)
+    headers.set("Authorization", `Bearer ${token}`)
+    return fetch(input, {...init, headers: Object.fromEntries(headers.entries())})
+  }
+  return fetchWithLocalnetAuth
+}
+
+function createLocalnetApiClient(
+  endpoint: string,
+  network: Network,
+  localnetApiToken?: string,
+): ApiClientToncenter {
+  return new ApiClientToncenter({
+    endpoint,
+    network,
+    fetchApi: createLocalnetFetch(localnetApiToken),
+  })
+}
+
 export function getWalletNetwork(): Network {
   return Network.testnet()
 }
@@ -43,10 +70,12 @@ export function getWalletNetworkLabel(): string {
   return "Localnet"
 }
 
-export function createWalletKit(host: string): TonWalletKit {
+export function createWalletKit(host: string, localnetApiToken?: string): TonWalletKit {
   const origin = getWalletOrigin()
   const walletUrl = origin
   const apiEndpoint = getApiEndpoint(host)
+  const mainnet = Network.mainnet()
+  const testnet = Network.testnet()
 
   return new TonWalletKit({
     deviceInfo: createDeviceInfo({
@@ -71,15 +100,11 @@ export function createWalletKit(host: string): TonWalletKit {
       platforms: ["chrome", "firefox", "safari", "android", "ios", "windows", "macos", "linux"],
     }),
     networks: {
-      [Network.mainnet().chainId]: {
-        apiClient: {
-          url: apiEndpoint,
-        },
+      [mainnet.chainId]: {
+        apiClient: createLocalnetApiClient(apiEndpoint, mainnet, localnetApiToken),
       },
-      [Network.testnet().chainId]: {
-        apiClient: {
-          url: apiEndpoint,
-        },
+      [testnet.chainId]: {
+        apiClient: createLocalnetApiClient(apiEndpoint, testnet, localnetApiToken),
       },
     },
     storage: new LocalStorageAdapter({prefix: "acton-localnet-walletkit:"}),

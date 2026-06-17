@@ -78,6 +78,7 @@ interface AccountDetailsProps {
 }
 
 const ITEMS_PER_PAGE = 10
+const TRANSACTION_SKELETON_ROWS = 5
 const TRANSACTION_FILTERS_STORAGE_KEY = "acton.account.transactionFilters.v1"
 type PaginationItem = number | "ellipsis-left" | "ellipsis-right"
 type AccountSortOrder = "desc" | "asc"
@@ -644,7 +645,7 @@ export const AccountDetails: React.FC<AccountDetailsProps> = ({
             </TableHeader>
             <TableBody>
               {transactionsLoading ? (
-                Array.from({length: ITEMS_PER_PAGE}, (_, index) => (
+                Array.from({length: TRANSACTION_SKELETON_ROWS}, (_, index) => (
                   <TableRow key={`transaction-skeleton-${index}`} className={styles.skeletonRow}>
                     <TableCell className={`${styles.time} ${styles.timeColumn}`}>
                       <div className={`${styles.skeleton} ${styles.historySkeletonTime}`} />

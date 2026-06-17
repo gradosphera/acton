@@ -122,7 +122,7 @@ export const App: React.FC = () => {
       <ToastProvider>
         <NetworkInfoProvider client={client}>
           <AddressBookProvider client={client}>
-            <WalletRuntimeProvider client={client} host={HOST}>
+            <WalletRuntimeProvider client={client} host={HOST} localnetApiToken={localnetApiToken}>
               <AppContent
                 client={client}
                 isAuthOverlayOpen={isAuthOverlayOpen}
