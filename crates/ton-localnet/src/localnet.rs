@@ -1238,7 +1238,6 @@ async fn run_node_loop_async(
 }
 
 fn mine_scheduled_block(node: &mut Node, block_interval: Duration) -> Instant {
-    tracing::info!("Mining localnet block");
     if let Err(e) = node.mine_block() {
         tracing::error!("Block mining failed: {:?}", e);
     }
@@ -1250,7 +1249,6 @@ fn handle_mine_blocks(node: &mut Node, count: u32) -> anyhow::Result<LocalnetMin
 
     let mut blocks = Vec::with_capacity(count as usize);
     for _ in 0..count {
-        tracing::info!("Manually mining localnet block");
         let block = node.mine_block()?;
         blocks.push(block.block_id());
     }
@@ -2101,7 +2099,7 @@ pub(crate) fn convert_to_tx_struct(
     tx: &TransactionInfo,
     tx_boc: BocBytes,
 ) -> anyhow::Result<LocalnetTransaction> {
-    let in_msg_struct = if let Some(in_msg) = &tx.in_msg {
+    let in_msg = if let Some(in_msg) = &tx.in_msg {
         convert_to_message_struct(&in_msg.meta, &in_msg.boc)?
     } else {
         LocalnetMessage {
@@ -2122,10 +2120,11 @@ pub(crate) fn convert_to_tx_struct(
         }
     };
 
-    let mut out_msgs_struct = Vec::new();
-    for out_msg in &tx.out_msgs {
-        out_msgs_struct.push(convert_to_message_struct(&out_msg.meta, &out_msg.boc)?);
-    }
+    let out_msgs = tx
+        .out_msgs
+        .iter()
+        .map(|out_msg| convert_to_message_struct(&out_msg.meta, &out_msg.boc))
+        .collect::<anyhow::Result<Vec<_>>>()?;
 
     Ok(LocalnetTransaction {
         hash: tx.meta.tx_hash,
@@ -2139,11 +2138,11 @@ pub(crate) fn convert_to_tx_struct(
             lt: tx.meta.lt,
             hash: tx.meta.tx_hash,
         },
-        in_msg: in_msg_struct,
-        out_msgs: out_msgs_struct,
-        total_fees: tx.meta.total_fees.unwrap_or(0),
-        storage_fees: tx.meta.storage_fees.unwrap_or(0),
-        other_fees: tx.meta.other_fees.unwrap_or(0),
+        in_msg,
+        out_msgs,
+        total_fees: tx.meta.total_fees,
+        storage_fees: tx.meta.storage_fees,
+        other_fees: tx.meta.other_fees,
     })
 }
 
@@ -2169,7 +2168,7 @@ pub(crate) fn compute_normalized_ext_in_hash(msg: &Message<'_>) -> anyhow::Resul
     builder.store_bit_zero()?;
     builder.store_bit_one()?;
     builder.store_reference(body_cell)?;
-    Ok(Hash256(*builder.build()?.repr_hash().as_array()))
+    Ok(Hash256::from(builder.build()?.repr_hash()))
 }
 
 fn normalized_ext_in_hash_from_boc(boc: &[u8]) -> anyhow::Result<Option<Hash256>> {
@@ -2196,7 +2195,7 @@ pub(crate) fn convert_to_message_struct(
     let mut builder = CellBuilder::new();
     builder.store_slice(msg.body)?;
     let body_cell = builder.build()?;
-    let body_hash = Hash256(*body_cell.repr_hash().as_array());
+    let body_hash = Hash256::from(body_cell.repr_hash());
     let body_bytes = Boc::encode(body_cell);
 
     let (fwd_fee, ihr_fee, bounce, bounced) = match &msg.info {
@@ -2273,15 +2272,13 @@ fn handle_get_block_transactions(
         anyhow::bail!("Transaction in block {seqno} not found")
     };
 
-    let mut result = Vec::new();
-    for tx in txs {
-        let Some(ext_tx) = node.get_transaction_by_hash(&tx.tx_hash) else {
-            continue;
-        };
-
-        let tx_boc = node.get_cell(&ext_tx.meta.tx_hash).unwrap_or_default();
-        result.push(convert_to_tx_struct(&ext_tx, tx_boc)?);
-    }
+    let result = txs
+        .into_iter()
+        .filter_map(|tx| {
+            node.get_transaction_by_hash(&tx.tx_hash)
+                .map(|ext_tx| convert_to_tx_struct(&ext_tx, ext_tx.tx_boc.clone()))
+        })
+        .collect::<anyhow::Result<Vec<_>>>()?;
 
     let block_id = block_header.block_id();
 

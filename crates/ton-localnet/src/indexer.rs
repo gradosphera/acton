@@ -108,7 +108,7 @@ impl Node {
         if let Some(jetton_data) =
             ton_indexer::jettons::get_jetton_data(addr.to_string(), code, data, libs.as_deref())
         {
-            let wallet_code_hash = Hash256(*jetton_data.jetton_wallet_code.repr_hash().as_array());
+            let wallet_code_hash = Hash256::from(jetton_data.jetton_wallet_code.repr_hash());
             let jetton_content = ton_indexer::jettons::resolve_jetton_content(
                 ton_indexer::jettons::parse_jetton_content(jetton_data.jetton_content),
             );

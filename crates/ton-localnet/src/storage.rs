@@ -1,17 +1,22 @@
 use crate::localnet::{LocalnetBlockId, LocalnetTransactionId};
 use crate::types::{Addr, BocBytes, Hash256, Lt, Seqno};
+use dashmap::DashMap;
 use indexmap::IndexMap;
 use rusqlite::{Connection, params};
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::fmt::Display;
 use std::sync::{Arc, Mutex};
+use tycho_types::boc::Boc;
+use tycho_types::cell::Cell;
 use tycho_types::models::{StdAddr, StdAddrFormat};
 
 pub struct CellStore {
     pub conn: Option<Arc<Mutex<Connection>>>,
-    pub boc_by_hash: HashMap<Hash256, BocBytes>,
+    pub boc_by_hash: FxHashMap<Hash256, BocBytes>,
+    cell_by_hash: DashMap<Hash256, Cell>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -28,18 +33,22 @@ impl CellStore {
     pub fn new() -> Self {
         Self {
             conn: None,
-            boc_by_hash: HashMap::new(),
+            boc_by_hash: FxHashMap::default(),
+            cell_by_hash: DashMap::new(),
         }
     }
 
     pub fn with_conn(conn: Arc<Mutex<Connection>>) -> Self {
         Self {
             conn: Some(conn),
-            boc_by_hash: HashMap::new(),
+            boc_by_hash: FxHashMap::default(),
+            cell_by_hash: DashMap::new(),
         }
     }
 
     pub fn put(&mut self, boc: BocBytes, hash: Hash256) -> Hash256 {
+        self.cell_by_hash.remove(&hash);
+
         if let Some(conn) = &self.conn {
             let conn = conn.lock().expect("Failed to lock DB connection");
             let _ = conn.execute(
@@ -50,6 +59,16 @@ impl CellStore {
             self.boc_by_hash.insert(hash, boc);
         }
         hash
+    }
+
+    #[must_use]
+    pub fn get_cell(&self, hash: &Hash256) -> Option<Cell> {
+        if let Some(cell) = self.cached_cell(hash) {
+            return Some(cell);
+        }
+
+        let boc = self.get(hash)?;
+        self.decode_and_cache_cell(*hash, &boc)
     }
 
     #[must_use]
@@ -68,24 +87,90 @@ impl CellStore {
     }
 
     #[must_use]
-    pub fn values(&self) -> Vec<BocBytes> {
+    pub fn find_map_cell<T>(&self, mut f: impl FnMut(&Cell) -> Option<T>) -> Option<T> {
         let Some(conn) = &self.conn else {
-            return self.boc_by_hash.values().cloned().collect();
+            return self
+                .boc_by_hash
+                .keys()
+                .filter_map(|hash| self.get_cell(hash))
+                .find_map(|cell| f(&cell));
         };
 
-        {
-            let conn_guard = conn.lock().expect("Failed to lock DB connection");
-            let Ok(mut stmt) = conn_guard.prepare("SELECT boc FROM cas") else {
-                return Vec::new();
+        let conn_guard = conn.lock().expect("Failed to lock DB connection");
+        let Ok(mut stmt) = conn_guard.prepare("SELECT hash, boc FROM cas") else {
+            return None;
+        };
+        let Ok(rows) = stmt.query_map([], |row| {
+            let hash_bytes: Vec<u8> = row.get(0)?;
+            let boc: BocBytes = row.get(1)?;
+            Ok((hash_bytes, boc))
+        }) else {
+            return None;
+        };
+        let mut rows = rows;
+        let mut result = None;
+        for (hash_bytes, boc) in rows.by_ref().filter_map(Result::ok) {
+            let Ok(hash_bytes) = <[u8; 32]>::try_from(hash_bytes.as_slice()) else {
+                continue;
             };
-            let Ok(rows) = stmt.query_map([], |row| row.get::<_, BocBytes>(0)) else {
-                return Vec::new();
-            };
-            let bocs = rows.filter_map(Result::ok).collect();
-            drop(stmt);
-            drop(conn_guard);
-            bocs
+            let hash = Hash256(hash_bytes);
+            if let Some(cell) = self.decode_and_cache_cell(hash, &boc)
+                && let Some(value) = f(&cell)
+            {
+                result = Some(value);
+                break;
+            }
         }
+        drop(rows);
+        drop(stmt);
+        drop(conn_guard);
+        result
+    }
+
+    #[must_use]
+    pub fn find_map_value<T>(&self, mut f: impl FnMut(&BocBytes) -> Option<T>) -> Option<T> {
+        let Some(conn) = &self.conn else {
+            return self.boc_by_hash.values().find_map(f);
+        };
+
+        let conn_guard = conn.lock().expect("Failed to lock DB connection");
+        let Ok(mut stmt) = conn_guard.prepare("SELECT boc FROM cas") else {
+            return None;
+        };
+        let Ok(rows) = stmt.query_map([], |row| row.get::<_, BocBytes>(0)) else {
+            return None;
+        };
+        let mut rows = rows;
+        let mut result = None;
+        for boc in rows.by_ref().filter_map(Result::ok) {
+            if let Some(value) = f(&boc) {
+                result = Some(value);
+                break;
+            }
+        }
+        drop(rows);
+        drop(stmt);
+        drop(conn_guard);
+        result
+    }
+
+    pub fn clear_cell_cache(&self) {
+        self.cell_by_hash.clear();
+    }
+
+    fn decode_and_cache_cell(&self, hash: Hash256, boc: &BocBytes) -> Option<Cell> {
+        if let Some(cell) = self.cached_cell(&hash) {
+            return Some(cell);
+        }
+
+        let cell = Boc::decode(boc).ok()?;
+        self.cell_by_hash.insert(hash, cell.clone());
+        Some(cell)
+    }
+
+    fn cached_cell(&self, hash: &Hash256) -> Option<Cell> {
+        let cell = self.cell_by_hash.get(hash)?;
+        Some(cell.clone())
     }
 }
 
@@ -228,9 +313,12 @@ pub struct TxMeta {
     pub success: bool,
     pub compute_exit_code: Option<i32>,
     pub action_result_code: Option<i32>,
-    pub total_fees: Option<u128>,
-    pub storage_fees: Option<u128>,
-    pub other_fees: Option<u128>,
+    #[serde(default)]
+    pub total_fees: u128,
+    #[serde(default)]
+    pub storage_fees: u128,
+    #[serde(default)]
+    pub other_fees: u128,
     pub in_msg_hash: Option<Hash256>,
     pub out_msg_hashes: Vec<Hash256>,
     pub block_seqno: Seqno,
@@ -260,8 +348,8 @@ pub struct TransactionInfo {
     pub in_msg: Option<MessageInfo>,
     pub out_msgs: Vec<MessageInfo>,
     pub tx_boc: BocBytes,
-    pub account_state_before: Option<AccountStatePreview>,
-    pub account_state_after: Option<AccountStatePreview>,
+    pub account_state_before: Option<AccountStateSnapshot>,
+    pub account_state_after: Option<AccountStateSnapshot>,
 }
 
 #[derive(Clone, Debug)]
@@ -279,15 +367,29 @@ pub struct EmulateTraceResult {
 }
 
 #[derive(Clone, Debug)]
-pub struct AccountStatePreview {
+pub struct AccountStateSnapshot {
     pub hash: Hash256,
     pub balance: u128,
     pub status: AccountStatus,
-    pub code_hash: Option<Hash256>,
-    pub data_hash: Option<Hash256>,
-    pub code_boc: Option<BocBytes>,
-    pub data_boc: Option<BocBytes>,
+    pub code: Option<Cell>,
+    pub data: Option<Cell>,
     pub frozen_hash: Option<Hash256>,
+}
+
+impl AccountStateSnapshot {
+    #[must_use]
+    pub fn code_hash(&self) -> Option<Hash256> {
+        self.code.as_ref().map(cell_hash)
+    }
+
+    #[must_use]
+    pub fn data_hash(&self) -> Option<Hash256> {
+        self.data.as_ref().map(cell_hash)
+    }
+}
+
+fn cell_hash(cell: &Cell) -> Hash256 {
+    Hash256::from(cell.repr_hash())
 }
 
 impl TraceNode {

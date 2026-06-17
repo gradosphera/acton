@@ -21,7 +21,7 @@ pub fn fetch_remote_library(hash: &Hash256, provider: &RemoteProvider) -> anyhow
     let api_client = TonApiClient::new(provider.network.clone(), custom_networks)?;
 
     let lib = api_client.get_library_by_hash(&HashBytes(hash.0))?;
-    let actual_hash = Hash256(*lib.repr_hash().as_array());
+    let actual_hash = Hash256::from(lib.repr_hash());
     if actual_hash != *hash {
         anyhow::bail!(
             "Remote library hash mismatch: requested {}, got {}",
@@ -65,7 +65,7 @@ pub(crate) fn account_meta_from_shard_account(
             status: AccountStatus::Nonexist,
             balance: 0,
             last_trans_lt: Some(shard_account.last_trans_lt),
-            last_trans_hash: Some(Hash256(*shard_account.last_trans_hash.as_array())),
+            last_trans_hash: Some(Hash256::from(&shard_account.last_trans_hash)),
             code_hash: None,
             data_hash: None,
             frozen_hash: None,
@@ -84,7 +84,7 @@ pub(crate) fn account_meta_from_shard_account(
         }
         AccountState::Uninit => AccountStatus::Uninit,
         AccountState::Frozen(hash) => {
-            frozen_hash = Some(Hash256(*hash.as_array()));
+            frozen_hash = Some(Hash256::from(hash));
             AccountStatus::Frozen
         }
     };
@@ -94,7 +94,7 @@ pub(crate) fn account_meta_from_shard_account(
         status,
         balance,
         last_trans_lt: Some(shard_account.last_trans_lt),
-        last_trans_hash: Some(Hash256(*shard_account.last_trans_hash.as_array())),
+        last_trans_hash: Some(Hash256::from(&shard_account.last_trans_hash)),
         code_hash,
         data_hash,
         frozen_hash,
@@ -102,7 +102,7 @@ pub(crate) fn account_meta_from_shard_account(
 }
 
 fn put_cell(cas: &mut CellStore, cell: Cell) -> Hash256 {
-    let hash = Hash256(*cell.repr_hash().as_array());
+    let hash = Hash256::from(cell.repr_hash());
     cas.put(Boc::encode(cell).into(), hash);
     hash
 }

@@ -6,7 +6,7 @@ use crate::remote::{
 };
 use crate::storage::{self, GlobalLibraryEntry, JettonMasterMeta, NftItemMeta};
 use crate::storage::{
-    AccountDelta, AccountMeta, AccountStatePreview, AccountStatus, BlockMeta, CellStore, Globals,
+    AccountDelta, AccountMeta, AccountStateSnapshot, AccountStatus, BlockMeta, CellStore, Globals,
     History, Indexes, LatestState, MessageInfo, MessagePool, MsgMeta, PendingCommit, ReverseLtKey,
     TraceNode, TransactionInfo, TxMeta,
 };
@@ -588,14 +588,14 @@ impl Node {
         let new_account_cell =
             Boc::decode(new_account_boc).context("Failed to decode new ShardAccount BOC")?;
 
-        let new_account_hash = Hash256(*new_account_cell.repr_hash().as_array());
+        let new_account_hash = Hash256::from(new_account_cell.repr_hash());
         self.cas.put(new_account_boc.clone(), new_account_hash);
 
         let new_shard_account = new_account_cell
             .parse::<ShardAccount>()
             .context("Failed to parse new ShardAccount")?;
         let account_state_cell = new_shard_account.account.inner().clone();
-        let account_state_hash = Hash256(*account_state_cell.repr_hash().as_array());
+        let account_state_hash = Hash256::from(account_state_cell.repr_hash());
         self.cas
             .put(Boc::encode(account_state_cell).into(), account_state_hash);
 
@@ -610,13 +610,13 @@ impl Node {
                 AccountState::Uninit => AccountStatus::Uninit,
                 AccountState::Active(state) => {
                     if let Some(cell) = state.code {
-                        let ch = Hash256(*cell.repr_hash().as_array());
+                        let ch = Hash256::from(cell.repr_hash());
                         let boc = Boc::encode(cell);
                         self.cas.put(boc.into(), ch);
                         code_hash = Some(ch);
                     }
                     if let Some(cell) = state.data {
-                        let dh = Hash256(*cell.repr_hash().as_array());
+                        let dh = Hash256::from(cell.repr_hash());
                         let boc = Boc::encode(cell);
                         self.cas.put(boc.into(), dh);
                         data_hash = Some(dh);
@@ -632,7 +632,7 @@ impl Node {
 
         let mut out_msg_hashes = Vec::new();
         for out_cell in &exec_result.out_msg_cells {
-            let h = Hash256(*out_cell.repr_hash().as_array());
+            let h = Hash256::from(out_cell.repr_hash());
             let out_boc = BocBytes::from(Boc::encode(out_cell.clone()));
             self.cas.put(out_boc, h);
             out_msg_hashes.push(h);
@@ -664,9 +664,9 @@ impl Node {
             success: compute_exit_code == Some(0) && action_result_code == Some(0),
             compute_exit_code,
             action_result_code,
-            total_fees: Some(total_fees),
-            storage_fees: Some(storage_fees),
-            other_fees: Some(other_fees),
+            total_fees,
+            storage_fees,
+            other_fees,
             in_msg_hash: Some(msg_hash),
             out_msg_hashes: out_msg_hashes.clone(),
             block_seqno: seqno,
@@ -812,7 +812,7 @@ impl Node {
             let lib_cell = Boc::decode(&entry.lib_boc).with_context(|| {
                 format!("Failed to decode stored library BOC {}", hash.to_hex())
             })?;
-            let actual_hash = Hash256(*lib_cell.repr_hash().as_array());
+            let actual_hash = Hash256::from(lib_cell.repr_hash());
             if actual_hash != *hash {
                 anyhow::bail!(
                     "Stored global library hash mismatch for {}: got {}",
@@ -886,7 +886,7 @@ impl Node {
                     }
                 }
                 (_, Some(new_lib)) => {
-                    let new_hash = Hash256(*new_lib.repr_hash().as_array());
+                    let new_hash = Hash256::from(new_lib.repr_hash());
                     if new_hash != hash {
                         anyhow::bail!(
                             "Public library hash mismatch in account {}: dict key {} != library hash {}",
@@ -908,7 +908,7 @@ impl Node {
                                 last_seen_lt: lt,
                             });
                     let stored_cell = Boc::decode(&entry.lib_boc)?;
-                    let stored_hash = Hash256(*stored_cell.repr_hash().as_array());
+                    let stored_hash = Hash256::from(stored_cell.repr_hash());
                     if stored_hash != hash {
                         anyhow::bail!(
                             "Global library store is corrupted for {} (stored hash {})",
@@ -1097,7 +1097,7 @@ impl Node {
         hashes: &mut HashSet<Hash256>,
         visited: &mut HashSet<Hash256>,
     ) -> anyhow::Result<()> {
-        if !visited.insert(Hash256(*cell.repr_hash().as_array())) {
+        if !visited.insert(Hash256::from(cell.repr_hash())) {
             return Ok(());
         }
 
@@ -1136,8 +1136,8 @@ impl Node {
         for item in state_init.libraries.iter() {
             let (key_hash, simple_lib) =
                 item.context("Failed to read account library dictionary")?;
-            let key_hash = Hash256(key_hash.0);
-            let root_hash = Hash256(*simple_lib.root.repr_hash().as_array());
+            let key_hash = Hash256::from(key_hash);
+            let root_hash = Hash256::from(simple_lib.root.repr_hash());
             if root_hash != key_hash {
                 anyhow::bail!(
                     "Malformed account library entry: key {} != root hash {}",
@@ -1419,6 +1419,13 @@ impl Node {
         Some(self.transaction_info_from_meta(tx))
     }
 
+    fn get_rich_transaction_by_hash(&self, hash: &Hash256) -> Option<TransactionInfo> {
+        let tx = self.history.tx_by_hash.get(hash).cloned()?;
+        Some(self.rich_transaction_info_from_meta(tx))
+    }
+
+    /// Fast transaction view used by list-style endpoints. It intentionally skips
+    /// account state snapshots because finding them may scan the whole CAS.
     fn transaction_info_from_meta(&self, tx: TxMeta) -> TransactionInfo {
         let in_msg = tx.in_msg_hash.and_then(|h| self.get_message_info(&h));
         let out_msgs = tx
@@ -1427,24 +1434,34 @@ impl Node {
             .filter_map(|h| self.get_message_info(h))
             .collect();
         let tx_boc = self.get_cell(&tx.tx_hash).unwrap_or_default();
-        let (account_state_before, account_state_after) =
-            self.transaction_account_state_previews(&tx_boc);
         TransactionInfo {
             meta: tx,
             in_msg,
             out_msgs,
             tx_boc,
-            account_state_before,
-            account_state_after,
+            account_state_before: None,
+            account_state_after: None,
         }
     }
 
-    fn transaction_account_state_previews(
+    /// Rich transaction view used by traces. Traces need full before/after account
+    /// states, so this path pays the extra parsing and CAS lookup cost explicitly.
+    fn rich_transaction_info_from_meta(&self, tx: TxMeta) -> TransactionInfo {
+        let mut info = self.transaction_info_from_meta(tx);
+        (info.account_state_before, info.account_state_after) =
+            self.transaction_account_state_snapshots(&info.meta.tx_hash, &info.tx_boc);
+        info
+    }
+
+    fn transaction_account_state_snapshots(
         &self,
+        tx_hash: &Hash256,
         tx_boc: &BocBytes,
-    ) -> (Option<AccountStatePreview>, Option<AccountStatePreview>) {
-        let Some(state_update) = Boc::decode(tx_boc)
-            .ok()
+    ) -> (Option<AccountStateSnapshot>, Option<AccountStateSnapshot>) {
+        let Some(state_update) = self
+            .cas
+            .get_cell(tx_hash)
+            .or_else(|| Boc::decode(tx_boc).ok())
             .and_then(|cell| cell.parse::<tycho_types::models::Transaction>().ok())
             .and_then(|tx| tx.state_update.load().ok())
         else {
@@ -1452,21 +1469,21 @@ impl Node {
         };
 
         (
-            self.find_account_state_preview(&Hash256(*state_update.old.as_array())),
-            self.find_account_state_preview(&Hash256(*state_update.new.as_array())),
+            self.find_account_state_snapshot(&Hash256::from(&state_update.old)),
+            self.find_account_state_snapshot(&Hash256::from(&state_update.new)),
         )
     }
 
-    fn find_account_state_preview(&self, state_hash: &Hash256) -> Option<AccountStatePreview> {
-        if let Some(boc) = self.cas.get(state_hash)
-            && let Some(preview) = account_state_preview_from_boc(&boc)
+    fn find_account_state_snapshot(&self, state_hash: &Hash256) -> Option<AccountStateSnapshot> {
+        if let Some(cell) = self.cas.get_cell(state_hash)
+            && let Some(snapshot) = account_state_snapshot_from_cell(&cell)
         {
-            return Some(preview);
+            return Some(snapshot);
         }
 
-        self.cas.values().into_iter().find_map(|boc| {
-            let preview = account_state_preview_from_boc(&boc)?;
-            (preview.hash == *state_hash).then_some(preview)
+        self.cas.find_map_cell(|cell| {
+            let snapshot = account_state_snapshot_from_cell(cell)?;
+            (snapshot.hash == *state_hash).then_some(snapshot)
         })
     }
 
@@ -1566,7 +1583,7 @@ impl Node {
             return None;
         }
 
-        let tx_info = self.get_transaction_by_hash(tx_hash)?;
+        let tx_info = self.get_rich_transaction_by_hash(tx_hash)?;
         let mut children = Vec::new();
 
         for out_msg in &tx_info.meta.out_msg_hashes {
@@ -1722,7 +1739,7 @@ impl Node {
         let mut out_msg_hashes = Vec::new();
         let mut out_msgs = Vec::new();
         for out_cell in &exec_result.out_msg_cells {
-            let out_hash = Hash256(*out_cell.repr_hash().as_array());
+            let out_hash = Hash256::from(out_cell.repr_hash());
             out_msg_hashes.push(out_hash);
             let out_meta = parse_msg_meta_from_cell(out_cell, out_hash)?;
             let out_boc = BocBytes::from(Boc::encode(out_cell.clone()));
@@ -1754,9 +1771,9 @@ impl Node {
             success: compute_exit_code == Some(0) && action_result_code == Some(0),
             compute_exit_code,
             action_result_code,
-            total_fees: Some(total_fees),
-            storage_fees: Some(storage_fees),
-            other_fees: Some(other_fees),
+            total_fees,
+            storage_fees,
+            other_fees,
             in_msg_hash: Some(msg_hash),
             out_msg_hashes,
             block_seqno,
@@ -1778,8 +1795,8 @@ impl Node {
                     }),
                     out_msgs,
                     tx_boc: exec_result.tx_boc,
-                    account_state_before: account_state_preview_from_boc(&shard_account_boc),
-                    account_state_after: account_state_preview_from_boc(
+                    account_state_before: account_state_snapshot_from_boc(&shard_account_boc),
+                    account_state_after: account_state_snapshot_from_boc(
                         &exec_result.new_account_boc,
                     ),
                 },
@@ -1985,53 +2002,57 @@ fn store_account_state_cell_from_shard_account_boc(
     let cell = Boc::decode(shard_account_boc).ok()?;
     let shard_account = cell.parse::<ShardAccount>().ok()?;
     let account_cell = shard_account.account.inner().clone();
-    let hash = Hash256(*account_cell.repr_hash().as_array());
+    let hash = Hash256::from(account_cell.repr_hash());
     cas.put(Boc::encode(account_cell).into(), hash);
     Some(hash)
 }
 
-fn account_state_preview_from_boc(boc: &BocBytes) -> Option<AccountStatePreview> {
+fn account_state_snapshot_from_boc(boc: &BocBytes) -> Option<AccountStateSnapshot> {
     let cell = Boc::decode(boc).ok()?;
-
-    if let Ok(shard_account) = cell.parse::<ShardAccount>() {
-        return account_state_preview_from_optional_account_cell(shard_account.account.inner());
-    }
-
-    account_state_preview_from_optional_account_cell(&cell)
+    account_state_snapshot_from_cell(&cell)
 }
 
-fn account_state_preview_from_optional_account_cell(cell: &Cell) -> Option<AccountStatePreview> {
-    let hash = Hash256(*cell.repr_hash().as_array());
+fn account_state_snapshot_from_cell(cell: &Cell) -> Option<AccountStateSnapshot> {
+    if let Ok(shard_account) = cell.parse::<ShardAccount>() {
+        let hash = Hash256::from(shard_account.account.inner().repr_hash());
+        let optional_account = shard_account.account.load().ok()?;
+        return Some(account_state_snapshot_from_optional_account(
+            hash,
+            optional_account,
+        ));
+    }
+
+    let hash = Hash256::from(cell.repr_hash());
     let optional_account = cell.parse::<OptionalAccount>().ok()?;
+    Some(account_state_snapshot_from_optional_account(
+        hash,
+        optional_account,
+    ))
+}
+
+fn account_state_snapshot_from_optional_account(
+    hash: Hash256,
+    optional_account: OptionalAccount,
+) -> AccountStateSnapshot {
     let Some(account) = optional_account.0 else {
-        return Some(AccountStatePreview {
+        return AccountStateSnapshot {
             hash,
             balance: 0,
             status: AccountStatus::Nonexist,
-            code_hash: None,
-            data_hash: None,
-            code_boc: None,
-            data_boc: None,
+            code: None,
+            data: None,
             frozen_hash: None,
-        });
+        };
     };
 
-    let mut code_hash = None;
-    let mut data_hash = None;
-    let mut code_boc = None;
-    let mut data_boc = None;
+    let mut code = None;
+    let mut data = None;
     let mut frozen_hash = None;
     let status = match account.state {
         AccountState::Uninit => AccountStatus::Uninit,
         AccountState::Active(state) => {
-            if let Some(cell) = state.code {
-                code_hash = Some(Hash256(*cell.repr_hash().as_array()));
-                code_boc = Some(Boc::encode(cell).into());
-            }
-            if let Some(cell) = state.data {
-                data_hash = Some(Hash256(*cell.repr_hash().as_array()));
-                data_boc = Some(Boc::encode(cell).into());
-            }
+            code = state.code;
+            data = state.data;
             AccountStatus::Active
         }
         AccountState::Frozen(state) => {
@@ -2040,16 +2061,14 @@ fn account_state_preview_from_optional_account_cell(cell: &Cell) -> Option<Accou
         }
     };
 
-    Some(AccountStatePreview {
+    AccountStateSnapshot {
         hash,
         balance: account.balance.tokens.into(),
         status,
-        code_hash,
-        data_hash,
-        code_boc,
-        data_boc,
+        code,
+        data,
         frozen_hash,
-    })
+    }
 }
 
 fn collect_code_data_cells(
@@ -2078,14 +2097,14 @@ fn collect_code_data_cells(
     };
 
     if let Some(code) = state.code {
-        let hash = Hash256(*code.repr_hash().as_array());
+        let hash = Hash256::from(code.repr_hash());
         code_cells
             .entry(hash)
             .or_insert_with(|| Boc::encode(code).into());
     }
 
     if let Some(data) = state.data {
-        let hash = Hash256(*data.repr_hash().as_array());
+        let hash = Hash256::from(data.repr_hash());
         data_cells
             .entry(hash)
             .or_insert_with(|| Boc::encode(data).into());
@@ -2445,9 +2464,9 @@ mod tests {
             success: true,
             compute_exit_code: Some(0),
             action_result_code: Some(0),
-            total_fees: Some(0),
-            storage_fees: Some(0),
-            other_fees: Some(0),
+            total_fees: 0,
+            storage_fees: 0,
+            other_fees: 0,
             in_msg_hash: Some(in_msg_hash),
             out_msg_hashes: vec![out_msg_hash],
             block_seqno: 1,
@@ -2557,9 +2576,9 @@ mod tests {
                 success: true,
                 compute_exit_code: Some(0),
                 action_result_code: Some(0),
-                total_fees: Some(0),
-                storage_fees: Some(0),
-                other_fees: Some(0),
+                total_fees: 0,
+                storage_fees: 0,
+                other_fees: 0,
                 in_msg_hash: None,
                 out_msg_hashes: vec![out_msg_hash],
                 block_seqno: 1,
@@ -2761,16 +2780,14 @@ mod tests {
         let shard_account = cell
             .parse::<ShardAccount>()
             .expect("shard account BOC must parse");
-        Hash256(*shard_account.account.inner().repr_hash().as_array())
+        Hash256::from(shard_account.account.inner().repr_hash())
     }
 
     #[test]
-    fn account_state_preview_uses_account_state_hash_and_balance() {
+    fn account_state_snapshot_uses_account_state_hash_and_balance() {
         let account = test_addr(0x21);
         let code = make_lib_root(0xc0de);
         let data = make_lib_root(0xda7a);
-        let code_boc = Boc::encode(code.clone()).into();
-        let data_boc = Boc::encode(data.clone()).into();
         let boc = make_active_shard_account_boc_with_state(
             account,
             Some(code.clone()),
@@ -2779,28 +2796,22 @@ mod tests {
             12_345_678,
         );
 
-        let preview = account_state_preview_from_boc(&boc).expect("preview must parse");
+        let snapshot = account_state_snapshot_from_boc(&boc).expect("snapshot must parse");
 
         assert_eq!(
-            preview.hash,
+            snapshot.hash,
             account_state_hash_from_shard_account_boc(&boc)
         );
-        assert_eq!(preview.balance, 12_345_678);
-        assert_eq!(preview.status, AccountStatus::Active);
-        assert_eq!(
-            preview.code_hash,
-            Some(Hash256(*code.repr_hash().as_array()))
-        );
-        assert_eq!(
-            preview.data_hash,
-            Some(Hash256(*data.repr_hash().as_array()))
-        );
-        assert_eq!(preview.code_boc, Some(code_boc));
-        assert_eq!(preview.data_boc, Some(data_boc));
+        assert_eq!(snapshot.balance, 12_345_678);
+        assert_eq!(snapshot.status, AccountStatus::Active);
+        assert_eq!(snapshot.code_hash(), Some(Hash256::from(code.repr_hash())));
+        assert_eq!(snapshot.data_hash(), Some(Hash256::from(data.repr_hash())));
+        assert_eq!(snapshot.code.as_ref(), Some(&code));
+        assert_eq!(snapshot.data.as_ref(), Some(&data));
     }
 
     #[test]
-    fn account_state_preview_lookup_scans_shard_account_bocs_by_account_state_hash() {
+    fn account_state_snapshot_lookup_scans_shard_account_bocs_by_account_state_hash() {
         let mut node = make_test_node(Box::new(NoopExecutor));
         let account = test_addr(0x22);
         let boc =
@@ -2808,12 +2819,12 @@ mod tests {
         let shard_hash = boc.hash().expect("shard account BOC must hash");
         node.cas.put(boc.clone(), shard_hash);
 
-        let preview = node
-            .find_account_state_preview(&account_state_hash_from_shard_account_boc(&boc))
-            .expect("preview must be found by account state hash");
+        let snapshot = node
+            .find_account_state_snapshot(&account_state_hash_from_shard_account_boc(&boc))
+            .expect("snapshot must be found by account state hash");
 
-        assert_eq!(preview.balance, 777_000);
-        assert_eq!(preview.status, AccountStatus::Active);
+        assert_eq!(snapshot.balance, 777_000);
+        assert_eq!(snapshot.status, AccountStatus::Active);
     }
 
     #[test]
@@ -2946,9 +2957,9 @@ mod tests {
             success: true,
             compute_exit_code: Some(0),
             action_result_code: Some(0),
-            total_fees: Some(0),
-            storage_fees: Some(0),
-            other_fees: Some(0),
+            total_fees: 0,
+            storage_fees: 0,
+            other_fees: 0,
             in_msg_hash: Some(external_msg_hash),
             out_msg_hashes: vec![internal_msg_hash],
             block_seqno: 1,
@@ -2961,9 +2972,9 @@ mod tests {
             success: true,
             compute_exit_code: Some(0),
             action_result_code: Some(0),
-            total_fees: Some(0),
-            storage_fees: Some(0),
-            other_fees: Some(0),
+            total_fees: 0,
+            storage_fees: 0,
+            other_fees: 0,
             in_msg_hash: Some(internal_msg_hash),
             out_msg_hashes: Vec::new(),
             block_seqno: 1,
@@ -3209,7 +3220,7 @@ mod tests {
         )
         .expect("must update library diff");
 
-        let entry = found_library_entry(&node, Hash256(hash.0))
+        let entry = found_library_entry(&node, Hash256::from(&hash))
             .expect("public library must appear globally");
         assert!(
             entry.publishers.contains(&account_a),
@@ -3222,7 +3233,7 @@ mod tests {
         let mut node = make_test_node(Box::new(NoopExecutor));
         let account = test_addr(0x21);
         let library = make_lib_root(21);
-        let hash = Hash256(*library.repr_hash().as_array());
+        let hash = Hash256::from(library.repr_hash());
         node.cas.put(Boc::encode(library.clone()).into(), hash);
 
         let code_ref = CellBuilder::build_library(&HashBytes(hash.0));
@@ -3242,7 +3253,7 @@ mod tests {
         let mut node = make_test_node(Box::new(NoopExecutor));
         let account = test_addr(0x25);
         let library = make_lib_root(25);
-        let hash = Hash256(*library.repr_hash().as_array());
+        let hash = Hash256::from(library.repr_hash());
         node.cas.put(Boc::encode(library.clone()).into(), hash);
 
         let code_ref = CellBuilder::build_library(&HashBytes(hash.0));
@@ -3262,7 +3273,7 @@ mod tests {
         let mut node = make_test_node(Box::new(NoopExecutor));
         let account = test_addr(0x26);
         let library = make_lib_root(26);
-        let hash = Hash256(*library.repr_hash().as_array());
+        let hash = Hash256::from(library.repr_hash());
         node.cas.put(Boc::encode(library.clone()).into(), hash);
 
         let code_ref = CellBuilder::build_library(&HashBytes(hash.0));
@@ -3292,7 +3303,7 @@ mod tests {
         let account = test_addr(0x24);
 
         let nested = make_lib_root(24);
-        let nested_hash = Hash256(*nested.repr_hash().as_array());
+        let nested_hash = Hash256::from(nested.repr_hash());
         node.cas.put(Boc::encode(nested).into(), nested_hash);
 
         let nested_ref = CellBuilder::build_library(&HashBytes(nested_hash.0));
@@ -3302,7 +3313,7 @@ mod tests {
             .store_reference(nested_ref)
             .expect("must store nested library ref");
         let parent = parent_builder.build().expect("must build parent library");
-        let parent_hash = Hash256(*parent.repr_hash().as_array());
+        let parent_hash = Hash256::from(parent.repr_hash());
         node.cas.put(Boc::encode(parent).into(), parent_hash);
 
         let code_ref = CellBuilder::build_library(&HashBytes(parent_hash.0));
@@ -3327,7 +3338,7 @@ mod tests {
         let mut node = make_test_node(Box::new(NoopExecutor));
         let account = test_addr(0x23);
         let library = make_lib_root(23);
-        let hash = Hash256(*library.repr_hash().as_array());
+        let hash = Hash256::from(library.repr_hash());
         node.cas.put(Boc::encode(library.clone()).into(), hash);
 
         let code_ref = CellBuilder::build_library(&HashBytes(hash.0));
@@ -3386,7 +3397,7 @@ mod tests {
         )
         .expect("must add publisher B");
 
-        let entry = found_library_entry(&node, Hash256(hash.0))
+        let entry = found_library_entry(&node, Hash256::from(&hash))
             .expect("library hash must have one global entry");
         assert_eq!(entry.publishers.len(), 2, "must have 2 publishers");
         assert!(entry.publishers.contains(&account_a));
@@ -3429,7 +3440,7 @@ mod tests {
         )
         .expect("must remove publisher A");
 
-        let entry = found_library_entry(&node, Hash256(hash.0))
+        let entry = found_library_entry(&node, Hash256::from(&hash))
             .expect("entry must remain while publisher B exists");
         assert_eq!(entry.publishers.len(), 1);
         assert!(entry.publishers.contains(&account_b));
@@ -3480,7 +3491,7 @@ mod tests {
         .expect("must remove publisher B");
 
         assert!(
-            found_library_entry(&node, Hash256(hash.0)).is_none(),
+            found_library_entry(&node, Hash256::from(&hash)).is_none(),
             "entry must be deleted when last publisher is removed"
         );
     }
@@ -3525,7 +3536,7 @@ mod tests {
             .unwrap_or_else(|e| panic!("state transition {name} failed: {e}"));
 
             assert!(
-                found_library_entry(&node, Hash256(hash.0)).is_none(),
+                found_library_entry(&node, Hash256::from(&hash)).is_none(),
                 "state transition {name} must clear published library"
             );
         }
@@ -3555,7 +3566,7 @@ mod tests {
         .expect("nonexist transition must be processed");
 
         assert!(
-            found_library_entry(&node, Hash256(hash.0)).is_none(),
+            found_library_entry(&node, Hash256::from(&hash)).is_none(),
             "nonexist transition must clear published library"
         );
     }
@@ -3584,7 +3595,7 @@ mod tests {
         .expect("must index from final state");
 
         assert!(
-            found_library_entry(&node, Hash256(hash.0)).is_some(),
+            found_library_entry(&node, Hash256::from(&hash)).is_some(),
             "final state with public library must be indexed"
         );
     }
@@ -3607,7 +3618,7 @@ mod tests {
         )
         .expect("unchanged public library must still be indexed");
 
-        let entry = found_library_entry(&node, Hash256(hash.0))
+        let entry = found_library_entry(&node, Hash256::from(&hash))
             .expect("unchanged public library must be visible");
         assert!(
             entry.publishers.contains(&account),
@@ -3633,7 +3644,7 @@ mod tests {
         let library =
             Boc::decode_base64(USDT_WALLET_LIBRARY_B64).expect("USDT wallet library must decode");
 
-        let library_hash = Hash256(*library.repr_hash().as_array());
+        let library_hash = Hash256::from(library.repr_hash());
         assert_eq!(
             library_hash.to_hex().to_uppercase(),
             "8F452D7A4DFD74066B682365177259ED05734435BE76B5FD4BD5D8AF2B7C3D68"
@@ -3649,9 +3660,9 @@ mod tests {
             },
         );
 
-        let code_hash = Hash256(*code.repr_hash().as_array());
+        let code_hash = Hash256::from(code.repr_hash());
         node.cas.put(Boc::encode(code.clone()).into(), code_hash);
-        let data_hash = Hash256(*data.repr_hash().as_array());
+        let data_hash = Hash256::from(data.repr_hash());
         node.cas.put(Boc::encode(data.clone()).into(), data_hash);
         let account_boc = make_active_shard_account_boc_with_state(
             wallet_address,
@@ -3800,7 +3811,7 @@ mod tests {
 
         let destination = test_addr(0xF1);
         let library = make_lib_root(18);
-        let hash = Hash256(*library.repr_hash().as_array());
+        let hash = Hash256::from(library.repr_hash());
         node.cas.put(Boc::encode(library).into(), hash);
 
         let code_ref = CellBuilder::build_library(&HashBytes(hash.0));
@@ -3885,7 +3896,7 @@ mod tests {
         )
         .expect("private transition must succeed");
         assert!(
-            found_library_entry(&node, Hash256(hash.0)).is_none(),
+            found_library_entry(&node, Hash256::from(&hash)).is_none(),
             "private library must stay hidden"
         );
 
@@ -3897,7 +3908,7 @@ mod tests {
         )
         .expect("public transition must succeed");
         assert!(
-            found_library_entry(&node, Hash256(hash.0)).is_some(),
+            found_library_entry(&node, Hash256::from(&hash)).is_some(),
             "public transition must expose library"
         );
     }
@@ -3927,7 +3938,7 @@ mod tests {
             .expect("rollback-like noop for B must succeed");
 
         assert!(
-            found_library_entry(&node, Hash256(hash_a.0)).is_some(),
+            found_library_entry(&node, Hash256::from(&hash_a)).is_some(),
             "unrelated noop update must not affect existing global library"
         );
     }
@@ -3978,7 +3989,8 @@ mod tests {
             .expect("must index libraries");
 
         let missing = Hash256([0xEE; 32]);
-        let entries = node.get_libraries(&[missing, Hash256(hash_b.0), Hash256(hash_a.0)]);
+        let entries =
+            node.get_libraries(&[missing, Hash256::from(&hash_b), Hash256::from(&hash_a)]);
         assert_eq!(entries.len(), 3);
         assert!(
             entries[0].is_none(),
@@ -3986,11 +3998,11 @@ mod tests {
         );
         assert_eq!(
             entries[1].as_ref().map(|entry| entry.hash),
-            Some(Hash256(hash_b.0))
+            Some(Hash256::from(&hash_b))
         );
         assert_eq!(
             entries[2].as_ref().map(|entry| entry.hash),
-            Some(Hash256(hash_a.0))
+            Some(Hash256::from(&hash_a))
         );
     }
 
@@ -4046,7 +4058,7 @@ mod tests {
 
         node.rebuild_global_libraries_from_accounts()
             .expect("must rebuild global libraries from accounts");
-        let entry = found_library_entry(&node, Hash256(lib_hash.0))
+        let entry = found_library_entry(&node, Hash256::from(&lib_hash))
             .expect("shared public library must be present");
         assert_eq!(
             entry.first_seen_lt, 5,

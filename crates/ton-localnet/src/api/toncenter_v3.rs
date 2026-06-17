@@ -3,7 +3,7 @@ use crate::localnet::{
     LocalnetRunGetMethodResult, LocalnetTransaction, convert_to_message_struct,
 };
 use crate::storage::{
-    AccountStatePreview, AccountStatus, EmulateTraceResult, JettonMasterMeta, JettonWalletMeta,
+    AccountStateSnapshot, AccountStatus, EmulateTraceResult, JettonMasterMeta, JettonWalletMeta,
     MessageInfo, MsgMeta, NftItemMeta, TraceNode, TransactionInfo,
 };
 use crate::types::{Addr, BocBytes, Hash256};
@@ -368,7 +368,7 @@ fn map_v3_message(
 
 fn hash_boc_base64(boc: &BocBytes) -> Option<String> {
     let cell = Boc::decode(boc).ok()?;
-    Some(Hash256(*cell.repr_hash().as_array()).to_base64())
+    Some(Hash256::from(cell.repr_hash()).to_base64())
 }
 
 fn map_jetton_wallet(w: &JettonWalletMeta) -> Value {
@@ -811,7 +811,7 @@ fn map_transaction(tx: &TransactionInfo, emulated: bool) -> Value {
         "now": tx.meta.now,
         "orig_status": tx_details.orig_status,
         "end_status": tx_details.end_status,
-        "total_fees": tx.meta.total_fees.unwrap_or(0).to_string(),
+        "total_fees": tx.meta.total_fees.to_string(),
         "total_fees_extra_currencies": {},
         "prev_trans_hash": tx_details.prev_trans_hash,
         "prev_trans_lt": tx_details.prev_trans_lt,
@@ -823,7 +823,7 @@ fn map_transaction(tx: &TransactionInfo, emulated: bool) -> Value {
             "is_tock": false,
             "installed": false,
             "storage_ph": tx_details.storage_phase.unwrap_or_else(|| {
-                default_storage_phase(tx.meta.storage_fees.unwrap_or(0))
+                default_storage_phase(tx.meta.storage_fees)
             }),
             "compute_ph": tx_details.compute_phase.unwrap_or_else(|| {
                 default_compute_phase(
@@ -1111,36 +1111,44 @@ const fn map_compute_skip_reason(reason: ComputePhaseSkipReason) -> &'static str
 }
 
 fn map_transaction_account_state(
-    preview: Option<&AccountStatePreview>,
+    snapshot: Option<&AccountStateSnapshot>,
     fallback_hash: &str,
     fallback_status: &str,
 ) -> Value {
-    if let Some(preview) = preview {
+    if let Some(snapshot) = snapshot {
+        let data_hash = snapshot.data_hash();
+        let code_hash = snapshot.code_hash();
         let mut value = map_emulation_account_state(
             fallback_hash,
-            &preview.balance.to_string(),
-            map_account_state_status(&preview.status),
-            preview.frozen_hash.as_ref(),
-            preview.data_hash.as_ref(),
-            preview.code_hash.as_ref(),
+            &snapshot.balance.to_string(),
+            map_account_state_status(&snapshot.status),
+            snapshot.frozen_hash.as_ref(),
+            data_hash.as_ref(),
+            code_hash.as_ref(),
         );
-        insert_account_state_bocs(&mut value, preview);
+        insert_account_state_bocs(&mut value, snapshot);
         return value;
     }
 
     map_emulation_account_state(fallback_hash, "0", fallback_status, None, None, None)
 }
 
-fn insert_account_state_bocs(value: &mut Value, preview: &AccountStatePreview) {
+fn insert_account_state_bocs(value: &mut Value, snapshot: &AccountStateSnapshot) {
     let Some(mapped) = value.as_object_mut() else {
         return;
     };
 
-    if let Some(code_boc) = &preview.code_boc {
-        mapped.insert("code_boc".to_string(), Value::String(code_boc.to_base64()));
+    if let Some(code) = &snapshot.code {
+        mapped.insert(
+            "code_boc".to_string(),
+            Value::String(Boc::encode_base64(code)),
+        );
     }
-    if let Some(data_boc) = &preview.data_boc {
-        mapped.insert("data_boc".to_string(), Value::String(data_boc.to_base64()));
+    if let Some(data) = &snapshot.data {
+        mapped.insert(
+            "data_boc".to_string(),
+            Value::String(Boc::encode_base64(data)),
+        );
     }
 }
 
@@ -1164,7 +1172,7 @@ fn map_emulation_account_state(
 }
 
 fn hash_bytes_base64(hash: &HashBytes) -> String {
-    Hash256(*hash.as_array()).to_base64()
+    Hash256::from(hash).to_base64()
 }
 
 const fn map_tycho_account_status(status: tycho_types::models::AccountStatus) -> &'static str {

@@ -24,7 +24,7 @@ impl BocBytes {
 
     pub fn hash(&self) -> anyhow::Result<Hash256> {
         let cell = Boc::decode(self)?;
-        Ok(Hash256(*cell.repr_hash().as_array()))
+        Ok(Hash256::from(cell.repr_hash()))
     }
 }
 
@@ -126,6 +126,18 @@ impl Hash256 {
     #[must_use]
     pub fn to_base64(&self) -> String {
         base64::engine::general_purpose::STANDARD.encode(self.0)
+    }
+}
+
+impl From<HashBytes> for Hash256 {
+    fn from(value: HashBytes) -> Self {
+        Self(value.0)
+    }
+}
+
+impl From<&HashBytes> for Hash256 {
+    fn from(value: &HashBytes) -> Self {
+        Self(*value.as_array())
     }
 }
 

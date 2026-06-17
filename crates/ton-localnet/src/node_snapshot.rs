@@ -5,9 +5,10 @@ use crate::storage::{
 };
 use crate::types::{Addr, BocBytes, Hash256, Lt, Seqno};
 use core::cmp;
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 use std::fs::File;
 use std::io::{BufReader, BufWriter};
 use std::path::Path;
@@ -231,13 +232,14 @@ impl Node {
         let cas_by_hash = snapshot
             .cas_entries
             .into_iter()
-            .collect::<HashMap<Hash256, BocBytes>>();
+            .collect::<FxHashMap<Hash256, BocBytes>>();
 
         if self.conn.is_some() {
             self.cas.boc_by_hash.clear();
         } else {
             self.cas.boc_by_hash = cas_by_hash;
         }
+        self.cas.clear_cell_cache();
 
         self.latest.accounts = snapshot.latest_accounts.into_iter().collect();
         self.history.blocks = snapshot.history_blocks;
