@@ -2,11 +2,13 @@ import {Cell} from "@ton/core"
 
 import type {ExtendedContractABI} from "./compilerAbi"
 import type {
+  AccountStateTokenInfo,
   AccountStatesResponse,
   ApiResponse,
   FullAccountState,
   ApiCallLogResponse,
   JettonMaster,
+  JettonMasterMetadata,
   JettonWallet,
   JettonWalletData,
   LocalnetNodeInfo,
@@ -39,6 +41,63 @@ interface FaucetResponse {
 
 interface SendInternalMessageResponse {
   readonly hash: string
+}
+
+type JettonWalletMetadata = Record<
+  string,
+  {
+    readonly token_info?: readonly AccountStateTokenInfo[]
+  }
+>
+
+interface JettonWalletsResponse {
+  readonly jetton_wallets: JettonWallet[]
+  readonly metadata?: JettonWalletMetadata
+}
+
+const JETTON_CONTENT_KEYS = ["uri", "name", "description", "image", "symbol", "decimals"] as const
+
+function jettonMasterMetadataFromWalletResponse(
+  jettonAddress: string,
+  metadata: JettonWalletMetadata | undefined,
+): JettonMasterMetadata | undefined {
+  const tokenInfo = metadata?.[jettonAddress]?.token_info?.find(
+    info => info.type === "jetton_masters",
+  )
+  if (!tokenInfo) {
+    return undefined
+  }
+
+  const extra = isRecord(tokenInfo.extra) ? tokenInfo.extra : {}
+  const jettonContent: Record<string, unknown> = {...extra}
+  for (const key of JETTON_CONTENT_KEYS) {
+    const value = stringValue(tokenInfo[key]) ?? stringValue(extra[key])
+    if (value) {
+      jettonContent[key] = value
+    }
+  }
+
+  const totalSupply = stringValue(tokenInfo.total_supply) ?? stringValue(extra.total_supply)
+  const mintable = booleanValue(tokenInfo.mintable) ?? booleanValue(extra.mintable)
+
+  return {
+    address: jettonAddress,
+    jetton_content: jettonContent,
+    ...(totalSupply ? {total_supply: totalSupply} : undefined),
+    ...(mintable === undefined ? undefined : {mintable}),
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined
+}
+
+function booleanValue(value: unknown): boolean | undefined {
+  return typeof value === "boolean" ? value : undefined
 }
 
 interface TransactionStreamHandlers {
@@ -109,10 +168,9 @@ export class TonClient {
           const singleUrl = this.buildUrl(this.v3BaseUrl, "/jetton/masters")
           singleUrl.searchParams.append("address", addr)
           try {
-            const response = await this.request<{jetton_masters: JettonMaster[]}>(
-              singleUrl,
-              "Failed to fetch jetton master",
-            )
+            const response = await this.request<{
+              jetton_masters: JettonMaster[]
+            }>(singleUrl, "Failed to fetch jetton master")
             return response.jetton_masters
           } catch (error) {
             console.error(`Failed to fetch jetton master for ${addr}`, error)
@@ -203,11 +261,13 @@ export class TonClient {
         const url = this.buildUrl(this.v3BaseUrl, "/jetton/wallets")
         url.searchParams.append(paramName, addr)
         try {
-          const response = await this.request<{jetton_wallets: JettonWallet[]}>(
+          const response = await this.request<JettonWalletsResponse>(
             url,
             "Failed to fetch jetton wallets",
           )
-          return response.jetton_wallets
+          return response.jetton_wallets.map(wallet =>
+            this.attachJettonWalletMaster(wallet, response.metadata),
+          )
         } catch (error) {
           console.error(`Failed to fetch jetton wallets for ${addr}`, error)
           return []
@@ -428,7 +488,11 @@ export class TonClient {
     return response.hash
   }
 
-  getEndpoints(): {readonly apiV2: string; readonly apiV3: string; readonly admin: string} {
+  getEndpoints(): {
+    readonly apiV2: string
+    readonly apiV3: string
+    readonly admin: string
+  } {
     return {
       apiV2: this.buildUrl(this.v2BaseUrl, "").toString().replace(/\/$/, ""),
       apiV3: this.buildUrl(this.v3BaseUrl, "").toString().replace(/\/$/, ""),
@@ -548,6 +612,14 @@ export class TonClient {
       processLine(buffer)
     }
     dispatch()
+  }
+
+  private attachJettonWalletMaster(
+    wallet: JettonWallet,
+    metadata: JettonWalletMetadata | undefined,
+  ): JettonWallet {
+    const master = wallet.master ?? jettonMasterMetadataFromWalletResponse(wallet.jetton, metadata)
+    return master ? {...wallet, master} : wallet
   }
 
   private async request<T>(url: URL, errorMessage: string, options?: RequestInit): Promise<T> {

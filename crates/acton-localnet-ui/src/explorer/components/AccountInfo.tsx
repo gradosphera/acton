@@ -5,8 +5,8 @@ import {useCallback, useEffect, useId, useLayoutEffect, useRef, useState} from "
 import {createPortal} from "react-dom"
 import {QRCodeSVG} from "qrcode.react"
 
-import type {FullAccountState, JettonMaster, JettonWallet} from "../api/types"
-import {TonClient} from "../api/client"
+import type {FullAccountState, JettonMasterMetadata, JettonWallet} from "../api/types"
+import type {TonClient} from "../api/client"
 import type {ContractAbiLink, ExtendedContractABI} from "../api/compilerAbi"
 import {useAddressBook, useAddressName} from "../hooks/useAddressBook"
 import {useNetworkInfo} from "../hooks/useNetworkInfo"
@@ -70,10 +70,11 @@ export const AccountInfo: React.FC<AccountInfoProps> = ({
   const resolvedName = useAddressName(address)
   const {addressFormat, forkNetwork} = useNetworkInfo()
   const displayAddress = normalizeAddress(address, addressFormat)
+  const rawAddress = toRawAddress(address)
 
-  const [tokenMastersByAddress, setTokenMastersByAddress] = useState<Map<string, JettonMaster>>(
-    () => new Map(),
-  )
+  const [tokenMastersByAddress, setTokenMastersByAddress] = useState<
+    Map<string, JettonMasterMetadata>
+  >(() => new Map())
   const [tokenMastersLoading, setTokenMastersLoading] = useState(false)
 
   const [copied, setCopied] = useState(false)
@@ -81,33 +82,44 @@ export const AccountInfo: React.FC<AccountInfoProps> = ({
   useEffect(() => {
     let isActive = true
 
-    const previewJettonAddresses = [
-      ...new Set(jettonWallets.slice(0, TOKEN_PREVIEW_LIMIT).map(wallet => wallet.jetton)),
-    ]
+    const inlineMasters = new Map<string, JettonMasterMetadata>()
+    const missingJettonAddresses = new Set<string>()
 
-    if (previewJettonAddresses.length > 0) {
-      setTokenMastersByAddress(new Map())
-      setTokenMastersLoading(true)
-      void client
-        .getJettonMasters(previewJettonAddresses)
-        .then(masters => {
-          if (!isActive) return
-          setTokenMastersByAddress(
-            new Map(masters.map(master => [toRawAddress(master.address), master])),
-          )
-        })
-        .catch(error => {
-          if (isActive) {
-            console.error("Failed to fetch jetton master previews", error)
-          }
-        })
-        .finally(() => {
-          if (isActive) setTokenMastersLoading(false)
-        })
-    } else {
-      setTokenMastersByAddress(new Map())
-      setTokenMastersLoading(false)
+    for (const wallet of jettonWallets.slice(0, TOKEN_PREVIEW_LIMIT)) {
+      const key = toRawAddress(wallet.jetton)
+      if (wallet.master) {
+        inlineMasters.set(key, wallet.master)
+      } else {
+        missingJettonAddresses.add(wallet.jetton)
+      }
     }
+
+    setTokenMastersByAddress(inlineMasters)
+    if (missingJettonAddresses.size === 0) {
+      setTokenMastersLoading(false)
+      return
+    }
+
+    setTokenMastersLoading(true)
+    void client
+      .getJettonMasters([...missingJettonAddresses])
+      .then(masters => {
+        if (!isActive) return
+        setTokenMastersByAddress(
+          new Map([
+            ...inlineMasters,
+            ...masters.map(master => [toRawAddress(master.address), master] as const),
+          ]),
+        )
+      })
+      .catch(error => {
+        if (isActive) {
+          console.error("Failed to fetch jetton master previews", error)
+        }
+      })
+      .finally(() => {
+        if (isActive) setTokenMastersLoading(false)
+      })
 
     return () => {
       isActive = false
@@ -133,7 +145,7 @@ export const AccountInfo: React.FC<AccountInfoProps> = ({
 
   useEffect(() => {
     setQrOpen(false)
-  }, [displayAddress])
+  }, [rawAddress])
 
   const handleStartEdit = () => {
     setEditValue(customName || "")
@@ -178,20 +190,20 @@ export const AccountInfo: React.FC<AccountInfoProps> = ({
   const tonscanUrl = getTonscanUrl(displayAddress, forkNetwork)
   const isNameUnchanged = editValue.trim() === (customName || "")
   const stateLoading = accountLoading
-  const assetMetadataLoading = jettonWallets.length > 0 && tokenMastersLoading
-  const showAssetsSkeleton = assetsLoading || stateLoading || assetMetadataLoading
   const firstWallet = jettonWallets[0]
   const canOpenTokens = Boolean(onMoreAssetsClick)
   const canOpenCollectibles = Boolean(onCollectiblesClick)
   const showCollectiblesRow = collectiblesLoading || collectiblesCount > 0
   const visibleCollectibles = collectiblePreviews.slice(0, 8)
   const firstMaster = firstWallet
-    ? tokenMastersByAddress.get(toRawAddress(firstWallet.jetton))
+    ? (firstWallet.master ?? tokenMastersByAddress.get(toRawAddress(firstWallet.jetton)))
     : undefined
+  const assetMetadataLoading = jettonWallets.length > 0 && tokenMastersLoading && !firstMaster
+  const showAssetsSkeleton = assetsLoading || stateLoading || assetMetadataLoading
   const tokenPreviewWallets = jettonWallets.slice(1, TOKEN_PREVIEW_LIMIT)
   const tokenPreviewItems = tokenPreviewWallets.map(wallet => ({
     wallet,
-    master: tokenMastersByAddress.get(toRawAddress(wallet.jetton)),
+    master: wallet.master ?? tokenMastersByAddress.get(toRawAddress(wallet.jetton)),
   }))
   const firstWalletDecimals = Number(firstMaster?.jetton_content?.decimals || 9)
   const firstWalletSymbol = firstMaster?.jetton_content?.symbol || "tokens"
@@ -199,13 +211,13 @@ export const AccountInfo: React.FC<AccountInfoProps> = ({
 
   const qrCode = (
     <QRCodeSVG
-      value={displayAddress}
+      value={rawAddress}
       size={132}
       level="M"
       marginSize={3}
       bgColor="var(--tonscan-card-bg)"
       fgColor="var(--tonscan-text-primary)"
-      title={`QR code for ${displayAddress}`}
+      title={`QR code for ${rawAddress}`}
       className={styles.qrSvg}
     />
   )
@@ -382,7 +394,9 @@ export const AccountInfo: React.FC<AccountInfoProps> = ({
                                 src={master.jetton_content.image}
                                 alt={master.jetton_content.symbol || "Jetton"}
                                 className={styles.assetPreviewIcon}
-                                style={{zIndex: tokenPreviewItems.length - index}}
+                                style={{
+                                  zIndex: tokenPreviewItems.length - index,
+                                }}
                                 onError={event => {
                                   const image = event.currentTarget
                                   if (image.getAttribute("src") === TOKEN_PLACEHOLDER_IMAGE) {
@@ -395,7 +409,9 @@ export const AccountInfo: React.FC<AccountInfoProps> = ({
                               <span
                                 key={wallet.address}
                                 className={styles.assetPreviewPlaceholder}
-                                style={{zIndex: tokenPreviewItems.length - index}}
+                                style={{
+                                  zIndex: tokenPreviewItems.length - index,
+                                }}
                               />
                             ),
                           )}

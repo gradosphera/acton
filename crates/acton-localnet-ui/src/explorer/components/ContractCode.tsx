@@ -269,7 +269,7 @@ export const ContractCode: React.FC<ContractCodeProps> = ({
           compilerAbiError ? (
             <div className={styles.empty}>Failed to load compiler ABI: {compilerAbiError}</div>
           ) : compilerAbiLoading ? (
-            <div className={styles.empty}>Loading compiler ABI...</div>
+            <AbiLoadingSkeleton />
           ) : compilerAbi && abiJson ? (
             <AbiPanel
               activeTab={activeAbiTab}
@@ -294,6 +294,16 @@ export const ContractCode: React.FC<ContractCodeProps> = ({
           <div className={styles.verifiedLoading}>Checking verified source...</div>
         )}
       </div>
+    </div>
+  )
+}
+
+function AbiLoadingSkeleton(): React.JSX.Element {
+  return (
+    <div className={styles.abiResultSkeleton} aria-label="Loading compiler ABI">
+      <span />
+      <span />
+      <span />
     </div>
   )
 }

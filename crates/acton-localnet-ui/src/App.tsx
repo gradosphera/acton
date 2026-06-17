@@ -6,9 +6,17 @@ import {ToastProvider} from "@acton/shared-ui"
 import type {ThemeMode} from "@acton/shared-ui"
 
 import {TonClient} from "./explorer/api/client"
+import {AccountPage} from "./explorer/pages/AccountPage"
+import {ExplorerIndexPage} from "./explorer/pages/ExplorerIndexPage"
+import {TransactionPage} from "./explorer/pages/TransactionPage"
 import {NetworkInfoProvider} from "./explorer/hooks/NetworkInfoProvider"
 import {AddressBookProvider} from "./explorer/hooks/useAddressBook"
 import {DashboardPage} from "./dashboard/DashboardPage"
+import {FaucetPage} from "./dashboard/pages/FaucetPage"
+import {HomePage} from "./dashboard/pages/HomePage"
+import {NftsPage} from "./dashboard/pages/NftsPage"
+import {TokensPage} from "./dashboard/pages/TokensPage"
+import {WalletsPage} from "./dashboard/pages/WalletsPage"
 import {WalletRuntimeProvider} from "./wallet/WalletRuntimeProvider"
 import "@acton/shared-ui/styles/tokens.css"
 import "./index.css"
@@ -36,43 +44,10 @@ const ApiReferencePage = React.lazy(async () => {
   const module = await import("./dashboard/pages/ApiReferencePage")
   return {default: module.ApiReferencePage}
 })
-const FaucetPage = React.lazy(async () => {
-  const module = await import("./dashboard/pages/FaucetPage")
-  return {default: module.FaucetPage}
-})
-const HomePage = React.lazy(async () => {
-  const module = await import("./dashboard/pages/HomePage")
-  return {default: module.HomePage}
-})
 const ApiCallsPage = React.lazy(async () => {
   const module = await import("./dashboard/pages/ApiCallsPage")
   return {default: module.ApiCallsPage}
 })
-const NftsPage = React.lazy(async () => {
-  const module = await import("./dashboard/pages/NftsPage")
-  return {default: module.NftsPage}
-})
-const TokensPage = React.lazy(async () => {
-  const module = await import("./dashboard/pages/TokensPage")
-  return {default: module.TokensPage}
-})
-const WalletsPage = React.lazy(async () => {
-  const module = await import("./dashboard/pages/WalletsPage")
-  return {default: module.WalletsPage}
-})
-const AccountPage = React.lazy(async () => {
-  const module = await import("./explorer/pages/AccountPage")
-  return {default: module.AccountPage}
-})
-const ExplorerIndexPage = React.lazy(async () => {
-  const module = await import("./explorer/pages/ExplorerIndexPage")
-  return {default: module.ExplorerIndexPage}
-})
-const TransactionPage = React.lazy(async () => {
-  const module = await import("./explorer/pages/TransactionPage")
-  return {default: module.TransactionPage}
-})
-
 export const App: React.FC = () => {
   const [theme, setTheme] = useState<ThemeMode>(readInitialTheme)
   const [localnetApiToken, setLocalnetApiTokenState] = useState<string | undefined>(
@@ -224,9 +199,7 @@ const AppContent: React.FC<AppContentProps> = ({
               path="/faucet"
               element={
                 <DashboardPage {...dashboardProps}>
-                  <RouteSuspense>
-                    <FaucetPage client={client} />
-                  </RouteSuspense>
+                  <FaucetPage client={client} />
                 </DashboardPage>
               }
             />
@@ -234,9 +207,7 @@ const AppContent: React.FC<AppContentProps> = ({
               path="/wallets"
               element={
                 <DashboardPage {...dashboardProps}>
-                  <RouteSuspense>
-                    <WalletsPage />
-                  </RouteSuspense>
+                  <WalletsPage />
                 </DashboardPage>
               }
             />
@@ -244,9 +215,7 @@ const AppContent: React.FC<AppContentProps> = ({
               path="/tokens"
               element={
                 <DashboardPage {...dashboardProps}>
-                  <RouteSuspense>
-                    <TokensPage client={client} />
-                  </RouteSuspense>
+                  <TokensPage client={client} />
                 </DashboardPage>
               }
             />
@@ -254,9 +223,7 @@ const AppContent: React.FC<AppContentProps> = ({
               path="/nfts"
               element={
                 <DashboardPage {...dashboardProps}>
-                  <RouteSuspense>
-                    <NftsPage client={client} />
-                  </RouteSuspense>
+                  <NftsPage client={client} />
                 </DashboardPage>
               }
             />
@@ -335,9 +302,7 @@ const AppContent: React.FC<AppContentProps> = ({
               path="/explorer"
               element={
                 <DashboardPage {...dashboardProps} embedded>
-                  <RouteSuspense>
-                    <ExplorerIndexPage />
-                  </RouteSuspense>
+                  <ExplorerIndexPage />
                 </DashboardPage>
               }
             />
@@ -345,9 +310,7 @@ const AppContent: React.FC<AppContentProps> = ({
               path="/explorer/address/:address"
               element={
                 <DashboardPage {...dashboardProps} embedded>
-                  <RouteSuspense>
-                    <AccountPage client={client} />
-                  </RouteSuspense>
+                  <AccountPage client={client} />
                 </DashboardPage>
               }
             />
@@ -355,9 +318,7 @@ const AppContent: React.FC<AppContentProps> = ({
               path="/explorer/tx/:hash"
               element={
                 <DashboardPage {...dashboardProps} embedded>
-                  <RouteSuspense>
-                    <TransactionPage client={client} />
-                  </RouteSuspense>
+                  <TransactionPage client={client} />
                 </DashboardPage>
               }
             />

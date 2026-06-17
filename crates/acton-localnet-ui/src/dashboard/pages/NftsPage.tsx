@@ -4,6 +4,7 @@ import {useNavigate} from "react-router-dom"
 
 import type {TonClient} from "../../explorer/api/client"
 import type {NftItem} from "../../explorer/api/types"
+import {useDelayedLoadingVisibility} from "../../hooks/useDelayedLoadingVisibility"
 import {NFT_PLACEHOLDER_IMAGE} from "../constants"
 import {contentString} from "../dashboardUtils"
 
@@ -25,6 +26,7 @@ export const NftsPage: React.FC<NftsPageProps> = ({client}) => {
     items: [],
     isLoading: true,
   })
+  const showLoadingSkeleton = useDelayedLoadingVisibility(nftsState.isLoading, 500)
 
   React.useEffect(() => {
     let cancelled = false
@@ -74,11 +76,17 @@ export const NftsPage: React.FC<NftsPageProps> = ({client}) => {
         </div>
       </section>
 
-      <section className={styles.resourceGrid}>
+      <section
+        className={styles.resourceGrid}
+        aria-busy={nftsState.isLoading}
+        aria-label={nftsState.isLoading ? "Loading NFTs" : undefined}
+      >
         {nftsState.error ? (
           <div className={styles.emptyState}>{nftsState.error}</div>
         ) : nftsState.isLoading ? (
-          <div className={styles.emptyState}>Loading NFTs…</div>
+          showLoadingSkeleton ? (
+            <NftCardsSkeleton />
+          ) : null
         ) : nftsState.items.length === 0 ? (
           <div className={styles.emptyState}>No NFTs yet.</div>
         ) : (
@@ -145,6 +153,42 @@ export const NftsPage: React.FC<NftsPageProps> = ({client}) => {
           })
         )}
       </section>
+    </>
+  )
+}
+
+function NftCardsSkeleton(): React.JSX.Element {
+  return (
+    <>
+      {Array.from({length: 3}, (_, index) => (
+        <Card
+          key={`nft-card-skeleton-${index}`}
+          className={`${styles.dashboardCard} ${styles.assetCard} ${styles.assetSkeletonCard}`}
+          aria-hidden="true"
+        >
+          <CardHeader className={styles.dashboardCardHeader}>
+            <div className={styles.cardTitleRow}>
+              <span className={`${styles.skeletonAvatar} ${styles.assetImageSkeleton}`} />
+              <div className={styles.assetSkeletonTitleGroup}>
+                <span className={`${styles.skeletonLine} ${styles.nftSkeletonTitle}`} />
+                <span className={`${styles.skeletonLine} ${styles.nftSkeletonIndex}`} />
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className={styles.dashboardCardContent}>
+            <div className={styles.assetMetaGrid}>
+              <div>
+                <span className={`${styles.skeletonLine} ${styles.nftSkeletonCollectionLabel}`} />
+                <span className={`${styles.skeletonLine} ${styles.nftSkeletonCollectionValue}`} />
+              </div>
+              <div>
+                <span className={`${styles.skeletonLine} ${styles.nftSkeletonSaleLabel}`} />
+                <span className={`${styles.skeletonLine} ${styles.nftSkeletonSaleValue}`} />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ))}
     </>
   )
 }

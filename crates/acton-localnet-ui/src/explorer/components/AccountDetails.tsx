@@ -41,7 +41,7 @@ import {addressKey, buildMessageNamesByOpcodeHex} from "../api/compilerAbi"
 
 import {AddressLabel} from "./AddressLabel"
 import {Nfts} from "./Nfts"
-import {Tokens} from "./Tokens"
+import {Tokens, TokensSkeleton} from "./Tokens"
 import styles from "./AccountDetails.module.css"
 import {formatNano, formatTimeAgo, hashToHex, isSameAddress, parseAddress} from "./utils"
 
@@ -168,6 +168,7 @@ export const AccountDetails: React.FC<AccountDetailsProps> = ({
   >()
   const [transactionFilters, setTransactionFilters] =
     useState<AccountTransactionFilters>(readTransactionFilters)
+  const showNftsTab = !nftsLoading && nftItems.length > 0
 
   useEffect(() => {
     if (
@@ -175,12 +176,21 @@ export const AccountDetails: React.FC<AccountDetailsProps> = ({
       (activeTabHash === "history" ||
         activeTabHash === "contract" ||
         activeTabHash === "tokens" ||
-        activeTabHash === "nfts" ||
+        (activeTabHash === "nfts" && showNftsTab) ||
         activeTabHash === "holders")
     ) {
       setActiveTab(activeTabHash as Tabs)
     }
-  }, [activeTabHash])
+  }, [activeTabHash, showNftsTab])
+
+  useEffect(() => {
+    if (activeTab !== "nfts" || showNftsTab) {
+      return
+    }
+
+    setActiveTab("history")
+    onTabChange?.("history")
+  }, [activeTab, onTabChange, showNftsTab])
 
   useEffect(() => {
     let isActive = true
@@ -482,16 +492,18 @@ export const AccountDetails: React.FC<AccountDetailsProps> = ({
             Holders
           </button>
         )}
-        <button
-          type="button"
-          className={`${styles.tab} ${activeTab === "nfts" ? styles.tabActive : ""}`}
-          onClick={() => handleTabClick("nfts")}
-        >
-          <span className={styles.tabIcon} aria-hidden="true">
-            <Image size={18} />
-          </span>
-          Collectibles
-        </button>
+        {showNftsTab && (
+          <button
+            type="button"
+            className={`${styles.tab} ${activeTab === "nfts" ? styles.tabActive : ""}`}
+            onClick={() => handleTabClick("nfts")}
+          >
+            <span className={styles.tabIcon} aria-hidden="true">
+              <Image size={18} />
+            </span>
+            Collectibles
+          </button>
+        )}
         <button
           type="button"
           className={`${styles.tab} ${activeTab === "contract" ? styles.tabActive : ""}`}
@@ -818,23 +830,19 @@ export const AccountDetails: React.FC<AccountDetailsProps> = ({
       ) : activeTab === "tokens" ? (
         <CardContent className={styles.tokensContent}>
           {tokensLoading ? (
-            <div className={styles.emptyState}>Loading tokens...</div>
+            <TokensSkeleton />
           ) : (
             <Tokens wallets={jettonWallets} client={client} onAddressClick={onAddressClick} />
           )}
         </CardContent>
-      ) : activeTab === "nfts" ? (
+      ) : activeTab === "nfts" && showNftsTab ? (
         <CardContent className={styles.tokensContent}>
-          {nftsLoading ? (
-            <div className={styles.emptyState}>Loading NFTs...</div>
-          ) : (
-            <Nfts items={nftItems} onAddressClick={onAddressClick} />
-          )}
+          <Nfts items={nftItems} onAddressClick={onAddressClick} />
         </CardContent>
       ) : activeTab === "holders" ? (
         <CardContent className={styles.historyContent}>
           {holdersLoading ? (
-            <div className={styles.emptyState}>Loading holders...</div>
+            <HoldersSkeleton />
           ) : (
             <Table>
               <TableHeader className={styles.historyHeaderGroup}>
@@ -905,12 +913,9 @@ export const AccountDetails: React.FC<AccountDetailsProps> = ({
       ) : (
         <CardContent className={styles.tokensContent}>
           {accountLoading && !accountState ? (
-            <div className={styles.contractSkeleton}>
-              <div className={`${styles.skeleton} ${styles.contractSkeletonTabs}`} />
-              <div className={`${styles.skeleton} ${styles.contractSkeletonBlock}`} />
-            </div>
+            <ContractCodeSkeleton />
           ) : (
-            <Suspense fallback={<div className={styles.emptyState}>Loading contract code...</div>}>
+            <Suspense fallback={<ContractCodeSkeleton />}>
               <ContractCode
                 codeBoc={accountState?.code ?? ""}
                 ownerAddress={ownerAddress}
@@ -928,6 +933,46 @@ export const AccountDetails: React.FC<AccountDetailsProps> = ({
         </CardContent>
       )}
     </Card>
+  )
+}
+
+function HoldersSkeleton(): React.JSX.Element {
+  return (
+    <Table aria-label="Loading holders">
+      <TableHeader className={styles.historyHeaderGroup}>
+        <TableRow className={styles.historyHeaderRow}>
+          <TableHead className={styles.tableHeader}>Owner</TableHead>
+          <TableHead className={styles.tableHeader}>Wallet</TableHead>
+          <TableHead className={`${styles.tableHeader} ${styles.valueContainer}`}>
+            Balance
+          </TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {Array.from({length: 4}, (_, index) => (
+          <TableRow key={`holders-skeleton-${index}`} className={styles.skeletonRow}>
+            <TableCell>
+              <div className={`${styles.skeleton} ${styles.historySkeletonAddress}`} />
+            </TableCell>
+            <TableCell>
+              <div className={`${styles.skeleton} ${styles.historySkeletonAddress}`} />
+            </TableCell>
+            <TableCell className={styles.valueContainer}>
+              <div className={`${styles.skeleton} ${styles.historySkeletonValue}`} />
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  )
+}
+
+function ContractCodeSkeleton(): React.JSX.Element {
+  return (
+    <div className={styles.contractSkeleton} aria-label="Loading contract code">
+      <div className={`${styles.skeleton} ${styles.contractSkeletonTabs}`} />
+      <div className={`${styles.skeleton} ${styles.contractSkeletonBlock}`} />
+    </div>
   )
 }
 

@@ -99,7 +99,7 @@ export const WalletsPage: React.FC = () => {
               className={`${dashboardStyles.dashboardCardContent} ${styles.walletCardContent}`}
             >
               {isBusy ? (
-                <div className={dashboardStyles.emptyState}>Loading wallets...</div>
+                <WalletRowsSkeleton />
               ) : runtimeWallets.length === 0 ? (
                 <div className={dashboardStyles.emptyState}>
                   No supported startup wallets. Start localnet with `--accounts` or
@@ -285,6 +285,41 @@ export const WalletsPage: React.FC = () => {
         </aside>
       </section>
     </>
+  )
+}
+
+function WalletRowsSkeleton(): React.JSX.Element {
+  return (
+    <div className={styles.walletList} aria-label="Loading wallets">
+      {Array.from({length: 4}, (_, index) => (
+        <article
+          key={`wallet-row-skeleton-${index}`}
+          className={`${styles.walletRow} ${styles.walletSkeletonRow}`}
+          aria-hidden="true"
+        >
+          <div className={styles.walletSummary}>
+            <span className={styles.walletBody}>
+              <span className={styles.walletTopLine}>
+                <span className={styles.walletTitleGroup}>
+                  <span
+                    className={`${dashboardStyles.skeletonLine} ${styles.walletNameSkeleton}`}
+                  />
+                  <span
+                    className={`${dashboardStyles.skeletonLine} ${styles.walletBadgeSkeleton}`}
+                  />
+                </span>
+              </span>
+              <span className={styles.walletDetailsLine}>
+                <span
+                  className={`${dashboardStyles.skeletonLine} ${styles.walletAddressSkeleton}`}
+                />
+              </span>
+            </span>
+          </div>
+          <span className={`${dashboardStyles.skeletonLine} ${styles.walletBalanceSkeleton}`} />
+        </article>
+      ))}
+    </div>
   )
 }
 

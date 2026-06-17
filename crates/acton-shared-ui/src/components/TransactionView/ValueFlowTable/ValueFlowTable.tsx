@@ -11,18 +11,25 @@ export interface ValueFlowTableProps {
   readonly items: readonly ValueFlowItem[]
   readonly contracts: Map<string, ContractData>
   readonly onContractClick?: (address: string) => void
+  readonly className?: string
 }
 
 export function ValueFlowTable({
   items,
   contracts,
   onContractClick,
+  className,
 }: ValueFlowTableProps): React.JSX.Element {
   const totalFee = items.reduce((sum, item) => sum + item.fee, 0n)
   const showTotal = items.length > 1
 
   return (
-    <div className={styles.valueFlowContainer}>
+    <div
+      className={
+        className ? `${styles.valueFlowContainer} ${className}` : styles.valueFlowContainer
+      }
+      data-show-total={showTotal ? "true" : undefined}
+    >
       <div className={styles.flowList}>
         <div className={styles.flowHeader}>
           <div className={styles.flowCol}>Account</div>

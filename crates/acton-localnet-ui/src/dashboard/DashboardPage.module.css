@@ -904,6 +904,92 @@
   white-space: nowrap;
 }
 
+.assetSkeletonCard {
+  box-sizing: border-box;
+  cursor: default;
+  pointer-events: none;
+}
+
+.assetImageSkeleton {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  flex: 0 0 auto;
+}
+
+.assetSkeletonTitleGroup {
+  min-width: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.assetSkeletonTitle {
+  width: min(190px, 82%);
+  height: 16px;
+}
+
+.assetSkeletonSubtitle {
+  width: 64px;
+  height: 22px;
+}
+
+.assetSkeletonMetaLabel,
+.assetSkeletonMetaValue {
+  display: block;
+}
+
+.assetSkeletonMetaLabel {
+  width: 72px;
+  height: 14.5px;
+}
+
+.assetSkeletonMetaValue {
+  width: min(132px, 86%);
+  height: 16.5px;
+  margin-top: 4px;
+}
+
+.nftSkeletonTitle {
+  width: 86px;
+  height: 16px;
+}
+
+.nftSkeletonIndex {
+  width: 36px;
+  height: 22px;
+}
+
+.nftSkeletonCollectionLabel,
+.nftSkeletonSaleLabel,
+.nftSkeletonCollectionValue,
+.nftSkeletonSaleValue {
+  display: block;
+}
+
+.nftSkeletonCollectionLabel {
+  width: 76px;
+  height: 14.5px;
+}
+
+.nftSkeletonSaleLabel {
+  width: 38px;
+  height: 14.5px;
+}
+
+.nftSkeletonCollectionValue {
+  width: min(128px, 86%);
+  height: 16.5px;
+  margin-top: 4px;
+}
+
+.nftSkeletonSaleValue {
+  width: 86px;
+  height: 16.5px;
+  margin-top: 4px;
+}
+
 .metricMeta {
   margin-top: 18px;
   color: var(--litenode-text-muted);
@@ -1131,6 +1217,115 @@
 .emptyState {
   color: var(--litenode-text-muted);
   font-size: 0.9rem;
+}
+
+.skeletonList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.skeletonRow {
+  min-height: 64px;
+  padding: 12px 14px;
+  border: 1px solid var(--litenode-border-subtle);
+  border-radius: 12px;
+  background: var(--litenode-surface-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  box-sizing: border-box;
+}
+
+.skeletonMain {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.skeletonLine,
+.skeletonAvatar {
+  position: relative;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--litenode-text) 8%, var(--litenode-surface-subtle));
+}
+
+.skeletonLine::after,
+.skeletonAvatar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--litenode-text) 8%, transparent),
+    transparent
+  );
+  transform: translateX(-100%);
+  animation: skeletonShimmer 1300ms ease-in-out infinite;
+}
+
+.skeletonLine {
+  height: 11px;
+  border-radius: 999px;
+}
+
+.skeletonLinePrimary {
+  width: min(280px, 62%);
+}
+
+.skeletonLineSecondary {
+  width: min(420px, 78%);
+}
+
+.skeletonLineMeta {
+  width: 68px;
+  flex: 0 0 auto;
+}
+
+.skeletonAvatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  flex: 0 0 auto;
+}
+
+.skeletonAvatar.assetImageSkeleton {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+}
+
+.skeletonLine.assetSkeletonTitle,
+.skeletonLine.nftSkeletonTitle {
+  height: 16px;
+}
+
+.skeletonLine.assetSkeletonSubtitle,
+.skeletonLine.nftSkeletonIndex {
+  height: 22px;
+}
+
+.skeletonLine.assetSkeletonMetaLabel,
+.skeletonLine.nftSkeletonCollectionLabel,
+.skeletonLine.nftSkeletonSaleLabel {
+  height: 14.5px;
+}
+
+.skeletonLine.assetSkeletonMetaValue,
+.skeletonLine.nftSkeletonCollectionValue,
+.skeletonLine.nftSkeletonSaleValue {
+  height: 16.5px;
+  margin-top: 4px;
+}
+
+@keyframes skeletonShimmer {
+  to {
+    transform: translateX(100%);
+  }
 }
 
 .accountItem {

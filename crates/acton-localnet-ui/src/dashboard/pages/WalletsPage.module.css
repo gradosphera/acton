@@ -221,6 +221,37 @@
   white-space: nowrap;
 }
 
+.walletSkeletonRow {
+  pointer-events: none;
+}
+
+.walletNameSkeleton,
+.walletBadgeSkeleton,
+.walletAddressSkeleton,
+.walletBalanceSkeleton {
+  display: block;
+}
+
+.walletNameSkeleton {
+  width: min(168px, 48vw);
+  height: 17px;
+}
+
+.walletBadgeSkeleton {
+  width: 48px;
+  height: 18px;
+}
+
+.walletAddressSkeleton {
+  width: min(320px, 62vw);
+  height: 13px;
+}
+
+.walletBalanceSkeleton {
+  width: 128px;
+  height: 18px;
+}
+
 .unsupportedBlock {
   margin-top: 16px;
   padding-top: 16px;

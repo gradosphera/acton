@@ -51,9 +51,21 @@ export const HomePage: React.FC<HomePageProps> = ({client}) => {
   const endpointRows = React.useMemo(
     () =>
       [
-        {label: "V2 API", value: endpoints.apiV2, referencePath: "/api-reference/v2"},
-        {label: "V3 API", value: endpoints.apiV3, referencePath: "/api-reference/v3"},
-        {label: "Control API", value: endpoints.admin, referencePath: "/api-reference/control"},
+        {
+          label: "V2 API",
+          value: endpoints.apiV2,
+          referencePath: "/api-reference/v2",
+        },
+        {
+          label: "V3 API",
+          value: endpoints.apiV3,
+          referencePath: "/api-reference/v3",
+        },
+        {
+          label: "Control API",
+          value: endpoints.admin,
+          referencePath: "/api-reference/control",
+        },
       ].filter(endpoint => endpoint.value.length > 0),
     [endpoints],
   )
@@ -236,7 +248,19 @@ export const HomePage: React.FC<HomePageProps> = ({client}) => {
               {homeState.error ? (
                 <div className={styles.emptyState}>{homeState.error}</div>
               ) : homeState.isLoading ? (
-                <div className={styles.emptyState}>Loading transactions…</div>
+                <div className={styles.skeletonList} aria-label="Loading transactions">
+                  {[0, 1, 2, 3].map(index => (
+                    <div key={index} className={styles.skeletonRow}>
+                      <div className={styles.skeletonMain}>
+                        <span className={`${styles.skeletonLine} ${styles.skeletonLinePrimary}`} />
+                        <span
+                          className={`${styles.skeletonLine} ${styles.skeletonLineSecondary}`}
+                        />
+                      </div>
+                      <span className={`${styles.skeletonLine} ${styles.skeletonLineMeta}`} />
+                    </div>
+                  ))}
+                </div>
               ) : homeState.transactions.length === 0 ? (
                 <div className={styles.emptyState}>No transactions yet.</div>
               ) : (
@@ -302,7 +326,19 @@ export const HomePage: React.FC<HomePageProps> = ({client}) => {
               {homeState.error ? (
                 <div className={styles.emptyState}>{homeState.error}</div>
               ) : homeState.isLoading ? (
-                <div className={styles.emptyState}>Loading accounts…</div>
+                <div className={styles.skeletonList} aria-label="Loading accounts">
+                  {[0, 1, 2, 3].map(index => (
+                    <div key={index} className={styles.skeletonRow}>
+                      <span className={styles.skeletonAvatar} />
+                      <div className={styles.skeletonMain}>
+                        <span className={`${styles.skeletonLine} ${styles.skeletonLinePrimary}`} />
+                        <span
+                          className={`${styles.skeletonLine} ${styles.skeletonLineSecondary}`}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
               ) : recentAccounts.length === 0 ? (
                 <div className={styles.emptyState}>No accounts yet.</div>
               ) : (

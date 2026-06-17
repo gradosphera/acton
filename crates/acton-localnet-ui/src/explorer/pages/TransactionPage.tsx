@@ -8,7 +8,14 @@ import {
   type ValueFlowItem,
 } from "@acton/shared-ui"
 import {Address} from "@ton/core"
-import {Activity, AlertCircle, ArrowLeft, CheckCircle2, List, Loader2, XCircle} from "lucide-react"
+import {
+  AlertCircle,
+  ArrowLeft,
+  CheckCircle2,
+  CircleDotDashed,
+  GitBranch,
+  XCircle,
+} from "lucide-react"
 import type React from "react"
 import {useEffect, useLayoutEffect, useMemo, useRef, useState} from "react"
 import {useNavigate, useParams, useSearchParams} from "react-router-dom"
@@ -25,6 +32,7 @@ import {
 } from "../components/utils"
 import {useAddressBook} from "../hooks/useAddressBook"
 import {useAddressFormat} from "../hooks/useNetworkInfo"
+import {useDelayedLoadingVisibility} from "../../hooks/useDelayedLoadingVisibility"
 
 import styles from "./TransactionPage.module.css"
 
@@ -80,6 +88,7 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({client}) => {
   const [valueFlow, setValueFlow] = useState<ValueFlowItem[]>([])
   const {fetchName} = useAddressBook()
   const addressFormat = useAddressFormat()
+  const showLoadingSkeleton = useDelayedLoadingVisibility(loading, 500)
 
   const handleContractClick = (address: string) => {
     const formattedAddr = normalizeAddress(address, addressFormat)
@@ -232,12 +241,7 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({client}) => {
   }, [addressFormat, client, fetchName, hash])
 
   if (loading) {
-    return (
-      <div className={styles.centered}>
-        <Loader2 className={styles.spinner} />
-        <p>Loading transaction trace...</p>
-      </div>
-    )
+    return showLoadingSkeleton ? <TransactionTraceSkeleton activeTab={activeTab} /> : null
   }
 
   if (error) {
@@ -298,21 +302,23 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({client}) => {
                 </div>
               </div>
 
-              <div className={styles.tabsContainer}>
+              <div
+                className={`${styles.tabsContainer} ${activeTab === "transactions" ? styles.tabsContainerDetached : ""}`}
+              >
                 <div className={styles.tabs}>
                   <button
                     type="button"
                     className={`${styles.tab} ${activeTab === "value-flow" ? styles.tabActive : ""}`}
                     onClick={() => handleActiveTabChange("value-flow")}
                   >
-                    <Activity size={16} /> Value Flow
+                    <CircleDotDashed size={16} /> Value Flow
                   </button>
                   <button
                     type="button"
                     className={`${styles.tab} ${activeTab === "transactions" ? styles.tabActive : ""}`}
                     onClick={() => handleActiveTabChange("transactions")}
                   >
-                    <List size={16} /> Transactions
+                    <GitBranch size={16} /> Transactions
                   </button>
                 </div>
 
@@ -322,6 +328,7 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({client}) => {
                       items={valueFlow}
                       contracts={contracts}
                       onContractClick={handleContractClick}
+                      className={styles.valueFlowPanel}
                     />
                   )}
 
@@ -353,6 +360,122 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({client}) => {
             </div>
           </>
         )}
+      </div>
+    </div>
+  )
+}
+
+interface TransactionTraceSkeletonProps {
+  readonly activeTab: TabType
+}
+
+function TransactionTraceSkeleton({activeTab}: TransactionTraceSkeletonProps): React.JSX.Element {
+  return (
+    <div className={styles.container} aria-label="Loading transaction trace">
+      <div className={styles.content}>
+        <div className={styles.skeletonBreadcrumbs}>
+          <span className={`${styles.skeleton} ${styles.skeletonBreadcrumbAddress}`} />
+          <span className={`${styles.skeleton} ${styles.skeletonBreadcrumbHash}`} />
+        </div>
+
+        <div className={styles.preTreeContent}>
+          <div className={styles.overviewCard}>
+            <div className={styles.overviewHeader}>
+              <div className={styles.skeletonStatus}>
+                <span className={`${styles.skeleton} ${styles.skeletonStatusIcon}`} />
+                <span className={`${styles.skeleton} ${styles.skeletonStatusText}`} />
+              </div>
+              <span className={`${styles.skeleton} ${styles.skeletonTime}`} />
+            </div>
+          </div>
+
+          <div className={styles.tabsContainer}>
+            <div className={styles.tabs} aria-hidden="true">
+              <div
+                className={`${styles.tab} ${activeTab === "value-flow" ? styles.tabActive : ""} ${styles.skeletonTab}`}
+              >
+                <CircleDotDashed size={16} />
+                Value Flow
+              </div>
+              <div
+                className={`${styles.tab} ${activeTab === "transactions" ? styles.tabActive : ""} ${styles.skeletonTab}`}
+              >
+                <GitBranch size={16} />
+                Transactions
+              </div>
+            </div>
+
+            <div className={styles.tabContent}>
+              {activeTab === "transactions" ? <TraceDetailsSkeleton /> : <ValueFlowSkeleton />}
+            </div>
+          </div>
+        </div>
+
+        <div className={styles.treeSection}>
+          <TraceTreeSkeleton />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ValueFlowSkeleton(): React.JSX.Element {
+  return (
+    <div className={styles.skeletonFlowCard} aria-hidden="true">
+      <div className={styles.skeletonFlowHeader}>
+        <span className={`${styles.skeleton} ${styles.skeletonFlowHeaderLine}`} />
+        <span className={`${styles.skeleton} ${styles.skeletonFlowHeaderLine}`} />
+        <span className={`${styles.skeleton} ${styles.skeletonFlowHeaderLine}`} />
+      </div>
+      {[0, 1].map(index => (
+        <div key={`flow-skeleton-${index}`} className={styles.skeletonFlowRow}>
+          <span className={`${styles.skeleton} ${styles.skeletonFlowAddress}`} />
+          <span className={`${styles.skeleton} ${styles.skeletonFlowAmount}`} />
+          <span className={`${styles.skeleton} ${styles.skeletonFlowFee}`} />
+        </div>
+      ))}
+      <div className={styles.skeletonFlowFooter}>
+        <span className={`${styles.skeleton} ${styles.skeletonFlowTotal}`} />
+      </div>
+    </div>
+  )
+}
+
+function TraceDetailsSkeleton(): React.JSX.Element {
+  return (
+    <div className={styles.detailsList} aria-hidden="true">
+      {[0, 1].map(index => (
+        <div key={`trace-details-skeleton-${index}`} className={styles.skeletonDetailCard}>
+          {[0, 1, 2, 3].map(rowIndex => (
+            <div
+              key={`trace-details-skeleton-${index}-${rowIndex}`}
+              className={styles.skeletonDetailRow}
+            >
+              <span className={`${styles.skeleton} ${styles.skeletonDetailLabel}`} />
+              <span className={`${styles.skeleton} ${styles.skeletonDetailValue}`} />
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function TraceTreeSkeleton(): React.JSX.Element {
+  return (
+    <div className={styles.skeletonTree} aria-hidden="true">
+      <div className={`${styles.skeletonTreeNode} ${styles.skeletonTreeNodeRoot}`}>
+        <span className={`${styles.skeleton} ${styles.skeletonTreeDot}`} />
+        <span className={`${styles.skeleton} ${styles.skeletonTreeLabel}`} />
+      </div>
+      <div className={styles.skeletonTreeBranch}>
+        <div className={styles.skeletonTreeRail} />
+        {[0, 1].map(index => (
+          <div key={`trace-tree-skeleton-${index}`} className={styles.skeletonTreeNode}>
+            <span className={`${styles.skeleton} ${styles.skeletonTreeDot}`} />
+            <span className={`${styles.skeleton} ${styles.skeletonTreeLabel}`} />
+          </div>
+        ))}
       </div>
     </div>
   )

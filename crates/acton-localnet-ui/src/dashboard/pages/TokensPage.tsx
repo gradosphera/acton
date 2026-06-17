@@ -4,6 +4,7 @@ import {useNavigate} from "react-router-dom"
 
 import type {TonClient} from "../../explorer/api/client"
 import type {JettonMaster} from "../../explorer/api/types"
+import {useDelayedLoadingVisibility} from "../../hooks/useDelayedLoadingVisibility"
 import {TOKEN_PLACEHOLDER_IMAGE} from "../constants"
 import {formatTokenSupply} from "../dashboardUtils"
 
@@ -25,6 +26,7 @@ export const TokensPage: React.FC<TokensPageProps> = ({client}) => {
     items: [],
     isLoading: true,
   })
+  const showLoadingSkeleton = useDelayedLoadingVisibility(tokensState.isLoading, 500)
 
   React.useEffect(() => {
     let cancelled = false
@@ -70,11 +72,17 @@ export const TokensPage: React.FC<TokensPageProps> = ({client}) => {
         </div>
       </section>
 
-      <section className={styles.resourceGrid}>
+      <section
+        className={styles.resourceGrid}
+        aria-busy={tokensState.isLoading}
+        aria-label={tokensState.isLoading ? "Loading tokens" : undefined}
+      >
         {tokensState.error ? (
           <div className={styles.emptyState}>{tokensState.error}</div>
         ) : tokensState.isLoading ? (
-          <div className={styles.emptyState}>Loading tokens…</div>
+          showLoadingSkeleton ? (
+            <TokenCardsSkeleton />
+          ) : null
         ) : tokensState.items.length === 0 ? (
           <div className={styles.emptyState}>No tokens yet.</div>
         ) : (
@@ -138,6 +146,42 @@ export const TokensPage: React.FC<TokensPageProps> = ({client}) => {
           })
         )}
       </section>
+    </>
+  )
+}
+
+function TokenCardsSkeleton(): React.JSX.Element {
+  return (
+    <>
+      {Array.from({length: 1}, (_, index) => (
+        <Card
+          key={`token-card-skeleton-${index}`}
+          className={`${styles.dashboardCard} ${styles.assetCard} ${styles.assetSkeletonCard}`}
+          aria-hidden="true"
+        >
+          <CardHeader className={styles.dashboardCardHeader}>
+            <div className={styles.cardTitleRow}>
+              <span className={`${styles.skeletonAvatar} ${styles.assetImageSkeleton}`} />
+              <div className={styles.assetSkeletonTitleGroup}>
+                <span className={`${styles.skeletonLine} ${styles.assetSkeletonTitle}`} />
+                <span className={`${styles.skeletonLine} ${styles.assetSkeletonSubtitle}`} />
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className={styles.dashboardCardContent}>
+            <div className={styles.assetMetaGrid}>
+              <div>
+                <span className={`${styles.skeletonLine} ${styles.assetSkeletonMetaLabel}`} />
+                <span className={`${styles.skeletonLine} ${styles.assetSkeletonMetaValue}`} />
+              </div>
+              <div>
+                <span className={`${styles.skeletonLine} ${styles.assetSkeletonMetaLabel}`} />
+                <span className={`${styles.skeletonLine} ${styles.assetSkeletonMetaValue}`} />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ))}
     </>
   )
 }
