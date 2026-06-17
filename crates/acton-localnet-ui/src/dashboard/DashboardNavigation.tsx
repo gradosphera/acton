@@ -1,11 +1,13 @@
 import {
+  Activity,
   ArrowUpRight,
   BookOpen,
-  Boxes,
-  Braces,
+  Brackets,
   Check,
+  Coins,
   FileJson,
   Github,
+  HandCoins,
   Image,
   KeyRound,
   LayoutGrid,
@@ -51,16 +53,16 @@ interface SidebarItem {
 const mainItems: SidebarItem[] = [
   {label: "Home", icon: LayoutGrid, path: "/dashboard"},
   {label: "Explorer", icon: SearchIcon, path: "/explorer"},
-  {label: "Wallets", icon: KeyRound, path: "/wallets"},
-  {label: "Faucet", icon: Wallet, path: "/faucet"},
-  {label: "Tokens", icon: Boxes, path: "/tokens"},
+  {label: "Wallets", icon: Wallet, path: "/wallets"},
+  {label: "Faucet", icon: HandCoins, path: "/faucet"},
+  {label: "Tokens", icon: Coins, path: "/tokens"},
   {label: "NFTs", icon: Image, path: "/nfts"},
 ]
 
 const apiItems: SidebarItem[] = [
-  {label: "API Calls", icon: Braces, path: "/api-calls"},
+  {label: "API Calls", icon: Activity, path: "/api-calls"},
   {label: "v2 API", icon: FileJson, path: "/api-reference/v2"},
-  {label: "v3 API", icon: Braces, path: "/api-reference/v3"},
+  {label: "v3 API", icon: Brackets, path: "/api-reference/v3"},
   {label: "Control API", icon: Settings2, path: "/api-reference/control"},
 ]
 

@@ -23,7 +23,6 @@ import styles from "./WalletsPage.module.css"
 export const WalletsPage: React.FC = () => {
   const addressFormat = useAddressFormat()
   const {
-    host,
     runtimeWallets,
     unsupportedWallets,
     sessions,
@@ -65,7 +64,7 @@ export const WalletsPage: React.FC = () => {
       </section>
 
       <section className={styles.walletLayout}>
-        <div className={styles.walletTopGrid}>
+        <div className={styles.mainColumn}>
           <Card className={`${dashboardStyles.dashboardCard} ${styles.walletListCard}`}>
             <CardHeader
               className={`${dashboardStyles.dashboardCardHeader} ${styles.walletCardHeader}`}
@@ -184,106 +183,106 @@ export const WalletsPage: React.FC = () => {
             </CardContent>
           </Card>
 
-          <aside className={styles.sideColumn}>
-            <Card className={`${dashboardStyles.dashboardCard} ${styles.sessionsCard}`}>
-              <CardHeader className={dashboardStyles.dashboardCardHeader}>
-                <CardTitle className={dashboardStyles.dashboardCardTitle}>Sessions</CardTitle>
-                <CardDescription className={dashboardStyles.dashboardCardDescription}>
-                  {pendingRequestCount === 0
-                    ? "No pending approvals."
-                    : `${pendingRequestCount} pending approval${pendingRequestCount === 1 ? "" : "s"}.`}
-                </CardDescription>
-              </CardHeader>
-              <CardContent
-                className={`${dashboardStyles.dashboardCardContent} ${styles.sessionsContent}`}
+          <Card className={`${dashboardStyles.dashboardCard} ${styles.connectCard}`}>
+            <CardHeader className={dashboardStyles.dashboardCardHeader}>
+              <div className={dashboardStyles.cardTitleRow}>
+                <div className={dashboardStyles.cardIcon}>
+                  <Link2 size={16} />
+                </div>
+                <div>
+                  <CardTitle className={dashboardStyles.dashboardCardTitle}>TON Connect</CardTitle>
+                  <CardDescription className={dashboardStyles.dashboardCardDescription}>
+                    Paste a connect link from a local dApp, then approve it with a startup wallet.
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className={dashboardStyles.dashboardCardContent}>
+              <form
+                className={styles.connectForm}
+                onSubmit={event => void handleConnectUrlSubmit(event)}
               >
-                {sessions.length === 0 ? (
-                  <div className={dashboardStyles.emptyState}>No active TON Connect sessions.</div>
-                ) : (
-                  <div className={styles.sessionList}>
-                    {sessions.map(session => (
-                      <article key={session.sessionId} className={styles.sessionCard}>
-                        <div className={styles.sessionHeader}>
-                          <div>
-                            <div className={styles.sessionTitle}>
-                              {getDappName(session.dAppName)}
-                            </div>
-                            <div className={styles.sessionDomain}>{session.domain}</div>
-                          </div>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => void handleDisconnectSession(session.sessionId)}
-                            disabled={isSubmitting}
-                          >
-                            <Unplug size={14} />
-                            Disconnect
-                          </Button>
-                        </div>
-                        <MetaRow label="Wallet">
-                          {findWalletName(runtimeWallets, session.walletId)}
-                        </MetaRow>
-                        <MetaRow label="Last activity">
-                          {formatDateTime(session.lastActivityAt)}
-                        </MetaRow>
-                      </article>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </aside>
+                <label className={styles.label} htmlFor="ton-connect-url">
+                  Connect URL
+                </label>
+                <textarea
+                  id="ton-connect-url"
+                  className={styles.textarea}
+                  rows={4}
+                  value={tonConnectUrl}
+                  onChange={event => setTonConnectUrl(event.target.value)}
+                  placeholder="tonconnect://..."
+                  disabled={runtimeWallets.length === 0 || isSubmitting}
+                />
+                <div className={styles.formFooter}>
+                  <span className={styles.helperText}>
+                    Paste a TON Connect request here or anywhere in Localnet UI.
+                  </span>
+                  <Button
+                    type="submit"
+                    disabled={
+                      runtimeWallets.length === 0 ||
+                      tonConnectUrl.trim().length === 0 ||
+                      isSubmitting
+                    }
+                  >
+                    <Link2 size={16} />
+                    Handle request
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
         </div>
 
-        <Card className={`${dashboardStyles.dashboardCard} ${styles.connectCard}`}>
-          <CardHeader className={dashboardStyles.dashboardCardHeader}>
-            <div className={dashboardStyles.cardTitleRow}>
-              <div className={dashboardStyles.cardIcon}>
-                <Link2 size={16} />
-              </div>
-              <div>
-                <CardTitle className={dashboardStyles.dashboardCardTitle}>TON Connect</CardTitle>
-                <CardDescription className={dashboardStyles.dashboardCardDescription}>
-                  Paste a connect link from a local dApp, then approve it with a startup wallet.
-                </CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className={dashboardStyles.dashboardCardContent}>
-            <form
-              className={styles.connectForm}
-              onSubmit={event => void handleConnectUrlSubmit(event)}
+        <aside className={styles.sideColumn}>
+          <Card className={`${dashboardStyles.dashboardCard} ${styles.sessionsCard}`}>
+            <CardHeader className={dashboardStyles.dashboardCardHeader}>
+              <CardTitle className={dashboardStyles.dashboardCardTitle}>Sessions</CardTitle>
+              <CardDescription className={dashboardStyles.dashboardCardDescription}>
+                {pendingRequestCount === 0
+                  ? "No pending approvals."
+                  : `${pendingRequestCount} pending approval${pendingRequestCount === 1 ? "" : "s"}.`}
+              </CardDescription>
+            </CardHeader>
+            <CardContent
+              className={`${dashboardStyles.dashboardCardContent} ${styles.sessionsContent}`}
             >
-              <label className={styles.label} htmlFor="ton-connect-url">
-                Connect URL
-              </label>
-              <textarea
-                id="ton-connect-url"
-                className={styles.textarea}
-                rows={4}
-                value={tonConnectUrl}
-                onChange={event => setTonConnectUrl(event.target.value)}
-                placeholder="tonconnect://..."
-                disabled={runtimeWallets.length === 0 || isSubmitting}
-              />
-              <div className={styles.formFooter}>
-                <span className={styles.helperText}>
-                  Listening on {formatHostLabel(host)}. Paste also works anywhere in Localnet UI.
-                </span>
-                <Button
-                  type="submit"
-                  disabled={
-                    runtimeWallets.length === 0 || tonConnectUrl.trim().length === 0 || isSubmitting
-                  }
-                >
-                  <Link2 size={16} />
-                  Handle request
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
+              {sessions.length === 0 ? (
+                <div className={dashboardStyles.emptyState}>No active TON Connect sessions.</div>
+              ) : (
+                <div className={styles.sessionList}>
+                  {sessions.map(session => (
+                    <article key={session.sessionId} className={styles.sessionCard}>
+                      <div className={styles.sessionHeader}>
+                        <div>
+                          <div className={styles.sessionTitle}>{getDappName(session.dAppName)}</div>
+                          <div className={styles.sessionDomain}>{session.domain}</div>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => void handleDisconnectSession(session.sessionId)}
+                          disabled={isSubmitting}
+                        >
+                          <Unplug size={14} />
+                          Disconnect
+                        </Button>
+                      </div>
+                      <MetaRow label="Wallet">
+                        {findWalletName(runtimeWallets, session.walletId)}
+                      </MetaRow>
+                      <MetaRow label="Last activity">
+                        {formatDateTime(session.lastActivityAt)}
+                      </MetaRow>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </aside>
       </section>
     </>
   )
@@ -353,16 +352,4 @@ function getDappName(name: string | undefined): string {
 
 function findWalletName(wallets: readonly RuntimeWallet[], walletId: string): string {
   return wallets.find(wallet => wallet.id === walletId)?.record.name ?? "Unknown wallet"
-}
-
-function formatHostLabel(host: string): string {
-  if (host.length === 0 && globalThis.location !== undefined) {
-    return globalThis.location.host
-  }
-
-  try {
-    return new URL(host).host
-  } catch {
-    return host || "current host"
-  }
 }
