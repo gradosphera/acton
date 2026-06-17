@@ -17,6 +17,7 @@ use axum::{
     extract::Query,
     extract::{RawQuery, State},
 };
+use base64::Engine;
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -274,8 +275,25 @@ pub async fn get_compiler_abi(
     .await
 }
 
-pub async fn get_verified_source(Query(payload): Query<GetVerifiedSourceRequest>) -> Json<Value> {
-    handle_result(fetch_verified_source(payload), Clone::clone).await
+pub async fn get_verified_source(
+    State(node): State<Arc<Localnet>>,
+    Query(payload): Query<GetVerifiedSourceRequest>,
+) -> Json<Value> {
+    handle_result(
+        async move {
+            let value = fetch_verified_source(payload).await?;
+            let entries = verified_source_compiler_abis(&value);
+            if !entries.is_empty()
+                && let Err(error) = node.register_compiler_abis(entries).await
+            {
+                tracing::warn!(?error, "failed to register verifier compiler ABI");
+            }
+
+            Ok(value)
+        },
+        Clone::clone,
+    )
+    .await
 }
 
 async fn fetch_verified_source(payload: GetVerifiedSourceRequest) -> anyhow::Result<Value> {
@@ -321,6 +339,63 @@ fn non_empty_text(value: Option<String>) -> Option<String> {
     value.filter(|value| !value.trim().is_empty())
 }
 
+fn verified_source_compiler_abis(value: &Value) -> Vec<(Hash256, Value)> {
+    let Some(code_hash) = value.get("code_hash").and_then(Value::as_str) else {
+        return Vec::new();
+    };
+    let Ok(code_hash) = parse_hash_any(code_hash) else {
+        return Vec::new();
+    };
+    let Some(bundles) = value.get("bundles").and_then(Value::as_array) else {
+        return Vec::new();
+    };
+
+    bundles
+        .iter()
+        .filter_map(compiler_abi_from_verified_source_bundle)
+        .map(|compiler_abi| (code_hash, compiler_abi))
+        .collect()
+}
+
+fn compiler_abi_from_verified_source_bundle(bundle: &Value) -> Option<Value> {
+    if let Some(compiler_abi) = bundle
+        .get("compiler_abi")
+        .filter(|compiler_abi| compiler_abi.is_object())
+        .cloned()
+    {
+        return Some(compiler_abi);
+    }
+
+    bundle
+        .get("files")
+        .and_then(Value::as_array)?
+        .iter()
+        .find_map(compiler_abi_from_verified_source_file)
+}
+
+fn compiler_abi_from_verified_source_file(file: &Value) -> Option<Value> {
+    let path = file.get("path").and_then(Value::as_str)?;
+    if !path.ends_with(".abi.json") {
+        return None;
+    }
+
+    let content = verified_source_file_content(file)?;
+    let compiler_abi = serde_json::from_str::<Value>(&content).ok()?;
+    compiler_abi.is_object().then_some(compiler_abi)
+}
+
+fn verified_source_file_content(file: &Value) -> Option<String> {
+    if let Some(content_text) = file.get("content_text").and_then(Value::as_str) {
+        return Some(content_text.to_owned());
+    }
+
+    let content_base64 = file.get("content_base64").and_then(Value::as_str)?;
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(content_base64)
+        .ok()?;
+    String::from_utf8(bytes).ok()
+}
+
 fn parse_hash_any(hash: &str) -> anyhow::Result<Hash256> {
     if let Ok(parsed) = Hash256::from_hex(hash) {
         return Ok(parsed);
@@ -329,4 +404,84 @@ fn parse_hash_any(hash: &str) -> anyhow::Result<Hash256> {
         return Ok(parsed);
     }
     anyhow::bail!("Invalid hash format")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use base64::engine::general_purpose::STANDARD;
+    use serde_json::json;
+
+    #[test]
+    fn extracts_compiler_abi_from_verified_source_file_text() {
+        let code_hash = Hash256([0x42; 32]);
+        let source = json!({
+            "code_hash": code_hash.to_hex(),
+            "bundles": [
+                {
+                    "files": [
+                        {
+                            "path": "output/counter.abi.json",
+                            "content_text": r#"{"contract_name":"Counter","get_methods":[]}"#
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let entries = verified_source_compiler_abis(&source);
+
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].0, code_hash);
+        assert_eq!(entries[0].1["contract_name"], "Counter");
+    }
+
+    #[test]
+    fn extracts_compiler_abi_from_verified_source_file_base64() {
+        let code_hash = Hash256([0x24; 32]);
+        let compiler_abi = r#"{"contract_name":"Wallet","get_methods":[]}"#;
+        let source = json!({
+            "code_hash": code_hash.to_hex(),
+            "bundles": [
+                {
+                    "files": [
+                        {
+                            "path": "output/wallet.abi.json",
+                            "content_base64": STANDARD.encode(compiler_abi)
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let entries = verified_source_compiler_abis(&source);
+
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].0, code_hash);
+        assert_eq!(entries[0].1["contract_name"], "Wallet");
+    }
+
+    #[test]
+    fn ignores_missing_or_invalid_verified_source_abi() {
+        let code_hash = Hash256([0x11; 32]);
+        let source = json!({
+            "code_hash": code_hash.to_hex(),
+            "bundles": [
+                {
+                    "files": [
+                        {
+                            "path": "output/broken.abi.json",
+                            "content_text": "not json"
+                        },
+                        {
+                            "path": "src/main.tolk",
+                            "content_text": "fun main() {}"
+                        }
+                    ]
+                }
+            ]
+        });
+
+        assert!(verified_source_compiler_abis(&source).is_empty());
+    }
 }
