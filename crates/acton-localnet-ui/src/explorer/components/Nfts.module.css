@@ -1,47 +1,82 @@
 .container {
-  padding: 12px;
+  padding: 20px 24px 24px;
+}
+
+.searchBox {
+  width: min(360px, 100%);
+  min-height: 44px;
+  margin-bottom: 24px;
+  box-sizing: border-box;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: var(--tonscan-bg-secondary);
+  color: var(--tonscan-text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px;
+  transition:
+    background-color var(--transition-duration-fast),
+    border-color var(--transition-duration-fast),
+    box-shadow var(--transition-duration-fast);
+}
+
+.searchBox:focus-within {
+  border-color: var(--litenode-border-control);
+  background: var(--tonscan-card-bg);
+  box-shadow: 0 0 0 2px var(--litenode-focus);
+}
+
+.searchBox input {
+  min-width: 0;
+  flex: 1 1 auto;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--tonscan-text-primary);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  line-height: 1.4;
+}
+
+.searchBox input::placeholder {
+  color: var(--tonscan-text-secondary);
 }
 
 .list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(154px, 1fr));
+  gap: 16px;
 }
 
 .nftItem {
-  padding: 14px;
+  min-width: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 10px;
+  background: var(--tonscan-bg-secondary);
+  color: inherit;
+  cursor: pointer;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  cursor: pointer;
-  transition:
-    background-color var(--transition-duration-fast),
-    border-color var(--transition-duration-fast),
-    color var(--transition-duration-fast);
-  border: 1px solid var(--tonscan-border);
-  border-radius: 12px;
-  background: var(--tonscan-card-bg);
+  text-align: left;
 }
 
-.nftItem:hover {
-  border-color: var(--litenode-border-control);
-  background: var(--tonscan-row-hover);
+.nftItem:hover .nftImage {
+  transform: scale(1.04);
 }
 
-.cardHeader {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
+.nftItem:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--litenode-focus);
 }
 
 .imageFrame {
-  width: 52px;
-  height: 52px;
-  border-radius: 10px;
-  border: 1px solid var(--tonscan-border);
-  background-color: var(--tonscan-bg-secondary);
-  flex-shrink: 0;
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  background: linear-gradient(135deg, rgb(228 232 238 / 85%), rgb(244 246 248 / 88%)),
+    var(--tonscan-bg-secondary);
   overflow: hidden;
 }
 
@@ -49,95 +84,73 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
   background-color: var(--tonscan-bg-secondary);
+  transition: transform 180ms ease;
 }
 
 .nftInfo {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 3px;
+  padding: 10px 12px 11px;
+  background: var(--tonscan-bg-secondary);
+}
+
+.collectionName,
+.nftMetaLine {
+  min-width: 0;
+  color: var(--tonscan-text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+.collectionName,
+.nftName,
+.nftAddress {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .nftName {
-  font-weight: 600;
-  color: var(--tonscan-text-primary);
-  font-size: 0.95rem;
-  line-height: 1.3;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.nftIndex {
-  display: inline-flex;
-  align-items: center;
-  width: fit-content;
-  color: var(--tonscan-text-secondary);
-  font-size: var(--font-size-xs);
-  font-weight: 500;
-  line-height: 1;
-}
-
-.nftDescription {
-  color: var(--tonscan-text-secondary);
-  font-size: 0.8125rem;
-  line-height: 1.4;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  margin: 0;
-}
-
-.metaGrid {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  overflow: hidden;
-  border: 1px solid var(--tonscan-border);
-  border-radius: 10px;
-  background: var(--litenode-surface-subtle);
-}
-
-.metaRow {
-  display: grid;
-  grid-template-columns: 84px minmax(0, 1fr);
-  gap: 10px;
-  align-items: center;
-  min-height: 34px;
-  padding: 0 10px;
-  border-bottom: 1px solid var(--tonscan-border);
-}
-
-.metaRow:last-child {
-  border-bottom: none;
-}
-
-.metaLabel {
-  font-size: var(--font-size-xs);
-  color: var(--tonscan-text-secondary);
-  text-transform: none;
-  letter-spacing: 0;
-  font-weight: 500;
-}
-
-.metaValue {
   color: var(--tonscan-text-primary);
   font-size: var(--font-size-sm);
-  line-height: 1.4;
-  word-break: break-all;
+  font-weight: 650;
+  line-height: 1.25;
 }
 
-.addressValue {
-  color: var(--tonscan-text-primary);
+.nftMetaLine {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.nftAddress {
+  min-width: 0;
 }
 
 .empty {
-  padding: var(--spacing-xl);
+  padding: 32px 16px;
   text-align: center;
   color: var(--tonscan-text-secondary);
   font-size: var(--font-size-sm);
+}
+
+@media (max-width: 720px) {
+  .container {
+    padding: 16px;
+  }
+
+  .searchBox {
+    width: 100%;
+    margin-bottom: 16px;
+  }
+
+  .list {
+    grid-template-columns: repeat(auto-fill, minmax(136px, 1fr));
+    gap: 12px;
+  }
 }

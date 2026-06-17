@@ -1,5 +1,5 @@
 .historyHeaderRow {
-  border-bottom: 1px solid var(--tonscan-border) !important;
+  border-bottom: 0 !important;
 }
 
 .historyHeaderRow:hover {
@@ -7,11 +7,16 @@
 }
 
 .historyHeaderGroup {
-  border-bottom: none !important;
+  border-bottom: 0 !important;
 }
 
 .historyContent {
   padding: 0;
+}
+
+.historyContent tbody > tr {
+  border-top: 1px solid var(--tonscan-border) !important;
+  border-bottom: 0 !important;
 }
 
 .tokensContent {

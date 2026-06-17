@@ -490,7 +490,7 @@ export const AccountDetails: React.FC<AccountDetailsProps> = ({
           <span className={styles.tabIcon} aria-hidden="true">
             <Image size={18} />
           </span>
-          NFTs
+          Collectibles
         </button>
         <button
           type="button"

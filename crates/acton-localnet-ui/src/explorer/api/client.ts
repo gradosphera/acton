@@ -34,6 +34,7 @@ interface FaucetResponse {
   readonly ok?: boolean
   readonly success?: boolean
   readonly error?: string
+  readonly hash?: string
 }
 
 interface SendInternalMessageResponse {
@@ -387,7 +388,7 @@ export class TonClient {
     })
   }
 
-  async fundAccount(address: string, amount: number): Promise<void> {
+  async fundAccount(address: string, amount: number): Promise<string> {
     const url = this.buildUrl(this.addressNameBaseUrl, "/acton_fundAccount")
     const response = await this.request<FaucetResponse>(url, "Failed to fund account", {
       method: "POST",
@@ -398,6 +399,10 @@ export class TonClient {
     if (response.ok === false || response.success === false) {
       throw new Error(response.error || "Failed to fund account")
     }
+    if (!response.hash) {
+      throw new Error(response.error || "Faucet response did not include a message hash")
+    }
+    return response.hash
   }
 
   async setShardAccount(address: string, shardAccount: string): Promise<void> {

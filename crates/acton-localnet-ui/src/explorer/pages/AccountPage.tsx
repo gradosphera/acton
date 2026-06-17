@@ -576,6 +576,7 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
   const tokenSymbol = tokenInfo?.jetton_content.symbol
   const tokenName = tokenInfo?.jetton_content.name || "Unknown Jetton"
   const tokenDecimals = tokenInfo?.jetton_content.decimals
+  const jettonMasterAdminAddress = jettonMaster?.admin_address ?? undefined
   const tokenTotalSupply = jettonMaster
     ? formatJettonAmount(jettonMaster.total_supply, tokenDecimals)
     : undefined
@@ -614,6 +615,28 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
     contentString(currentNftItem?.content, "preview") ||
     contentString(currentNftItem?.content, "image_url") ||
     NFT_PLACEHOLDER_IMAGE
+  const nftItemMetadataJson = currentNftItem
+    ? JSON.stringify(
+        {
+          address: toRawAddress(currentNftItem.address),
+          index: currentNftItem.index,
+          owner_address: currentNftItem.owner_address,
+          collection_address: currentNftItem.collection_address,
+          ...currentNftItem.content,
+        },
+        undefined,
+        2,
+      )
+    : undefined
+  const nftItemOwnerAddress = currentNftItem?.owner_address
+  const nftItemCollectionAddress = currentNftItem?.collection_address
+  const activeMetadataJson = jettonMaster ? jettonMetadataJson : nftItemMetadataJson
+  const activeMetadataTitle = jettonMaster ? tokenName : (nftItemName ?? "NFT item")
+  const activeMetadataImage = jettonMaster
+    ? tokenInfo?.jetton_content.image
+    : currentNftItem
+      ? nftItemImage
+      : undefined
   const collectionSample = currentNftCollectionItems[0]
   const nftCollectionName =
     tokenInfoString(nftCollectionTokenInfo, "name") ||
@@ -715,167 +738,104 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
                     {!jettonMaster && jettonWalletAccount && jettonWalletMaster && (
                       <>
                         <div className={styles.jettonDivider} />
-                        <div className={styles.jettonDetails}>
-                          <div className={styles.jettonRow}>
-                            <span className={styles.jettonLabel}>Jetton master</span>
-                            <div className={styles.jettonAddressValue}>
-                              <span
-                                className={`${styles.jettonValue} ${styles.jettonLink}`}
-                                onClick={() => handleSearch(jettonWalletAccount.jetton)}
-                                onKeyDown={e => {
-                                  if (e.key === "Enter" || e.key === " ") {
-                                    handleSearch(jettonWalletAccount.jetton)
-                                  }
-                                }}
-                                role="button"
-                                tabIndex={0}
-                              >
-                                <AddressLabel address={jettonWalletAccount.jetton} />
-                              </span>
-                              <CopyAddressButton address={jettonWalletAccount.jetton} />
-                            </div>
-                          </div>
-                          <div className={styles.jettonRow}>
-                            <span className={styles.jettonLabel}>Holder address</span>
-                            <div className={styles.jettonAddressValue}>
-                              <span
-                                className={`${styles.jettonValue} ${styles.jettonLink}`}
-                                onClick={() => handleSearch(jettonWalletAccount.owner)}
-                                onKeyDown={e => {
-                                  if (e.key === "Enter" || e.key === " ") {
-                                    handleSearch(jettonWalletAccount.owner)
-                                  }
-                                }}
-                                role="button"
-                                tabIndex={0}
-                              >
-                                <AddressLabel address={jettonWalletAccount.owner} />
-                              </span>
-                              <CopyAddressButton address={jettonWalletAccount.owner} />
-                            </div>
-                          </div>
-                        </div>
+                        <AccountDetailRows>
+                          <AccountAddressDetailRow
+                            label="Jetton master"
+                            address={jettonWalletAccount.jetton}
+                            onAddressClick={handleSearch}
+                          />
+                          <AccountAddressDetailRow
+                            label="Holder address"
+                            address={jettonWalletAccount.owner}
+                            onAddressClick={handleSearch}
+                          />
+                        </AccountDetailRows>
                       </>
                     )}
                   </div>
                 )}
                 {accountState && currentNftItem && (
-                  <div className={styles.jettonInfo}>
-                    <div className={styles.jettonHeader}>
-                      <img src={nftItemImage} alt={nftItemName} className={styles.jettonImage} />
-                      <div className={styles.jettonTitle}>
-                        <div className={styles.jettonName}>{nftItemName}</div>
-                        <div className={styles.jettonSymbol}>NFT item</div>
+                  <div className={styles.nftPanel}>
+                    <div className={styles.nftPanelHeader}>
+                      <div className={styles.nftPanelHeading}>
+                        <div className={styles.nftPanelTitle}>{nftItemName}</div>
+                        <button
+                          type="button"
+                          className={styles.nftPanelMetadataButton}
+                          onClick={() => setJettonMetadataOpen(true)}
+                        >
+                          Metadata
+                        </button>
                       </div>
                     </div>
-                    {nftItemDescription && (
-                      <div className={styles.jettonDescription}>{nftItemDescription}</div>
-                    )}
-                    <div className={styles.jettonDivider} />
-                    <div className={styles.jettonDetails}>
-                      <div className={styles.jettonRow}>
-                        <span className={styles.jettonLabel}>Index</span>
-                        <span className={styles.jettonValue}>#{currentNftItem.index}</span>
+                    <div className={styles.nftPanelDivider} />
+                    <div className={styles.nftPanelBody}>
+                      <div className={styles.nftPanelMain}>
+                        <AccountDetailRows>
+                          <AccountAddressDetailRow
+                            label="Owner"
+                            address={nftItemOwnerAddress}
+                            fallback="No owner"
+                            onAddressClick={handleSearch}
+                          />
+                          <AccountAddressDetailRow
+                            label="Collection Address"
+                            address={nftItemCollectionAddress}
+                            fallback="Standalone"
+                            onAddressClick={handleSearch}
+                          />
+                          <AccountTextDetailRow label="Index" value={`#${currentNftItem.index}`} />
+                        </AccountDetailRows>
+                        {nftItemDescription && (
+                          <div className={styles.nftPanelDescription}>{nftItemDescription}</div>
+                        )}
                       </div>
-                      <div className={styles.jettonRow}>
-                        <span className={styles.jettonLabel}>Owner</span>
-                        <span
-                          className={`${styles.jettonValue} ${styles.jettonLink}`}
-                          onClick={() => {
-                            if (currentNftItem.owner_address) {
-                              handleSearch(currentNftItem.owner_address)
-                            }
-                          }}
-                          onKeyDown={e => {
-                            if (
-                              (e.key === "Enter" || e.key === " ") &&
-                              currentNftItem.owner_address
-                            ) {
-                              handleSearch(currentNftItem.owner_address)
-                            }
-                          }}
-                          role="button"
-                          tabIndex={0}
-                        >
-                          {currentNftItem.owner_address ? (
-                            <AddressLabel address={currentNftItem.owner_address} />
-                          ) : (
-                            "No owner"
-                          )}
-                        </span>
-                      </div>
-                      <div className={styles.jettonRow}>
-                        <span className={styles.jettonLabel}>Collection</span>
-                        <span
-                          className={`${styles.jettonValue} ${styles.jettonLink}`}
-                          onClick={() => {
-                            if (currentNftItem.collection_address) {
-                              handleSearch(currentNftItem.collection_address)
-                            }
-                          }}
-                          onKeyDown={e => {
-                            if (
-                              (e.key === "Enter" || e.key === " ") &&
-                              currentNftItem.collection_address
-                            ) {
-                              handleSearch(currentNftItem.collection_address)
-                            }
-                          }}
-                          role="button"
-                          tabIndex={0}
-                        >
-                          {currentNftItem.collection_address ? (
-                            <AddressLabel address={currentNftItem.collection_address} />
-                          ) : (
-                            "Standalone"
-                          )}
-                        </span>
+                      <div className={styles.nftPanelMedia}>
+                        <img
+                          src={nftItemImage}
+                          alt={nftItemName}
+                          className={styles.nftPanelImage}
+                        />
                       </div>
                     </div>
                   </div>
                 )}
                 {accountState && nftCollectionName && !currentNftItem && (
-                  <div className={styles.jettonInfo}>
-                    <div className={styles.jettonHeader}>
-                      <img
-                        src={nftCollectionImage}
-                        alt={nftCollectionName}
-                        className={styles.jettonImage}
-                      />
-                      <div className={styles.jettonTitle}>
-                        <div className={styles.jettonName}>{nftCollectionName}</div>
-                        <div className={styles.jettonSymbol}>NFT collection</div>
+                  <div className={styles.nftPanel}>
+                    <div className={styles.nftPanelHeader}>
+                      <div className={styles.nftPanelHeading}>
+                        <div className={styles.nftPanelTitle}>{nftCollectionName}</div>
                       </div>
                     </div>
-                    {nftCollectionDescription && (
-                      <div className={styles.jettonDescription}>{nftCollectionDescription}</div>
-                    )}
-                    <div className={styles.jettonDivider} />
-                    <div className={styles.jettonDetails}>
-                      <div className={styles.jettonRow}>
-                        <span className={styles.jettonLabel}>Indexed items</span>
-                        <span className={styles.jettonValue}>
-                          {currentNftCollectionItems.length.toLocaleString()}
-                        </span>
+                    <div className={styles.nftPanelDivider} />
+                    <div className={styles.nftPanelBody}>
+                      <div className={styles.nftPanelMain}>
+                        <AccountDetailRows>
+                          <AccountTextDetailRow
+                            label="Indexed items"
+                            value={currentNftCollectionItems.length.toLocaleString()}
+                          />
+                          {collectionSample && (
+                            <AccountAddressDetailRow
+                              label="Latest item"
+                              address={collectionSample.address}
+                              onAddressClick={handleSearch}
+                            />
+                          )}
+                        </AccountDetailRows>
+                        {nftCollectionDescription && (
+                          <div className={styles.nftPanelDescription}>
+                            {nftCollectionDescription}
+                          </div>
+                        )}
                       </div>
-                      {collectionSample && (
-                        <div className={styles.jettonRow}>
-                          <span className={styles.jettonLabel}>Latest item</span>
-                          <span
-                            className={`${styles.jettonValue} ${styles.jettonLink}`}
-                            onClick={() => handleSearch(collectionSample.address)}
-                            onKeyDown={e => {
-                              if (e.key === "Enter" || e.key === " ") {
-                                handleSearch(collectionSample.address)
-                              }
-                            }}
-                            role="button"
-                            tabIndex={0}
-                          >
-                            #{collectionSample.index}
-                          </span>
-                        </div>
-                      )}
+                      <div className={styles.nftPanelMedia}>
+                        <img
+                          src={nftCollectionImage}
+                          alt={nftCollectionName}
+                          className={styles.nftPanelImage}
+                        />
+                      </div>
                     </div>
                   </div>
                 )}
@@ -907,7 +867,7 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
             activeTabHash={activeTab}
             onTabChange={handleTabChange}
           />
-          {jettonMaster && jettonMetadataOpen && jettonMetadataJson && (
+          {jettonMetadataOpen && activeMetadataJson && (
             <div
               className={styles.metadataOverlay}
               role="presentation"
@@ -921,7 +881,7 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
                 className={styles.metadataDialog}
                 role="dialog"
                 aria-modal="true"
-                aria-labelledby="jetton-metadata-title"
+                aria-labelledby="account-metadata-title"
               >
                 <button
                   type="button"
@@ -931,13 +891,13 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
                 >
                   <X size={18} strokeWidth={3} />
                 </button>
-                <h2 id="jetton-metadata-title" className={styles.metadataTitle}>
+                <h2 id="account-metadata-title" className={styles.metadataTitle}>
                   Metadata
                 </h2>
                 <div className={styles.metadataHero}>
                   <div className={styles.metadataMain}>
                     <div className={styles.metadataTokenTitle}>
-                      <span>{tokenName}</span>
+                      <span>{activeMetadataTitle}</span>
                     </div>
                     <div className={styles.metadataSummary}>
                       <div className={styles.metadataRow}>
@@ -946,47 +906,105 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
                           <AddressLabel address={formattedAddress} />
                         </span>
                       </div>
-                      <div className={styles.metadataRow}>
-                        <span className={styles.metadataLabel}>Owner</span>
-                        <span
-                          className={`${styles.metadataValue} ${styles.metadataLink}`}
-                          onClick={() => handleSearch(jettonMaster.admin_address)}
-                          onKeyDown={event => {
-                            if (event.key === "Enter" || event.key === " ") {
-                              handleSearch(jettonMaster.admin_address)
-                            }
-                          }}
-                          role="button"
-                          tabIndex={0}
-                        >
-                          <AddressLabel address={jettonMaster.admin_address} />
-                        </span>
-                      </div>
-                      {tokenTotalSupplyLabel && (
-                        <div className={styles.metadataRow}>
-                          <span className={styles.metadataLabel}>Max.supply</span>
-                          <span className={styles.metadataValue}>{tokenTotalSupplyLabel}</span>
-                        </div>
+                      {jettonMaster && (
+                        <>
+                          <div className={styles.metadataRow}>
+                            <span className={styles.metadataLabel}>Owner</span>
+                            {jettonMasterAdminAddress ? (
+                              <span
+                                className={`${styles.metadataValue} ${styles.metadataLink}`}
+                                onClick={() => handleSearch(jettonMasterAdminAddress)}
+                                onKeyDown={event => {
+                                  if (event.key === "Enter" || event.key === " ") {
+                                    handleSearch(jettonMasterAdminAddress)
+                                  }
+                                }}
+                                role="button"
+                                tabIndex={0}
+                              >
+                                <AddressLabel address={jettonMasterAdminAddress} />
+                              </span>
+                            ) : (
+                              <span className={styles.metadataValue}>None</span>
+                            )}
+                          </div>
+                          {tokenTotalSupplyLabel && (
+                            <div className={styles.metadataRow}>
+                              <span className={styles.metadataLabel}>Max.supply</span>
+                              <span className={styles.metadataValue}>{tokenTotalSupplyLabel}</span>
+                            </div>
+                          )}
+                          <div className={styles.metadataRow}>
+                            <span className={styles.metadataLabel}>Mintable</span>
+                            <span className={styles.metadataValue}>
+                              {String(jettonMaster.mintable)}
+                            </span>
+                          </div>
+                        </>
                       )}
-                      <div className={styles.metadataRow}>
-                        <span className={styles.metadataLabel}>Mintable</span>
-                        <span className={styles.metadataValue}>
-                          {String(jettonMaster.mintable)}
-                        </span>
-                      </div>
+                      {currentNftItem && (
+                        <>
+                          <div className={styles.metadataRow}>
+                            <span className={styles.metadataLabel}>Owner</span>
+                            {nftItemOwnerAddress ? (
+                              <span
+                                className={`${styles.metadataValue} ${styles.metadataLink}`}
+                                onClick={() => handleSearch(nftItemOwnerAddress)}
+                                onKeyDown={event => {
+                                  if (event.key === "Enter" || event.key === " ") {
+                                    handleSearch(nftItemOwnerAddress)
+                                  }
+                                }}
+                                role="button"
+                                tabIndex={0}
+                              >
+                                <AddressLabel address={nftItemOwnerAddress} />
+                              </span>
+                            ) : (
+                              <span className={styles.metadataValue}>No owner</span>
+                            )}
+                          </div>
+                          <div className={styles.metadataRow}>
+                            <span className={styles.metadataLabel}>Collection</span>
+                            {nftItemCollectionAddress ? (
+                              <span
+                                className={`${styles.metadataValue} ${styles.metadataLink}`}
+                                onClick={() => handleSearch(nftItemCollectionAddress)}
+                                onKeyDown={event => {
+                                  if (event.key === "Enter" || event.key === " ") {
+                                    handleSearch(nftItemCollectionAddress)
+                                  }
+                                }}
+                                role="button"
+                                tabIndex={0}
+                              >
+                                <AddressLabel address={nftItemCollectionAddress} />
+                              </span>
+                            ) : (
+                              <span className={styles.metadataValue}>Standalone</span>
+                            )}
+                          </div>
+                          <div className={styles.metadataRow}>
+                            <span className={styles.metadataLabel}>Index</span>
+                            <span className={styles.metadataValue}>#{currentNftItem.index}</span>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
-                  {jettonMaster.jetton_content.image && (
+                  {activeMetadataImage && (
                     <img
-                      src={jettonMaster.jetton_content.image}
-                      alt={tokenName}
-                      className={styles.metadataTokenImage}
+                      src={activeMetadataImage}
+                      alt={activeMetadataTitle}
+                      className={`${styles.metadataTokenImage} ${
+                        currentNftItem ? styles.metadataNftImage : ""
+                      }`}
                     />
                   )}
                 </div>
-                {jettonMaster.jetton_content.description && (
+                {(jettonMaster?.jetton_content.description || nftItemDescription) && (
                   <p className={styles.metadataDescription}>
-                    {jettonMaster.jetton_content.description}
+                    {jettonMaster?.jetton_content.description || nftItemDescription}
                   </p>
                 )}
                 <div className={styles.metadataJsonFrame}>
@@ -994,7 +1012,7 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
                     type="button"
                     className={styles.metadataJsonCopyButton}
                     onClick={() => {
-                      void navigator.clipboard.writeText(jettonMetadataJson)
+                      void navigator.clipboard.writeText(activeMetadataJson)
                       setJettonMetadataCopied(true)
                     }}
                     aria-label={jettonMetadataCopied ? "Metadata copied" : "Copy metadata JSON"}
@@ -1003,7 +1021,7 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
                     <Copy size={18} />
                   </button>
                   <pre className={styles.metadataJson}>
-                    <code>{renderJson(jettonMetadataJson)}</code>
+                    <code>{renderJson(activeMetadataJson)}</code>
                   </pre>
                 </div>
               </section>
@@ -1066,6 +1084,64 @@ const CopyAddressButton: React.FC<CopyAddressButtonProps> = ({
     </button>
   )
 }
+
+interface AccountDetailRowsProps {
+  readonly children: React.ReactNode
+}
+
+const AccountDetailRows: React.FC<AccountDetailRowsProps> = ({children}) => (
+  <div className={styles.accountDetailRows}>{children}</div>
+)
+
+interface AccountTextDetailRowProps {
+  readonly label: string
+  readonly value: React.ReactNode
+}
+
+const AccountTextDetailRow: React.FC<AccountTextDetailRowProps> = ({label, value}) => (
+  <div className={styles.accountDetailRow}>
+    <span className={styles.accountDetailLabel}>{label}</span>
+    <span className={styles.accountDetailValue}>{value}</span>
+  </div>
+)
+
+interface AccountAddressDetailRowProps {
+  readonly label: string
+  readonly address?: string
+  readonly fallback?: string
+  readonly onAddressClick: (address: string) => void
+}
+
+const AccountAddressDetailRow: React.FC<AccountAddressDetailRowProps> = ({
+  label,
+  address,
+  fallback,
+  onAddressClick,
+}) => (
+  <div className={styles.accountDetailRow}>
+    <span className={styles.accountDetailLabel}>{label}</span>
+    {address ? (
+      <div className={styles.accountDetailAddressValue}>
+        <span
+          className={`${styles.accountDetailValue} ${styles.accountDetailLink}`}
+          onClick={() => onAddressClick(address)}
+          onKeyDown={event => {
+            if (event.key === "Enter" || event.key === " ") {
+              onAddressClick(address)
+            }
+          }}
+          role="button"
+          tabIndex={0}
+        >
+          <AddressLabel address={address} />
+        </span>
+        <CopyAddressButton address={address} />
+      </div>
+    ) : (
+      <span className={styles.accountDetailValue}>{fallback ?? "Unknown"}</span>
+    )}
+  </div>
+)
 
 const JSON_TOKEN_RE =
   /("(?:\\.|[^"\\])*")(\s*:)?|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|true|false|null)/g
