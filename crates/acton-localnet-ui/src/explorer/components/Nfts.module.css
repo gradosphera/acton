@@ -9,7 +9,7 @@
   box-sizing: border-box;
   border: 1px solid transparent;
   border-radius: 12px;
-  background: var(--tonscan-bg-secondary);
+  background: color-mix(in srgb, var(--tonscan-bg-secondary) 96%, var(--tonscan-text-primary));
   color: var(--tonscan-text-secondary);
   display: flex;
   align-items: center;

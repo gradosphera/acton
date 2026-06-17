@@ -913,6 +913,8 @@ export const AccountDetails: React.FC<AccountDetailsProps> = ({
             <Suspense fallback={<div className={styles.emptyState}>Loading contract code...</div>}>
               <ContractCode
                 codeBoc={accountState?.code ?? ""}
+                ownerAddress={ownerAddress}
+                client={client}
                 dataBoc={accountState?.data}
                 compilerAbi={compilerAbi}
                 compilerAbiLoading={compilerAbiLoading}
