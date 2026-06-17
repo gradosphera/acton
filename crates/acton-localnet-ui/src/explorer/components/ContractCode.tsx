@@ -105,6 +105,30 @@ const getContractCodeHighlighter = () => {
   return contractCodeHighlighterPromise
 }
 
+function readContractHashTab(): ContractCodeTab {
+  if (typeof globalThis.window === "undefined") {
+    return "storage"
+  }
+
+  const hash = globalThis.window.location.hash.replace("#", "")
+  if (hash === "contract-source") {
+    return "source"
+  }
+  if (hash === "contract-abi") {
+    return "abi"
+  }
+  return "storage"
+}
+
+function writeContractHashTab(tab: ContractCodeTab): void {
+  if (typeof globalThis.window === "undefined") {
+    return
+  }
+
+  const nextUrl = `${globalThis.window.location.pathname}${globalThis.window.location.search}#contract-${tab}`
+  globalThis.window.history.replaceState(undefined, "", nextUrl)
+}
+
 export const ContractCode: React.FC<ContractCodeProps> = ({
   codeBoc,
   ownerAddress,
@@ -117,7 +141,7 @@ export const ContractCode: React.FC<ContractCodeProps> = ({
   verifiedSourceLoading = false,
   onContractClick,
 }) => {
-  const [activeTab, setActiveTab] = useState<ContractCodeTab>("storage")
+  const [activeTab, setActiveTab] = useState<ContractCodeTab>(() => readContractHashTab())
   const [activeStorageTab, setActiveStorageTab] = useState<StorageTab>("parsed")
   const [activeSourceTab, setActiveSourceTab] = useState<SourceTab>("verified")
   const [activeAbiTab, setActiveAbiTab] = useState<AbiTab>("view")
@@ -187,6 +211,11 @@ export const ContractCode: React.FC<ContractCodeProps> = ({
     : "No compiler ABI registered for storage decoding."
   const hasVerifiedSource = Boolean(verifiedSource?.verified && verifiedSource.bundles.length > 0)
 
+  const handleContractTabChange = (tab: ContractCodeTab) => {
+    setActiveTab(tab)
+    writeContractHashTab(tab)
+  }
+
   if (!codeBoc || !codeData) {
     return (
       <div className={styles.container}>
@@ -201,21 +230,21 @@ export const ContractCode: React.FC<ContractCodeProps> = ({
         <button
           type="button"
           className={`${styles.tab} ${activeTab === "storage" ? styles.tabActive : ""}`}
-          onClick={() => setActiveTab("storage")}
+          onClick={() => handleContractTabChange("storage")}
         >
           Storage
         </button>
         <button
           type="button"
           className={`${styles.tab} ${activeTab === "source" ? styles.tabActive : ""}`}
-          onClick={() => setActiveTab("source")}
+          onClick={() => handleContractTabChange("source")}
         >
           Source
         </button>
         <button
           type="button"
           className={`${styles.tab} ${activeTab === "abi" ? styles.tabActive : ""}`}
-          onClick={() => setActiveTab("abi")}
+          onClick={() => handleContractTabChange("abi")}
         >
           ABI
         </button>
@@ -1787,8 +1816,8 @@ function formatDecodedTolkNode(
   tyIdx: number | undefined,
   indent: number,
 ): string {
-  const pad = "  ".repeat(indent)
-  const nextPad = "  ".repeat(indent + 1)
+  const pad = " ".repeat(indent * 4)
+  const nextPad = " ".repeat((indent + 1) * 4)
 
   if (Array.isArray(value)) {
     if (value.length === 0) return "[]"
@@ -2263,7 +2292,7 @@ function formatGenericName(
   typeArgsTyIdx: readonly number[] | undefined,
   symbols: SymTable,
 ): string {
-  if (!typeArgsTyIdx?.length) {
+  if (typeArgsTyIdx === undefined || typeArgsTyIdx.length === 0) {
     return name
   }
   return `${name}<${typeArgsTyIdx.map(tyIdx => formatType(symbols, tyIdx)).join(", ")}>`

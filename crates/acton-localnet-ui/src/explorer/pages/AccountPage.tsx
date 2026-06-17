@@ -72,6 +72,9 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
   )
   const activeTab = useMemo<AccountTab>(() => {
     const tab = location.hash.replace("#", "")
+    if (tab.startsWith("contract-")) {
+      return "contract"
+    }
     return isAccountTab(tab) ? tab : "history"
   }, [location.hash])
   const accountInterfaces = accountStateV3?.interfaces ?? []
@@ -569,7 +572,8 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
   }
 
   const handleTabChange = (tab: string) => {
-    void navigate(`${location.pathname}#${tab}`, {replace: true})
+    const hash = tab === "contract" ? "contract-storage" : tab
+    void navigate(`${location.pathname}#${hash}`, {replace: true})
   }
 
   const tokenInfo = jettonMaster ?? jettonWalletMaster
