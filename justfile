@@ -122,7 +122,7 @@ check-tolk:
 
 check-ci: fmt-check check-docgen check-deps clippy typos check-schema check-tolk
 
-check: check-ci check-deny test
+check: check-ci check-security test
 
 coverage-setup:
     cargo install cargo-llvm-cov --locked
