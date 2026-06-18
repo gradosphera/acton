@@ -150,6 +150,16 @@ const DEPLOYER_MNEMONIC: &str = "cupboard match uphold miracle fog balance unkno
 const CATALOG_WALLET_V4R2_CODE_HASH: &str =
     "feb5ff6820e2ff0d9483e7e0d62c817d846789fb4ae580c878866d959dabd5c0";
 
+fn reserve_localnet_port() -> Option<(TcpListener, String)> {
+    let listener = TcpListener::bind("127.0.0.1:0").ok()?;
+    let port = listener
+        .local_addr()
+        .expect("Reserved localnet TCP port has no address")
+        .port()
+        .to_string();
+    Some((listener, port))
+}
+
 const V3_GETTER_CONTRACT: &str = r"
 fun onInternalMessage(_: InMessage) {}
 fun onBouncedMessage(_: InMessageBounced) {}
@@ -474,6 +484,34 @@ fun main() {
     println("WORKER_CONTRACT={}", workerAddress);
 }
 "#;
+
+#[test]
+fn localnet_start_port_conflict_is_reported_with_hint() {
+    let project = ProjectBuilder::new("localnet-port-conflict").build();
+    let Some((_listener, port)) = reserve_localnet_port() else {
+        return;
+    };
+
+    let output = project
+        .acton()
+        .arg("localnet")
+        .arg("start")
+        .arg("--port")
+        .arg(&port)
+        .arg("--block-interval-ms")
+        .arg("50")
+        .run()
+        .failure();
+
+    output
+        .assert_not_contains("Starting Localnet server")
+        .assert_stderr_contains("Failed to start localnet on 127.0.0.1:")
+        .assert_stderr_contains("Set another port with [localnet].port in Acton.toml")
+        .assert_stderr_contains("Or stop the process currently listening on that port")
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/localnet/test_localnet_start_port_conflict.stderr.txt",
+        );
+}
 
 #[test]
 fn localnet_starts_and_serves_masterchain_info() {

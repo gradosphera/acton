@@ -8,6 +8,7 @@ use axum::extract::FromRef;
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::{HashSet, VecDeque};
+use std::io;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -292,7 +293,29 @@ pub struct ServerArgs {
     pub auth_token: Option<String>,
 }
 
-pub async fn run_server(node: Arc<Localnet>, args: ServerArgs) -> anyhow::Result<()> {
+#[derive(Debug, thiserror::Error)]
+pub enum ServerError {
+    #[error("failed to bind localnet server to {address}")]
+    Bind { address: String, source: io::Error },
+    #[error("failed to seed startup wallet names")]
+    SeedStartupWalletNames(#[from] SeedStartupWalletNamesError),
+    #[error("localnet server stopped with an error")]
+    Serve { source: io::Error },
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum SeedStartupWalletNamesError {
+    #[error("failed to read existing startup wallet address names")]
+    ReadExistingNames { source: anyhow::Error },
+    #[error("failed to set startup wallet address name {name} for {address}")]
+    SetAddressName {
+        address: String,
+        name: String,
+        source: anyhow::Error,
+    },
+}
+
+pub async fn run_server(node: Arc<Localnet>, args: ServerArgs) -> Result<(), ServerError> {
     let ServerArgs {
         port,
         db_path: _,
@@ -333,7 +356,12 @@ pub async fn run_server(node: Arc<Localnet>, args: ServerArgs) -> anyhow::Result
     );
 
     let address = format!("127.0.0.1:{port}");
-    let listener = tokio::net::TcpListener::bind(&address).await?;
+    let listener = tokio::net::TcpListener::bind(&address)
+        .await
+        .map_err(|source| ServerError::Bind {
+            address: address.clone(),
+            source,
+        })?;
     println!(
         "    {} Localnet server and UI on http://{address}",
         "Starting".green().bold(),
@@ -373,14 +401,15 @@ pub async fn run_server(node: Arc<Localnet>, args: ServerArgs) -> anyhow::Result
                 shutdown.notify();
             }
         })
-        .await?;
+        .await
+        .map_err(|source| ServerError::Serve { source })?;
     Ok(())
 }
 
 async fn seed_startup_wallet_names(
     node: &Localnet,
     startup_wallets: &[StartupWallet],
-) -> anyhow::Result<()> {
+) -> Result<(), SeedStartupWalletNamesError> {
     let mut seen_addresses = HashSet::new();
     let mut named_wallets = Vec::new();
 
@@ -404,11 +433,18 @@ async fn seed_startup_wallet_names(
                 .map(|(address, _)| address.clone())
                 .collect(),
         )
-        .await?;
+        .await
+        .map_err(|source| SeedStartupWalletNamesError::ReadExistingNames { source })?;
 
     for ((address, name), (_, existing_name)) in named_wallets.into_iter().zip(existing_names) {
         if existing_name.is_none() {
-            node.set_address_name(address, name).await?;
+            node.set_address_name(address.clone(), name.clone())
+                .await
+                .map_err(|source| SeedStartupWalletNamesError::SetAddressName {
+                    address,
+                    name,
+                    source,
+                })?;
         }
     }
 

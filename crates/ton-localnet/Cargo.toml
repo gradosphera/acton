@@ -38,6 +38,7 @@ ton-indexer = { workspace = true }
 url = { workspace = true }
 include_dir = { workspace = true }
 rustc-hash = { workspace = true }
+thiserror = { workspace = true }
 
 [lints]
 workspace = true

@@ -15,7 +15,7 @@ use ton::ton_wallet::WalletVersion;
 use ton_localnet::node::StateSource;
 use ton_localnet::remote::RemoteProvider;
 use ton_localnet::storage::AccountStatus;
-use ton_localnet::{Localnet, ServerArgs, StartupWallet, run_server};
+use ton_localnet::{Localnet, ServerArgs, ServerError, StartupWallet, run_server};
 use ton_retrace::Network;
 use toncenter_keys::LOCALNET_API_KEY_ENV;
 use tycho_types::boc::BocRepr;
@@ -114,7 +114,16 @@ pub async fn localnet_start_cmd(
         );
     }
 
-    run_result?;
+    if let Err(error) = run_result {
+        return match error {
+            ServerError::Bind { address, source } => Err(anyhow::Error::new(source).context(
+                format!(
+                    "Failed to start localnet on {address}\nSet another port with [localnet].port in Acton.toml\nOr stop the process currently listening on that port"
+                ),
+            )),
+            error => Err(error.into()),
+        };
+    }
     Ok(())
 }
 
