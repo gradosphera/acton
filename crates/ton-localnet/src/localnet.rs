@@ -1,3 +1,4 @@
+use crate::LocalnetError;
 use crate::executor::TvmEmulatorAdapter;
 use crate::node::{Node, NodeClockInfo, StateSource};
 use crate::node_snapshot::NodeStateSnapshot;
@@ -308,6 +309,10 @@ pub(crate) enum Request {
         seqno: u32,
         resp: oneshot::Sender<anyhow::Result<LocalnetBlockHeader>>,
     },
+    GetBlockData {
+        seqno: u32,
+        resp: oneshot::Sender<anyhow::Result<BocBytes>>,
+    },
     GetBlockTransactions {
         seqno: u32,
         resp: oneshot::Sender<anyhow::Result<LocalnetBlockTransactions>>,
@@ -545,6 +550,19 @@ impl Localnet {
         boc_str: String,
     ) -> anyhow::Result<LocalnetAcceptedExternalMessage> {
         let boc = BocBytes::from_base64(&boc_str).context("Invalid BOC base64")?;
+        self.send_boc_bytes(boc).await
+    }
+
+    /// Sends an already decoded external-in message `BoC` into the localnet queue.
+    ///
+    /// Toncenter-compatible HTTP accepts a base64 string, while `LiteAPI` carries the
+    /// raw `bytes` field from `liteServer.sendMessage`. Both paths end up in the
+    /// same actor request so localnet keeps one validation/enqueueing behavior for
+    /// external-in messages.
+    pub async fn send_boc_bytes(
+        &self,
+        boc: BocBytes,
+    ) -> anyhow::Result<LocalnetAcceptedExternalMessage> {
         let (resp, rx) = oneshot::channel();
         self.tx.send(Request::SendBoc { boc, resp }).await?;
         rx.await?
@@ -654,7 +672,24 @@ impl Localnet {
         } else {
             None
         };
+        self.get_transactions_by_address(address, limit, lt, hash, to_lt)
+            .await
+    }
 
+    /// Returns transactions for a parsed account address.
+    ///
+    /// This is the typed localnet API used by `LiteAPI` adapters. The older
+    /// toncenter-compatible endpoint accepts string/base64 query values and
+    /// converts them before calling this method, so both transports share the
+    /// same actor request and pagination/filtering semantics.
+    pub async fn get_transactions_by_address(
+        &self,
+        address: Addr,
+        limit: usize,
+        lt: Option<u64>,
+        hash: Option<Hash256>,
+        to_lt: Option<u64>,
+    ) -> anyhow::Result<Vec<LocalnetTransaction>> {
         let (resp, rx) = oneshot::channel();
         self.tx
             .send(Request::GetTransactions {
@@ -765,6 +800,24 @@ impl Localnet {
                 .collect::<anyhow::Result<Vec<_>>>()?,
         );
 
+        self.run_get_method_by_id(address, method_id, stack, seqno)
+            .await
+    }
+
+    /// Runs a smart-contract get-method using a numeric method id and a typed TVM stack.
+    ///
+    /// This is the shared execution path for binary protocols such as `LiteAPI`
+    /// that already carry `method_id` and serialized stack values. The method
+    /// avoids the toncenter JSON stack conversion used by [`Self::run_get_method`]
+    /// and sends the typed request directly to the localnet actor, which executes
+    /// it against the requested block state.
+    pub async fn run_get_method_by_id(
+        &self,
+        address: Addr,
+        method_id: i32,
+        stack: Tuple,
+        seqno: Option<u32>,
+    ) -> anyhow::Result<LocalnetRunGetMethodResult> {
         let (resp, rx) = oneshot::channel();
         self.tx
             .send(Request::RunGetMethod {
@@ -801,6 +854,12 @@ impl Localnet {
         self.tx
             .send(Request::GetBlockHeader { seqno, resp })
             .await?;
+        rx.await?
+    }
+
+    pub async fn get_block_data(&self, seqno: u32) -> anyhow::Result<BocBytes> {
+        let (resp, rx) = oneshot::channel();
+        self.tx.send(Request::GetBlockData { seqno, resp }).await?;
         rx.await?
     }
 
@@ -868,7 +927,9 @@ impl Localnet {
         lt: Option<u64>,
         unixtime: Option<u32>,
     ) -> anyhow::Result<LocalnetBlockId> {
-        let shard = shard.parse::<i64>().context("invalid shard number")?;
+        let shard = shard.parse::<i64>().map_err(|error| {
+            LocalnetError::protocol_violation(format!("invalid shard number: {error}"))
+        })?;
         let (resp, rx) = oneshot::channel();
         self.tx
             .send(Request::LookupBlock {
@@ -1370,6 +1431,10 @@ fn process_loop_request(node: &mut Node, recovery_points: &mut RecoveryPoints, r
             let res = handle_get_block_header(node, seqno);
             let _ = resp.send(res);
         }
+        Request::GetBlockData { seqno, resp } => {
+            let res = node.get_block_data(seqno);
+            let _ = resp.send(res);
+        }
         Request::GetBlockTransactions { seqno, resp } => {
             let res = handle_get_block_transactions(node, seqno);
             let _ = resp.send(res);
@@ -1731,7 +1796,7 @@ fn block_id_for_query_seqno(node: &Node, seqno: Seqno) -> anyhow::Result<Localne
 
     node.get_block_header(seqno)
         .map(|block| block.block_id())
-        .ok_or_else(|| anyhow::anyhow!("Block {seqno} not found"))
+        .ok_or_else(|| LocalnetError::BlockNotFound { seqno }.into())
 }
 
 fn handle_get_jetton_masters(
@@ -2249,7 +2314,7 @@ pub(crate) fn convert_to_message_struct(
 
 fn handle_get_block_header(node: &Node, seqno: u32) -> anyhow::Result<LocalnetBlockHeader> {
     let Some(header) = node.get_block_header(seqno) else {
-        anyhow::bail!("Block {seqno} not found")
+        return Err(LocalnetError::BlockNotFound { seqno }.into());
     };
 
     Ok(LocalnetBlockHeader {
@@ -2266,7 +2331,7 @@ fn handle_get_block_transactions(
     seqno: u32,
 ) -> anyhow::Result<LocalnetBlockTransactions> {
     let Some(block_header) = node.get_block_header(seqno) else {
-        anyhow::bail!("Block {seqno} not found")
+        return Err(LocalnetError::BlockNotFound { seqno }.into());
     };
     let Some(txs) = node.get_block_transactions(&block_header) else {
         anyhow::bail!("Transaction in block {seqno} not found")
@@ -2370,7 +2435,7 @@ fn handle_get_config_all(node: &Node, seqno: Option<u32>) -> anyhow::Result<BocB
 
 fn handle_get_shards(node: &Node, seqno: u32) -> anyhow::Result<Vec<LocalnetBlockId>> {
     let Some(block_header) = node.get_block_header(seqno) else {
-        anyhow::bail!("Block not found for seqno={seqno}")
+        return Err(LocalnetError::BlockNotFound { seqno }.into());
     };
     Ok(vec![block_header.block_id()])
 }
@@ -2380,7 +2445,7 @@ fn ensure_seqno_exists(node: &Node, seqno: Option<u32>) -> anyhow::Result<()> {
         && seqno > 0
         && node.get_block_header(seqno).is_none()
     {
-        anyhow::bail!("Block {seqno} not found");
+        return Err(LocalnetError::BlockNotFound { seqno }.into());
     }
     Ok(())
 }
@@ -2402,7 +2467,12 @@ fn handle_lookup_block(
     };
 
     let Some(block) = found_block else {
-        anyhow::bail!("Block not found for seqno={seqno:?}, lt={lt:?}, unixtime={unixtime:?}")
+        return Err(LocalnetError::BlockLookupNotFound {
+            seqno,
+            lt,
+            unixtime,
+        }
+        .into());
     };
 
     Ok(block.block_id())

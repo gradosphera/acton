@@ -1,4 +1,6 @@
 pub mod api;
+mod block;
+mod error;
 pub mod executor;
 mod indexer;
 mod localnet;
@@ -9,5 +11,6 @@ pub mod server;
 pub mod storage;
 pub mod streaming;
 pub mod types;
+pub(crate) use error::{LiteServerErrorCode, LocalnetError};
 pub use localnet::{DEFAULT_BLOCK_INTERVAL_MS, Localnet};
 pub use server::{ServerArgs, ServerError, StartupWallet, run_server};

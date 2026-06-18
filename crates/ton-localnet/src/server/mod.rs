@@ -2,6 +2,7 @@ pub mod handlers;
 pub mod models;
 pub mod router;
 
+use crate::liteapi;
 use crate::localnet::Localnet;
 use acton_config::color::OwoColorize;
 use axum::extract::FromRef;
@@ -297,6 +298,10 @@ pub struct ServerArgs {
 pub enum ServerError {
     #[error("failed to bind localnet server to {address}")]
     Bind { address: String, source: io::Error },
+    #[error("localnet LiteAPI port overflows u16 for HTTP port {http_port}")]
+    LiteApiPortOverflow { http_port: u16 },
+    #[error("failed to bind localnet LiteAPI to {address}")]
+    LiteApiBind { address: String, source: io::Error },
     #[error("failed to seed startup wallet names")]
     SeedStartupWalletNames(#[from] SeedStartupWalletNamesError),
     #[error("localnet server stopped with an error")]
@@ -344,7 +349,7 @@ pub async fn run_server(node: Arc<Localnet>, args: ServerArgs) -> Result<(), Ser
     let shutdown = ShutdownSignal::new();
     let app = router::create_router(
         ServerState {
-            node,
+            node: Arc::clone(&node),
             startup_wallets: Arc::new(startup_wallets),
             state_source: Arc::new(state_source),
             shutdown: shutdown.clone(),
@@ -362,9 +367,28 @@ pub async fn run_server(node: Arc<Localnet>, args: ServerArgs) -> Result<(), Ser
             address: address.clone(),
             source,
         })?;
+    let liteapi_port = port
+        .checked_add(1)
+        .ok_or(ServerError::LiteApiPortOverflow { http_port: port })?;
+    let liteapi_endpoint = liteapi::spawn_liteapi_server(Arc::clone(&node), liteapi_port)
+        .await
+        .map_err(|source| ServerError::LiteApiBind {
+            address: format!("127.0.0.1:{liteapi_port}"),
+            source,
+        })?;
     println!(
         "    {} Localnet server and UI on http://{address}",
         "Starting".green().bold(),
+    );
+    println!(
+        "    {} Localnet LiteAPI on tcp://{}",
+        "Starting".green().bold(),
+        liteapi_endpoint.address,
+    );
+    println!(
+        "        {} LiteAPI public key: {}",
+        "Key".yellow().bold(),
+        liteapi_endpoint.public_key_base64
     );
     if let Some(token) = auth_token.as_deref() {
         println!(

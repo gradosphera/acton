@@ -289,6 +289,7 @@ pub struct BlockMeta {
     pub end_lt: Lt,
     pub tx_hashes: Vec<Hash256>,
     pub block_hash: Hash256,
+    pub file_hash: Hash256,
 }
 
 impl BlockMeta {
@@ -299,7 +300,7 @@ impl BlockMeta {
             shard: -9223372036854775808,
             seqno: self.seqno,
             root_hash: self.block_hash,
-            file_hash: self.block_hash,
+            file_hash: self.file_hash,
         }
     }
 }
