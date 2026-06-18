@@ -386,7 +386,7 @@ pub async fn run_server(node: Arc<Localnet>, args: ServerArgs) -> Result<(), Ser
         liteapi_endpoint.address,
     );
     println!(
-        "        {} LiteAPI public key: {}",
+        "         {} LiteAPI public key: {}",
         "Key".yellow().bold(),
         liteapi_endpoint.public_key_base64
     );

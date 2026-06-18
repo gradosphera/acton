@@ -5376,6 +5376,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "ton-liteapi"
+version = "1.1.0"
+dependencies = [
+ "aes",
+ "ctr",
+ "curve25519-dalek",
+ "derivative",
+ "futures",
+ "hex",
+ "log",
+ "pin-project",
+ "rand 0.8.6",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror 2.0.18",
+ "tl-proto 0.5.3",
+ "tl-scheme 0.3.0",
+ "tokio",
+ "tokio-tower",
+ "tokio-util",
+ "tower 0.5.2",
+]
+
+[[package]]
 name = "ton-localnet"
 version = "1.1.0"
 dependencies = [
@@ -5394,13 +5419,16 @@ dependencies = [
  "rustc-hash 2.1.1",
  "serde",
  "serde_json",
+ "sha2",
  "thiserror 2.0.18",
  "tokio",
  "tokio-stream",
  "ton-api",
  "ton-executor",
  "ton-indexer",
+ "ton-liteapi",
  "ton-networks",
+ "tower 0.5.2",
  "tower-http",
  "tower_governor",
  "tracing",

@@ -61,6 +61,7 @@ tvm-logs = { path = "crates/tvm-logs" }
 tasm-core = { path = "crates/tasm-core" }
 dap-client = { path = "crates/dap-client" }
 ton-api = { path = "crates/ton-api" }
+ton-liteapi = { path = "crates/ton-liteapi" }
 ton-retrace = { path = "crates/ton-retrace" }
 ton-source-map = { path = "crates/ton-source-map" }
 tolk-fmt = { path = "crates/tolk-fmt" }
@@ -128,6 +129,17 @@ reqwest = { version = "0.12", features = ["json", "blocking", "multipart"] }
 urlencoding = "2.1"
 base64 = "0.22.1"
 rand = "0.8"
+aes = "0.8"
+ctr = "0.9"
+curve25519-dalek = "4.1"
+derivative = "2.2"
+futures = "0.3"
+pin-project = "1.1"
+tl-proto = { version = "0.5.3", features = ["derive"] }
+tokio-tower = "0.6.0"
+tokio-util = { version = "0.7", features = ["codec"] }
+tower = { version = "0.5", features = ["make", "util"] }
+tl-scheme = "0.3.0"
 machine-uid = "0.5.4"
 
 tempfile = "3.10.1" # testing

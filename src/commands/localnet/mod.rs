@@ -121,6 +121,11 @@ pub async fn localnet_start_cmd(
                     "Failed to start localnet on {address}\nSet another port with [localnet].port in Acton.toml\nOr stop the process currently listening on that port"
                 ),
             )),
+            ServerError::LiteApiBind { address, source } => Err(anyhow::Error::new(source).context(
+                format!(
+                    "Failed to start localnet LiteAPI on {address}\nSet another localnet port with [localnet].port in Acton.toml so the next port is free\nOr stop the process currently listening on that port"
+                ),
+            )),
             error => Err(error.into()),
         };
     }
