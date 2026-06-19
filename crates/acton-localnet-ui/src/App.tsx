@@ -27,6 +27,12 @@ const HOST = (import.meta.env.VITE_LOCALNET_HOST || "").replace(/\/$/, "")
 const LOCALNET_API_TOKEN_STORAGE_KEY = "localnetApiToken"
 const ENV_LOCALNET_API_TOKEN = import.meta.env.VITE_LOCALNET_API_TOKEN?.trim() || undefined
 const TONCENTER_API_KEY = import.meta.env.VITE_LOCALNET_TONCENTER_API_KEY?.trim() || undefined
+const TONCENTER_API_V2_URL =
+  import.meta.env.VITE_LOCALNET_TONCENTER_API_V2_URL?.trim().replace(/\/$/, "") || undefined
+const TONCENTER_API_V3_URL =
+  import.meta.env.VITE_LOCALNET_TONCENTER_API_V3_URL?.trim().replace(/\/$/, "") || undefined
+const API_V2_BASE_URL = TONCENTER_API_V2_URL ?? `${HOST}/api/v2`
+const API_V3_BASE_URL = TONCENTER_API_V3_URL ?? `${HOST}/api/v3`
 
 const readInitialTheme = (): ThemeMode => {
   const storedTheme = localStorage.getItem("theme")
@@ -101,8 +107,8 @@ export const App: React.FC = () => {
   const client = useMemo(
     () =>
       new TonClient({
-        v2BaseUrl: `${HOST}/api/v2`,
-        v3BaseUrl: `${HOST}/api/v3`,
+        v2BaseUrl: API_V2_BASE_URL,
+        v3BaseUrl: API_V3_BASE_URL,
         addressNameBaseUrl: HOST,
         localnetApiToken,
         onUnauthorized: handleUnauthorized,
@@ -204,10 +210,7 @@ const AppContent: React.FC<AppContentProps> = ({
                 </DashboardPage>
               }
             />
-            <Route
-              path="/blocks"
-              element={<Navigate to="/explorer/blocks" replace />}
-            />
+            <Route path="/blocks" element={<Navigate to="/explorer/blocks" replace />} />
             <Route
               path="/explorer/blocks"
               element={
@@ -255,8 +258,8 @@ const AppContent: React.FC<AppContentProps> = ({
                 <DashboardPage {...dashboardProps} embedded>
                   <RouteSuspense>
                     <ApiReferencePage
-                      apiBaseUrl={`${HOST}/api/v2`}
-                      localnetApiToken={localnetApiToken}
+                      apiBaseUrl={API_V2_BASE_URL}
+                      localnetApiToken={TONCENTER_API_V2_URL ? undefined : localnetApiToken}
                       onUnauthorized={onRequireAuthToken}
                       theme={theme}
                       toncenterApiKey={TONCENTER_API_KEY}
@@ -272,8 +275,8 @@ const AppContent: React.FC<AppContentProps> = ({
                 <DashboardPage {...dashboardProps} embedded>
                   <RouteSuspense>
                     <ApiReferencePage
-                      apiBaseUrl={`${HOST}/api/v3`}
-                      localnetApiToken={localnetApiToken}
+                      apiBaseUrl={API_V3_BASE_URL}
+                      localnetApiToken={TONCENTER_API_V3_URL ? undefined : localnetApiToken}
                       onUnauthorized={onRequireAuthToken}
                       theme={theme}
                       toncenterApiKey={TONCENTER_API_KEY}

@@ -4,6 +4,12 @@ import React, {useMemo, useState} from "react"
 import type {NftItem} from "../api/types"
 
 import {AddressLabel} from "./AddressLabel"
+import {
+  NFT_IMAGE_SOURCE_KEYS,
+  getImageSources,
+  getPrimaryImageSource,
+  replaceBrokenImageWithFallback,
+} from "./imageFallbacks"
 import styles from "./Nfts.module.css"
 
 interface NftsProps {
@@ -11,11 +17,21 @@ interface NftsProps {
   readonly onAddressClick?: (addr: string) => void
 }
 
-const NFT_PLACEHOLDER_IMAGE = "/token-placeholder.svg"
-
 const getContentString = (content: Record<string, unknown>, key: string): string | undefined => {
   const value = content[key]
   return typeof value === "string" && value.length > 0 ? value : undefined
+}
+
+function getCollectionName(item: NftItem): string | undefined {
+  return (
+    getContentString(item.content, "collection_name") ||
+    getContentString(item.content, "collection")
+  )
+}
+
+function getNftDisplayName(item: NftItem): string {
+  const collectionName = getCollectionName(item)
+  return getContentString(item.content, "name") || `${collectionName || "NFT"} #${item.index}`
 }
 
 export const Nfts: React.FC<NftsProps> = ({items, onAddressClick}) => {
@@ -25,9 +41,8 @@ export const Nfts: React.FC<NftsProps> = ({items, onAddressClick}) => {
     if (!normalizedQuery) return items
 
     return items.filter(item => {
-      const name = getContentString(item.content, "name") || `NFT #${item.index}`
-      const collectionName =
-        getContentString(item.content, "collection_name") || item.collection_address || ""
+      const name = getNftDisplayName(item)
+      const collectionName = getCollectionName(item) || item.collection_address || ""
       const searchable = [
         name,
         collectionName,
@@ -61,15 +76,10 @@ export const Nfts: React.FC<NftsProps> = ({items, onAddressClick}) => {
       </label>
       <div className={styles.list}>
         {visibleItems.map(item => {
-          const name = getContentString(item.content, "name") || `NFT #${item.index}`
-          const collectionName =
-            getContentString(item.content, "collection_name") ||
-            getContentString(item.content, "collection")
-          const image =
-            getContentString(item.content, "image") ||
-            getContentString(item.content, "preview") ||
-            getContentString(item.content, "image_url") ||
-            NFT_PLACEHOLDER_IMAGE
+          const name = getNftDisplayName(item)
+          const collectionName = getCollectionName(item)
+          const imageSources = getImageSources(item.content, NFT_IMAGE_SOURCE_KEYS)
+          const image = getPrimaryImageSource(item.content, NFT_IMAGE_SOURCE_KEYS)
 
           return (
             <div
@@ -89,11 +99,7 @@ export const Nfts: React.FC<NftsProps> = ({items, onAddressClick}) => {
                   src={image}
                   alt={name}
                   className={styles.nftImage}
-                  onError={event => {
-                    const img = event.currentTarget
-                    if (img.getAttribute("src") === NFT_PLACEHOLDER_IMAGE) return
-                    img.src = NFT_PLACEHOLDER_IMAGE
-                  }}
+                  onError={event => replaceBrokenImageWithFallback(event, imageSources)}
                 />
               </div>
               <div className={styles.nftInfo}>

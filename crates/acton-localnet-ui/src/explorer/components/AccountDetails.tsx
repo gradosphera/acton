@@ -205,8 +205,8 @@ export const AccountDetails: React.FC<AccountDetailsProps> = ({
       addresses.add(ownerAddress)
 
       for (const tx of transactions) {
-        if (tx.in_msg.source) addresses.add(tx.in_msg.source)
-        if (tx.in_msg.destination) addresses.add(tx.in_msg.destination)
+        if (tx.in_msg?.source) addresses.add(tx.in_msg.source)
+        if (tx.in_msg?.destination) addresses.add(tx.in_msg.destination)
         for (const msg of tx.out_msgs) {
           if (msg.source) addresses.add(msg.source)
           if (msg.destination) addresses.add(msg.destination)
@@ -684,7 +684,13 @@ export const AccountDetails: React.FC<AccountDetailsProps> = ({
                 </TableRow>
               ) : (
                 paginatedTransactionRows.map(({tx, info}) => {
+                  const transactionHash = getTransactionHash(tx)
                   const valueStr = formatNano(info.displayValue.toString())
+                  const isEmptyValue = info.displayValue === 0n
+                  const valuePrefix = isEmptyValue ? "" : info.isIncoming ? "+ " : "- "
+                  const valueLabel = isEmptyValue
+                    ? "empty"
+                    : `${valuePrefix}${Number.parseFloat(valueStr).toLocaleString()} GRAM`
                   const formattedTime = formatTransactionTime(
                     tx.utime,
                     nowSeconds,
@@ -697,10 +703,10 @@ export const AccountDetails: React.FC<AccountDetailsProps> = ({
 
                   return (
                     <TableRow
-                      key={tx.hash}
+                      key={transactionHash ?? `${tx.account}:${tx.transaction_id.lt}:${tx.utime}`}
                       className={`${styles.row} ${styles.clickableRow}`}
                       onClick={() => {
-                        const txHash = hashToHex(tx.hash)
+                        const txHash = hashToHex(transactionHash)
                         if (!txHash) return
                         void navigate(`/explorer/tx/${txHash}`)
                       }}
@@ -749,10 +755,15 @@ export const AccountDetails: React.FC<AccountDetailsProps> = ({
                       </TableCell>
                       <TableCell className={styles.valueContainer}>
                         <div
-                          className={`${info.isIncoming ? styles.valuePositive : styles.valueNegative} ${styles.historyValue}`}
+                          className={`${
+                            isEmptyValue
+                              ? styles.valueEmpty
+                              : info.isIncoming
+                                ? styles.valuePositive
+                                : styles.valueNegative
+                          } ${styles.historyValue}`}
                         >
-                          {info.isIncoming ? "+" : "-"}{" "}
-                          {Number.parseFloat(valueStr).toLocaleString()} GRAM
+                          {valueLabel}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -1048,27 +1059,39 @@ function getHistoryTransactionInfo(
   messageNamesByAddress: MessageNamesByAddress,
 ): HistoryTransactionInfo {
   const inMsg = tx.in_msg
-  const inMsgSrc = parseAddress(inMsg.source || "")
-  const inMsgDest = parseAddress(inMsg.destination || "")
+  const outMsgs = tx.out_msgs
+  if (!inMsg && outMsgs.length === 0) {
+    return {
+      isIncoming: false,
+      address: "",
+      displayAddressFallback: "System",
+      actionKey: "system:tick-tock",
+      actionLabel: "Tick-tock",
+      displayValue: BigInt(0),
+    }
+  }
+
+  const inMsgSrc = parseAddress(inMsg?.source || "")
+  const inMsgDest = parseAddress(inMsg?.destination || "")
   const isInboundToAccount = inMsgDest && browsedAddr ? inMsgDest.equals(browsedAddr) : false
   const isIncoming =
     isInboundToAccount &&
     browsedAddr !== undefined &&
     inMsgSrc !== undefined &&
-    (!inMsgSrc.equals(browsedAddr) || tx.out_msgs.length === 0)
+    (!inMsgSrc.equals(browsedAddr) || outMsgs.length === 0)
 
-  const inValue = BigInt(tx.in_msg.value || "0")
-  const outValue = tx.out_msgs.reduce((acc, msg) => acc + BigInt(msg.value || "0"), BigInt(0))
+  const inValue = BigInt(inMsg?.value || "0")
+  const outValue = outMsgs.reduce((acc, msg) => acc + BigInt(msg.value || "0"), BigInt(0))
   const displayValue = isIncoming ? inValue : outValue
   const address = isIncoming
-    ? tx.in_msg.source || ""
-    : tx.out_msgs.find(message => message.destination)?.destination || ""
+    ? inMsg?.source || ""
+    : outMsgs.find(message => message.destination)?.destination || ""
   const displayAddressFallback = isIncoming ? "External" : "Contract"
   const displayMessage = isIncoming
-    ? tx.in_msg
-    : tx.out_msgs.find(message => message.destination) ||
-      tx.out_msgs.find(message => message.opcode) ||
-      tx.out_msgs[0]
+    ? (inMsg ?? undefined)
+    : outMsgs.find(message => message.destination) ||
+      outMsgs.find(message => message.opcode) ||
+      outMsgs[0]
   const opcode = displayMessage?.opcode?.trim()
   const normalizedOpcode = opcode ? normalizeOpcode(opcode) : undefined
   const actionLabel =
@@ -1100,7 +1123,11 @@ function compareTransactionsByTime(left: Transaction, right: Transaction): numbe
     return ltComparison
   }
 
-  return left.hash.localeCompare(right.hash)
+  return (getTransactionHash(left) ?? "").localeCompare(getTransactionHash(right) ?? "")
+}
+
+function getTransactionHash(transaction: Transaction): string | undefined {
+  return transaction.hash || transaction.transaction_id.hash
 }
 
 function compareBigIntStrings(left: string, right: string): number {

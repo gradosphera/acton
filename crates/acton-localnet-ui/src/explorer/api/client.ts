@@ -79,7 +79,36 @@ interface JettonWalletsResponse {
   readonly metadata?: JettonWalletMetadata
 }
 
-const JETTON_CONTENT_KEYS = ["uri", "name", "description", "image", "symbol", "decimals"] as const
+interface JettonMastersResponse {
+  readonly jetton_masters: JettonMaster[]
+  readonly metadata?: JettonWalletMetadata
+}
+
+interface NftItemsResponse {
+  readonly nft_items: NftItem[]
+  readonly metadata?: JettonWalletMetadata
+}
+
+const IMAGE_CONTENT_KEYS = ["image", "_image_small", "_image_medium", "_image_big"] as const
+const JETTON_CONTENT_KEYS = [
+  "uri",
+  "name",
+  "description",
+  ...IMAGE_CONTENT_KEYS,
+  "symbol",
+  "decimals",
+] as const
+const NFT_CONTENT_KEYS = [
+  "uri",
+  "name",
+  "description",
+  ...IMAGE_CONTENT_KEYS,
+  "preview",
+  "image_url",
+  "symbol",
+  "collection",
+  "collection_name",
+] as const
 
 function jettonMasterMetadataFromWalletResponse(
   jettonAddress: string,
@@ -109,6 +138,68 @@ function jettonMasterMetadataFromWalletResponse(
     jetton_content: jettonContent,
     ...(totalSupply ? {total_supply: totalSupply} : undefined),
     ...(mintable === undefined ? undefined : {mintable}),
+  }
+}
+
+function attachJettonMasterMetadata(
+  master: JettonMaster,
+  metadata: JettonWalletMetadata | undefined,
+): JettonMaster {
+  const normalizedMetadata = jettonMasterMetadataFromWalletResponse(master.address, metadata)
+  if (!normalizedMetadata) {
+    return master
+  }
+
+  return {
+    ...master,
+    jetton_content: {
+      ...master.jetton_content,
+      ...normalizedMetadata.jetton_content,
+    },
+  }
+}
+
+function attachNftItemMetadata(item: NftItem, metadata: JettonWalletMetadata | undefined): NftItem {
+  const tokenInfo = metadata?.[item.address]?.token_info?.find(info => info.type === "nft_items")
+  const tokenExtra = isRecord(tokenInfo?.extra) ? tokenInfo.extra : {}
+  const content: Record<string, unknown> = {...tokenExtra}
+
+  if (tokenInfo) {
+    for (const key of NFT_CONTENT_KEYS) {
+      const value = stringValue(tokenInfo[key]) ?? stringValue(tokenExtra[key])
+      if (value) {
+        content[key] = value
+      }
+    }
+  }
+
+  const collectionAddress = item.collection?.address ?? item.collection_address
+  const collectionInfo = collectionAddress
+    ? metadata?.[collectionAddress]?.token_info?.find(info => info.type === "nft_collections")
+    : undefined
+  const collectionExtra = isRecord(collectionInfo?.extra) ? collectionInfo.extra : {}
+  const collectionName =
+    stringValue(collectionInfo?.name) ??
+    stringValue(collectionExtra.name) ??
+    stringValue(item.collection?.collection_content?.name)
+  if (collectionName && !stringValue(content.collection_name)) {
+    content.collection_name = collectionName
+  }
+  const domainName = stringValue(content.domain)
+  if (domainName && !stringValue(content.name)) {
+    content.name = domainName
+  }
+
+  if (Object.keys(content).length === 0) {
+    return item
+  }
+
+  return {
+    ...item,
+    content: {
+      ...item.content,
+      ...content,
+    },
   }
 }
 
@@ -192,10 +283,13 @@ export class TonClient {
           const singleUrl = this.buildUrl(this.v3BaseUrl, "/jetton/masters")
           singleUrl.searchParams.append("address", addr)
           try {
-            const response = await this.request<{
-              jetton_masters: JettonMaster[]
-            }>(singleUrl, "Failed to fetch jetton master")
-            return response.jetton_masters
+            const response = await this.request<JettonMastersResponse>(
+              singleUrl,
+              "Failed to fetch jetton master",
+            )
+            return response.jetton_masters.map(master =>
+              attachJettonMasterMetadata(master, response.metadata),
+            )
           } catch (error) {
             console.error(`Failed to fetch jetton master for ${addr}`, error)
             return []
@@ -208,11 +302,13 @@ export class TonClient {
     const url = this.buildUrl(this.v3BaseUrl, "/jetton/masters")
     url.searchParams.append("limit", limit.toString())
     url.searchParams.append("offset", offset.toString())
-    const response = await this.request<{jetton_masters: JettonMaster[]}>(
+    const response = await this.request<JettonMastersResponse>(
       url,
       "Failed to fetch jetton masters",
     )
-    return response.jetton_masters
+    return response.jetton_masters.map(master =>
+      attachJettonMasterMetadata(master, response.metadata),
+    )
   }
 
   async getJettonWallets(
@@ -304,7 +400,7 @@ export class TonClient {
 
   async getTraces(hash: string): Promise<V3TracesResponse> {
     const url = this.buildUrl(this.v3BaseUrl, "/traces")
-    url.searchParams.append("hash", hash)
+    url.searchParams.append("tx_hash", hash)
     return this.request(url, "Failed to fetch traces")
   }
 
@@ -375,8 +471,8 @@ export class TonClient {
         url.searchParams.append("sort_by_last_transaction_lt", "true")
       }
 
-      const response = await this.request<{nft_items: NftItem[]}>(url, "Failed to fetch NFTs")
-      return response.nft_items
+      const response = await this.request<NftItemsResponse>(url, "Failed to fetch NFTs")
+      return response.nft_items.map(item => attachNftItemMetadata(item, response.metadata))
     }
 
     if (addresses && addresses.length > 0) {
@@ -800,11 +896,7 @@ export class TonClient {
   }
 
   private isLocalnetApiUrl(url: URL): boolean {
-    return (
-      this.isToncenterApiUrl(url) ||
-      this.isUrlWithinBase(url, this.buildUrl(this.addressNameBaseUrl, "")) ||
-      this.isUrlWithinBase(url, this.buildStreamingSseUrl())
-    )
+    return this.isUrlWithinBase(url, this.buildUrl(this.addressNameBaseUrl, ""))
   }
 
   private isUrlWithinBase(url: URL, baseUrl: URL): boolean {

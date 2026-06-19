@@ -21,6 +21,14 @@ import {AccountInfo} from "../components/AccountInfo"
 import {AddressLabel} from "../components/AddressLabel"
 import {Breadcrumbs} from "../components/Breadcrumbs"
 import {AccountDetails} from "../components/AccountDetails"
+import {
+  NFT_IMAGE_SOURCE_KEYS,
+  TOKEN_IMAGE_SOURCE_KEYS,
+  TOKEN_PLACEHOLDER_IMAGE,
+  getImageSources,
+  getPrimaryImageSource,
+  replaceBrokenImageWithFallback,
+} from "../components/imageFallbacks"
 import {normalizeAddress, toRawAddress} from "../components/utils"
 import {useAddressFormat} from "../hooks/useNetworkInfo"
 
@@ -30,7 +38,6 @@ interface AccountPageProps {
   readonly client: TonClient
 }
 
-const NFT_PLACEHOLDER_IMAGE = "/token-placeholder.svg"
 const ACCOUNT_TRANSACTION_HISTORY_LIMIT = 1000
 type AccountTab = "history" | "contract" | "tokens" | "nfts" | "holders"
 
@@ -455,7 +462,7 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
       try {
         const wallets = await client.getJettonWallets([formattedAddress])
         if (!isActive) return
-        setJettonWallets(wallets)
+        setJettonWallets(sortJettonWalletsByAmount(wallets))
       } catch (error) {
         console.error("Failed to fetch account jetton wallets", error)
       } finally {
@@ -600,6 +607,8 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
   const tokenSymbol = tokenInfo?.jetton_content.symbol
   const tokenName = tokenInfo?.jetton_content.name || "Unknown Jetton"
   const tokenDecimals = tokenInfo?.jetton_content.decimals
+  const tokenImageSources = getImageSources(tokenInfo?.jetton_content, TOKEN_IMAGE_SOURCE_KEYS)
+  const tokenImage = tokenImageSources[0] ?? TOKEN_PLACEHOLDER_IMAGE
   const jettonMasterAdminAddress = jettonMaster?.admin_address ?? undefined
   const tokenTotalSupply = jettonMaster
     ? formatJettonAmount(jettonMaster.total_supply, tokenDecimals)
@@ -633,12 +642,11 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
   const nftItemDescription =
     tokenInfoString(nftItemTokenInfo, "description") ||
     contentString(currentNftItem?.content, "description")
-  const nftItemImage =
-    tokenInfoString(nftItemTokenInfo, "image") ||
-    contentString(currentNftItem?.content, "image") ||
-    contentString(currentNftItem?.content, "preview") ||
-    contentString(currentNftItem?.content, "image_url") ||
-    NFT_PLACEHOLDER_IMAGE
+  const nftItemImageSources = [
+    ...getImageSources(nftItemTokenInfo, NFT_IMAGE_SOURCE_KEYS),
+    ...getImageSources(currentNftItem?.content, NFT_IMAGE_SOURCE_KEYS),
+  ]
+  const nftItemImage = nftItemImageSources[0] ?? TOKEN_PLACEHOLDER_IMAGE
   const nftItemMetadataJson = currentNftItem
     ? JSON.stringify(
         {
@@ -656,11 +664,12 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
   const nftItemCollectionAddress = currentNftItem?.collection_address
   const activeMetadataJson = jettonMaster ? jettonMetadataJson : nftItemMetadataJson
   const activeMetadataTitle = jettonMaster ? tokenName : (nftItemName ?? "NFT item")
-  const activeMetadataImage = jettonMaster
-    ? tokenInfo?.jetton_content.image
+  const activeMetadataImageSources = jettonMaster
+    ? tokenImageSources
     : currentNftItem
-      ? nftItemImage
-      : undefined
+      ? nftItemImageSources
+      : []
+  const activeMetadataImage = activeMetadataImageSources[0]
   const collectionSample = currentNftCollectionItems[0]
   const nftCollectionName =
     tokenInfoString(nftCollectionTokenInfo, "name") ||
@@ -669,16 +678,19 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
   const nftCollectionDescription =
     tokenInfoString(nftCollectionTokenInfo, "description") ||
     contentString(collectionSample?.content, "collection_description")
-  const nftCollectionImage =
-    tokenInfoString(nftCollectionTokenInfo, "image") ||
-    contentString(collectionSample?.content, "collection_image") ||
-    NFT_PLACEHOLDER_IMAGE
+  const nftCollectionImageSources = [
+    ...getImageSources(nftCollectionTokenInfo, NFT_IMAGE_SOURCE_KEYS),
+    ...getImageSources(collectionSample?.content, [
+      "collection_image",
+      "collection_image_small",
+      "collection_image_medium",
+      "collection_image_big",
+      ...NFT_IMAGE_SOURCE_KEYS,
+    ]),
+  ]
+  const nftCollectionImage = nftCollectionImageSources[0] ?? TOKEN_PLACEHOLDER_IMAGE
   const collectiblePreviews = nftItems.slice(0, 8).map(item => ({
-    image:
-      contentString(item.content, "image") ||
-      contentString(item.content, "preview") ||
-      contentString(item.content, "image_url") ||
-      NFT_PLACEHOLDER_IMAGE,
+    image: getPrimaryImageSource(item.content, NFT_IMAGE_SOURCE_KEYS),
     name:
       contentString(item.content, "name") ||
       contentString(item.content, "collection_name") ||
@@ -712,7 +724,9 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
                 address={formattedAddress}
                 state={accountState}
                 extendedContractAbi={extendedContractAbi}
-                contractInterfaces={accountStateV3?.interfaces}
+                contractInterfaces={
+                  Array.isArray(accountStateV3?.interfaces) ? accountStateV3.interfaces : undefined
+                }
                 jettonWallets={jettonWallets}
                 accountLoading={accountLoading}
                 assetsLoading={accountLoading || jettonWalletsLoading}
@@ -733,13 +747,14 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
                       className={`${styles.jettonInfo} ${jettonMaster ? styles.jettonMasterInfo : ""}`}
                     >
                       <div className={styles.jettonHeader}>
-                        {tokenInfo.jetton_content.image && (
-                          <img
-                            src={tokenInfo.jetton_content.image}
-                            alt={tokenName}
-                            className={styles.jettonImage}
-                          />
-                        )}
+                        <img
+                          src={tokenImage}
+                          alt={tokenName}
+                          className={styles.jettonImage}
+                          onError={event =>
+                            replaceBrokenImageWithFallback(event, tokenImageSources)
+                          }
+                        />
                         <div className={styles.jettonHeaderContent}>
                           <div className={styles.jettonTitle}>
                             <div className={styles.jettonName}>{tokenName}</div>
@@ -826,6 +841,9 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
                             src={nftItemImage}
                             alt={nftItemName}
                             className={styles.nftPanelImage}
+                            onError={event =>
+                              replaceBrokenImageWithFallback(event, nftItemImageSources)
+                            }
                           />
                         </div>
                       </div>
@@ -865,6 +883,9 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
                             src={nftCollectionImage}
                             alt={nftCollectionName}
                             className={styles.nftPanelImage}
+                            onError={event =>
+                              replaceBrokenImageWithFallback(event, nftCollectionImageSources)
+                            }
                           />
                         </div>
                       </div>
@@ -1031,6 +1052,9 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
                       className={`${styles.metadataTokenImage} ${
                         currentNftItem ? styles.metadataNftImage : ""
                       }`}
+                      onError={event =>
+                        replaceBrokenImageWithFallback(event, activeMetadataImageSources)
+                      }
                     />
                   )}
                 </div>
@@ -1074,6 +1098,42 @@ function formatJettonAmount(value: string, decimals?: string): string {
   return (Number(value) / 10 ** decimalsNumber).toLocaleString(undefined, {
     maximumFractionDigits: decimalsNumber,
   })
+}
+
+function sortJettonWalletsByAmount(wallets: readonly JettonWallet[]): JettonWallet[] {
+  return [...wallets].sort(compareJettonWalletAmount)
+}
+
+function compareJettonWalletAmount(left: JettonWallet, right: JettonWallet): number {
+  const leftBalance = parseBigIntAmount(left.balance)
+  const rightBalance = parseBigIntAmount(right.balance)
+  const leftDecimals = parseJettonDecimals(left.master?.jetton_content.decimals)
+  const rightDecimals = parseJettonDecimals(right.master?.jetton_content.decimals)
+  const leftScaled = leftBalance * 10n ** BigInt(rightDecimals)
+  const rightScaled = rightBalance * 10n ** BigInt(leftDecimals)
+
+  if (leftScaled > rightScaled) return -1
+  if (leftScaled < rightScaled) return 1
+
+  const leftSymbol = left.master?.jetton_content.symbol ?? ""
+  const rightSymbol = right.master?.jetton_content.symbol ?? ""
+  return leftSymbol.localeCompare(rightSymbol)
+}
+
+function parseBigIntAmount(value: string): bigint {
+  try {
+    return BigInt(value)
+  } catch {
+    return 0n
+  }
+}
+
+function parseJettonDecimals(decimals: string | undefined): number {
+  const value = Number(decimals ?? 9)
+  if (!Number.isInteger(value) || value < 0) {
+    return 9
+  }
+  return Math.min(value, 36)
 }
 
 interface CopyAddressButtonProps {

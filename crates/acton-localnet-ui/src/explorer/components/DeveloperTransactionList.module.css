@@ -210,6 +210,10 @@
   text-align: right;
 }
 
+.valueEmpty {
+  color: var(--tonscan-text-secondary, var(--litenode-text-muted));
+}
+
 .skeletonLine {
   position: relative;
   display: block;

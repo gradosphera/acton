@@ -36,6 +36,7 @@ interface DeveloperTransactionRow {
   readonly direction: "IN" | "OUT"
   readonly messageName?: string
   readonly valueLabel: string
+  readonly valueKind: "value" | "empty"
   readonly isSuccess: boolean
   readonly statusLabel: string
 }
@@ -135,7 +136,7 @@ export const DeveloperTransactionList: React.FC<DeveloperTransactionListProps> =
         </thead>
         <tbody>
           {rows.map(row => {
-            const hashHex = hashToHex(row.transaction.hash)
+            const hashHex = hashToHex(getTransactionHash(row.transaction))
             const canOpenTransaction = hashHex !== undefined && onTransactionClick !== undefined
             const timeTitle = formatAbsoluteTime(row.time)
 
@@ -172,7 +173,13 @@ export const DeveloperTransactionList: React.FC<DeveloperTransactionListProps> =
                   <span className={styles.opcodeValue}>{row.messageName ?? "—"}</span>
                 </td>
                 <td className={styles.valueCell}>
-                  <span className={styles.valueText}>{row.valueLabel}</span>
+                  <span
+                    className={`${styles.valueText} ${
+                      row.valueKind === "empty" ? styles.valueEmpty : ""
+                    }`}
+                  >
+                    {row.valueLabel}
+                  </span>
                 </td>
               </tr>
             )
@@ -226,18 +233,22 @@ function buildDeveloperRows(
   const account = transaction.account
   const isSuccess = isTransactionSuccess(transaction)
   const statusLabel = getTransactionStatusLabel(transaction)
+  const transactionHash = getTransactionHash(transaction)
+  const transactionKey = transactionHash ?? `${account}:${getTransactionLt(transaction)}:${time}`
 
   transaction.out_msgs.forEach((message, index) => {
     const to = addressEndpoint(message.destination, "External")
+    const value = formatMessageValue(message, to)
     rows.push({
-      key: `${transaction.hash}:out:${message.hash || index}`,
+      key: `${transactionKey}:out:${message.hash || index}`,
       transaction,
       time,
       from: addressEndpoint(message.source || account, "Account"),
       to,
       direction: "OUT",
       messageName: resolveMessageLabel(message, messageNamesByAddress),
-      valueLabel: formatMessageValue(message, to),
+      valueLabel: value.label,
+      valueKind: value.kind,
       isSuccess,
       statusLabel,
     })
@@ -245,15 +256,17 @@ function buildDeveloperRows(
 
   if (transaction.in_msg) {
     const from = addressEndpoint(transaction.in_msg.source, "External")
+    const value = formatMessageValue(transaction.in_msg, from)
     rows.push({
-      key: `${transaction.hash}:in`,
+      key: `${transactionKey}:in`,
       transaction,
       time,
       from,
       to: addressEndpoint(transaction.in_msg.destination || account, "Account"),
       direction: "IN",
       messageName: resolveMessageLabel(transaction.in_msg, messageNamesByAddress),
-      valueLabel: formatMessageValue(transaction.in_msg, from),
+      valueLabel: value.label,
+      valueKind: value.kind,
       isSuccess,
       statusLabel,
     })
@@ -261,13 +274,14 @@ function buildDeveloperRows(
 
   if (rows.length === 0) {
     rows.push({
-      key: `${transaction.hash}:empty`,
+      key: `${transactionKey}:empty`,
       transaction,
       time,
-      from: textEndpoint("External"),
+      from: textEndpoint("System"),
       to: addressEndpoint(account, "Account"),
       direction: "IN",
-      valueLabel: "—",
+      valueLabel: "empty",
+      valueKind: "empty",
       isSuccess,
       statusLabel,
     })
@@ -280,6 +294,18 @@ function getTransactionTime(transaction: DeveloperTransaction): number {
   return "now" in transaction ? transaction.now : transaction.utime
 }
 
+function getTransactionLt(transaction: DeveloperTransaction): string {
+  return "lt" in transaction ? transaction.lt : transaction.transaction_id.lt
+}
+
+function getTransactionHash(transaction: DeveloperTransaction): string | undefined {
+  if ("description" in transaction) {
+    return transaction.hash
+  }
+
+  return transaction.hash || transaction.transaction_id.hash
+}
+
 function isTransactionSuccess(transaction: DeveloperTransaction): boolean {
   if ("description" in transaction) {
     return (
@@ -289,7 +315,7 @@ function isTransactionSuccess(transaction: DeveloperTransaction): boolean {
     )
   }
 
-  return transaction.success
+  return transaction.success ?? true
 }
 
 function getTransactionStatusLabel(transaction: DeveloperTransaction): string {
@@ -299,6 +325,10 @@ function getTransactionStatusLabel(transaction: DeveloperTransaction): string {
 
   if ("description" in transaction) {
     return `Failed transaction, exit ${transaction.description.compute_ph.exit_code}`
+  }
+
+  if (transaction.exit_code === undefined || transaction.exit_code === null) {
+    return "Failed transaction"
   }
 
   return `Failed transaction, exit ${transaction.exit_code}`
@@ -331,12 +361,17 @@ function formatDeveloperValue(value: bigint): string {
 function formatMessageValue(
   message: DeveloperMessage,
   externalEndpoint: DeveloperEndpoint,
-): string {
+): {label: string; kind: "value" | "empty"} {
   if (externalEndpoint.kind === "text" && externalEndpoint.label === "External") {
-    return "—"
+    return {label: "empty", kind: "empty"}
   }
 
-  return formatDeveloperValue(parseNanoValue(message.value))
+  const value = parseNanoValue(message.value)
+  if (value === 0n) {
+    return {label: "empty", kind: "empty"}
+  }
+
+  return {label: formatDeveloperValue(value), kind: "value"}
 }
 
 function formatMessageOpcode(message: DeveloperMessage | undefined): string | undefined {
@@ -347,12 +382,15 @@ function formatMessageOpcode(message: DeveloperMessage | undefined): string | un
   return formatOpcode(message.opcode)
 }
 
-function formatOpcode(opcode: string | number | undefined): string | undefined {
-  if (opcode === undefined) {
+function formatOpcode(opcode: string | number | null | undefined): string | undefined {
+  if (opcode === null || opcode === undefined) {
     return undefined
   }
 
   const normalized = typeof opcode === "string" ? opcode.trim() : opcode
+  if (normalized === "") {
+    return undefined
+  }
   const value =
     typeof normalized === "number"
       ? normalized

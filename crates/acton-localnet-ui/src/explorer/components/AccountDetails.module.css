@@ -576,6 +576,11 @@ th.valueContainer {
   font-weight: var(--font-weight-medium);
 }
 
+.valueEmpty {
+  color: var(--tonscan-text-secondary);
+  font-weight: var(--font-weight-medium);
+}
+
 .historyValue {
   font-size: var(--font-size-sm);
   line-height: 1.35;

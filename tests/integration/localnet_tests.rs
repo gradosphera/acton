@@ -2137,12 +2137,12 @@ fn localnet_supports_try_locate_transaction_endpoints() {
     let deployer_address = extract_marker_value(&script_stdout, "DEPLOYER_CONTRACT=");
 
     let deadline = Instant::now() + Duration::from_secs(12);
-    let (source_tx_hash, source, destination, created_lt) = loop {
+    let (get_transactions_response, (source_tx_hash, source, destination, created_lt)) = loop {
         let response = node.get_json(&format!(
             "/api/v2/getTransactions?address={deployer_address}&limit=10"
         ));
         if let Some(locator) = extract_first_outgoing_message_locator(&response) {
-            break locator;
+            break (response, locator);
         }
         assert!(
             Instant::now() < deadline,
@@ -2151,6 +2151,14 @@ fn localnet_supports_try_locate_transaction_endpoints() {
         );
         thread::sleep(Duration::from_millis(200));
     };
+    let source_transaction = get_transactions_response["result"]
+        .as_array()
+        .and_then(|transactions| {
+            transactions
+                .iter()
+                .find(|tx| v2_transaction_id_hash(tx) == Some(source_tx_hash.as_str()))
+        })
+        .expect("getTransactions response must include the source transaction");
 
     let try_locate_tx_query = format!(
         "/api/v2/tryLocateTx?source={source}&destination={destination}&created_lt={created_lt}"
@@ -2170,9 +2178,11 @@ fn localnet_supports_try_locate_transaction_endpoints() {
     );
     let try_locate_result_tx =
         wait_for_ok_response(&node, &try_locate_result_tx_query, Duration::from_secs(12));
+    let try_locate_tx_hash = v2_transaction_id_hash(&try_locate_tx["result"])
+        .expect("tryLocateTx result must include transaction_id.hash");
     assert_eq!(
-        try_locate_result_tx["result"]["hash"].as_str(),
-        try_locate_tx["result"]["hash"].as_str()
+        v2_transaction_id_hash(&try_locate_result_tx["result"]),
+        Some(try_locate_tx_hash)
     );
 
     let try_locate_source_tx = node.get_json(&format!(
@@ -2185,7 +2195,7 @@ fn localnet_supports_try_locate_transaction_endpoints() {
         serde_json::to_string_pretty(&try_locate_source_tx).unwrap_or_default()
     );
     assert_eq!(
-        try_locate_source_tx["result"]["hash"].as_str(),
+        v2_transaction_id_hash(&try_locate_source_tx["result"]),
         Some(source_tx_hash.as_str())
     );
     assert_eq!(
@@ -2208,8 +2218,23 @@ fn localnet_supports_try_locate_transaction_endpoints() {
     );
     assert_eq!(try_locate_tx_rpc["ok"].as_bool(), Some(true));
     assert_eq!(
-        try_locate_tx_rpc["result"]["hash"].as_str(),
-        try_locate_tx["result"]["hash"].as_str()
+        v2_transaction_id_hash(&try_locate_tx_rpc["result"]),
+        Some(try_locate_tx_hash)
+    );
+
+    let shape_summary = json!({
+        "get_transactions": summarize_v2_ext_transaction_shape(source_transaction),
+        "try_locate_tx": summarize_v2_ext_transaction_shape(&try_locate_tx["result"]),
+        "try_locate_result_tx_hash_matches": v2_transaction_id_hash(&try_locate_result_tx["result"])
+            == Some(try_locate_tx_hash),
+        "try_locate_source_tx_hash_matches": v2_transaction_id_hash(&try_locate_source_tx["result"])
+            == Some(source_tx_hash.as_str()),
+        "try_locate_tx_rpc_hash_matches": v2_transaction_id_hash(&try_locate_tx_rpc["result"])
+            == Some(try_locate_tx_hash),
+    });
+    assertion().eq(
+        pretty_json_for_snapshot(&shape_summary, project.path()),
+        snapbox::file!("snapshots/localnet/test_localnet_v2_ext_transaction_shape.summary.json"),
     );
 
     node.stop();
@@ -5646,7 +5671,7 @@ fn extract_first_outgoing_message_locator(
 ) -> Option<(String, String, String, u64)> {
     let txs = response.get("result")?.as_array()?;
     for tx in txs {
-        let tx_hash = tx.get("hash")?.as_str()?;
+        let tx_hash = v2_transaction_id_hash(tx)?;
         let out_msgs = tx.get("out_msgs")?.as_array()?;
         for out_msg in out_msgs {
             let source = out_msg.get("source")?.as_str()?;
@@ -5663,6 +5688,31 @@ fn extract_first_outgoing_message_locator(
         }
     }
     None
+}
+
+fn v2_transaction_id_hash(transaction: &Value) -> Option<&str> {
+    transaction
+        .pointer("/transaction_id/hash")
+        .and_then(Value::as_str)
+}
+
+fn summarize_v2_ext_transaction_shape(transaction: &Value) -> Value {
+    let first_out_msg_type = transaction
+        .get("out_msgs")
+        .and_then(Value::as_array)
+        .and_then(|messages| messages.first())
+        .and_then(|message| message.get("@type"))
+        .and_then(Value::as_str);
+
+    json!({
+        "type": transaction.get("@type").and_then(Value::as_str),
+        "has_top_level_hash": transaction.get("hash").is_some(),
+        "has_top_level_success": transaction.get("success").is_some(),
+        "has_top_level_exit_code": transaction.get("exit_code").is_some(),
+        "transaction_id_hash_present": v2_transaction_id_hash(transaction).is_some(),
+        "in_msg_type": transaction.pointer("/in_msg/@type").and_then(Value::as_str),
+        "first_out_msg_type": first_out_msg_type,
+    })
 }
 
 fn normalize_transactions_std_for_snapshot(response: &mut Value) {

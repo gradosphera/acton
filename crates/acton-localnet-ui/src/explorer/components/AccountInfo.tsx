@@ -12,10 +12,15 @@ import {useAddressBook, useAddressName} from "../hooks/useAddressBook"
 import {useNetworkInfo} from "../hooks/useNetworkInfo"
 
 import styles from "./AccountInfo.module.css"
+import {
+  TOKEN_IMAGE_SOURCE_KEYS,
+  getImageSources,
+  getPrimaryImageSource,
+  replaceBrokenImageWithFallback,
+} from "./imageFallbacks"
 import {formatAddress, formatNano, normalizeAddress, toRawAddress} from "./utils"
 
 const TOKEN_PREVIEW_LIMIT = 5
-const TOKEN_PLACEHOLDER_IMAGE = "/token-placeholder.svg"
 
 interface AccountInfoProps {
   readonly address: string
@@ -207,6 +212,14 @@ export const AccountInfo: React.FC<AccountInfoProps> = ({
   }))
   const firstWalletDecimals = Number(firstMaster?.jetton_content?.decimals || 9)
   const firstWalletSymbol = firstMaster?.jetton_content?.symbol || "tokens"
+  const firstWalletImageSources = getImageSources(
+    firstMaster?.jetton_content,
+    TOKEN_IMAGE_SOURCE_KEYS,
+  )
+  const firstWalletImage = getPrimaryImageSource(
+    firstMaster?.jetton_content,
+    TOKEN_IMAGE_SOURCE_KEYS,
+  )
   const cardClassName = hasContextCard ? `${styles.card} ${styles.cardCompactQr}` : styles.card
 
   const qrCode = (
@@ -363,16 +376,12 @@ export const AccountInfo: React.FC<AccountInfoProps> = ({
                         disabled={!canOpenTokens}
                       >
                         <img
-                          src={firstMaster?.jetton_content?.image || TOKEN_PLACEHOLDER_IMAGE}
+                          src={firstWalletImage}
                           alt={firstMaster?.jetton_content?.symbol || "Jetton"}
                           className={styles.assetIconImage}
-                          onError={event => {
-                            const image = event.currentTarget
-                            if (image.getAttribute("src") === TOKEN_PLACEHOLDER_IMAGE) {
-                              return
-                            }
-                            image.src = TOKEN_PLACEHOLDER_IMAGE
-                          }}
+                          onError={event =>
+                            replaceBrokenImageWithFallback(event, firstWalletImageSources)
+                          }
                         />
                         <span className={styles.primaryValue}>
                           {formatTokenAmount(firstWallet.balance, firstWalletDecimals)}{" "}
@@ -387,23 +396,24 @@ export const AccountInfo: React.FC<AccountInfoProps> = ({
                           disabled={!canOpenTokens}
                           aria-label="Open all tokens"
                         >
-                          {tokenPreviewItems.map(({wallet, master}, index) =>
-                            master?.jetton_content?.image ? (
+                          {tokenPreviewItems.map(({wallet, master}, index) => {
+                            const imageSources = getImageSources(
+                              master?.jetton_content,
+                              TOKEN_IMAGE_SOURCE_KEYS,
+                            )
+                            const image = imageSources[0]
+                            return image ? (
                               <img
                                 key={wallet.address}
-                                src={master.jetton_content.image}
-                                alt={master.jetton_content.symbol || "Jetton"}
+                                src={image}
+                                alt={master?.jetton_content.symbol || "Jetton"}
                                 className={styles.assetPreviewIcon}
                                 style={{
                                   zIndex: tokenPreviewItems.length - index,
                                 }}
-                                onError={event => {
-                                  const image = event.currentTarget
-                                  if (image.getAttribute("src") === TOKEN_PLACEHOLDER_IMAGE) {
-                                    return
-                                  }
-                                  image.src = TOKEN_PLACEHOLDER_IMAGE
-                                }}
+                                onError={event =>
+                                  replaceBrokenImageWithFallback(event, imageSources)
+                                }
                               />
                             ) : (
                               <span
@@ -413,8 +423,8 @@ export const AccountInfo: React.FC<AccountInfoProps> = ({
                                   zIndex: tokenPreviewItems.length - index,
                                 }}
                               />
-                            ),
-                          )}
+                            )
+                          })}
                         </button>
                       )}
                       {canOpenTokens && jettonWallets.length > 0 && (
@@ -459,6 +469,9 @@ export const AccountInfo: React.FC<AccountInfoProps> = ({
                                   src={item.image}
                                   alt={item.name || "NFT"}
                                   className={styles.collectibleThumb}
+                                  onError={event =>
+                                    replaceBrokenImageWithFallback(event, [item.image ?? ""])
+                                  }
                                 />
                               ) : (
                                 <span

@@ -4,9 +4,13 @@ import type {TonClient} from "../api/client"
 import type {JettonMasterMetadata, JettonWallet} from "../api/types"
 
 import styles from "./Tokens.module.css"
+import {
+  TOKEN_IMAGE_SOURCE_KEYS,
+  getImageSources,
+  getPrimaryImageSource,
+  replaceBrokenImageWithFallback,
+} from "./imageFallbacks"
 import {toRawAddress} from "./utils"
-
-const TOKEN_PLACEHOLDER_IMAGE = "/token-placeholder.svg"
 
 interface TokensProps {
   readonly wallets: JettonWallet[]
@@ -85,6 +89,8 @@ export const Tokens: React.FC<TokensProps> = ({wallets, client, onAddressClick})
                       maximumFractionDigits: supplyShare < 0.01 ? 2 : 1,
                     })}%`
           const symbol = master?.jetton_content?.symbol || "UNKNOWN"
+          const imageSources = getImageSources(master?.jetton_content, TOKEN_IMAGE_SOURCE_KEYS)
+          const image = getPrimaryImageSource(master?.jetton_content, TOKEN_IMAGE_SOURCE_KEYS)
 
           return (
             <div
@@ -100,14 +106,10 @@ export const Tokens: React.FC<TokensProps> = ({wallets, client, onAddressClick})
               tabIndex={0}
             >
               <img
-                src={master?.jetton_content?.image || TOKEN_PLACEHOLDER_IMAGE}
+                src={image}
                 alt={symbol}
                 className={styles.jettonImage}
-                onError={e => {
-                  const img = e.currentTarget
-                  if (img.getAttribute("src") === TOKEN_PLACEHOLDER_IMAGE) return
-                  img.src = TOKEN_PLACEHOLDER_IMAGE
-                }}
+                onError={event => replaceBrokenImageWithFallback(event, imageSources)}
               />
               <div className={styles.jettonInfoMain}>
                 <div className={styles.jettonName}>

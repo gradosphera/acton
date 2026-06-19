@@ -6,8 +6,8 @@ const HEX_HASH_RE = /^[a-fA-F0-9]{64}$/
 const BASE64_STD_RE = /^[A-Za-z0-9+/]+={0,2}$/
 const BASE64_URL_RE = /^[A-Za-z0-9_-]+$/
 
-export function hashToHex(hash: string): string | undefined {
-  const value = hash.trim()
+export function hashToHex(hash: string | null | undefined): string | undefined {
+  const value = hash?.trim()
   if (!value) return undefined
 
   if (HEX_HASH_RE.test(value)) {

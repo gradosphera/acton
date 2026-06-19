@@ -190,7 +190,9 @@ const KNOWN_ACCOUNT_TYPES: readonly [string, string][] = [
 ]
 
 function getAccountType(state: V3AccountState | undefined): string {
-  const interfaces = state?.interfaces.map(iface => iface.trim().toLowerCase()) ?? []
+  const interfaces = Array.isArray(state?.interfaces)
+    ? state.interfaces.map(iface => iface.trim().toLowerCase())
+    : []
   for (const [name, label] of KNOWN_ACCOUNT_TYPES) {
     if (interfaces.includes(name)) {
       return label

@@ -34,9 +34,9 @@ export interface BlockId {
 }
 
 export interface Message {
-  readonly "@type": "raw.message" | "msg.message"
+  readonly "@type": "ext.message" | "raw.message" | "msg.message"
   readonly hash?: string
-  readonly opcode?: string
+  readonly opcode?: string | null
   readonly source?: string
   readonly destination?: string
   readonly value?: string
@@ -54,18 +54,18 @@ export interface Message {
 
 export interface Transaction {
   readonly "@type": "ext.transaction"
-  readonly hash: string
+  readonly hash?: string | null
   readonly address: AccountAddress
   readonly account: string
   readonly utime: number
   readonly data: string
-  readonly success: boolean
-  readonly exit_code: number
+  readonly success?: boolean | null
+  readonly exit_code?: number | null
   readonly transaction_id: TransactionId
   readonly fee: string
   readonly storage_fee: string
   readonly other_fee: string
-  readonly in_msg: Message
+  readonly in_msg?: Message | null
   readonly out_msgs: readonly Message[]
 }
 
@@ -90,7 +90,7 @@ export interface AccountStateTokenInfo {
 export interface AccountStatesAddressBookRow {
   readonly user_friendly: string
   readonly domain?: string | null
-  readonly interfaces: readonly string[]
+  readonly interfaces: readonly string[] | null
 }
 
 export interface V3AccountState {
@@ -104,7 +104,7 @@ export interface V3AccountState {
   readonly data_hash?: string
   readonly extra_currencies: Record<string, string>
   readonly frozen_hash?: string
-  readonly interfaces: readonly string[]
+  readonly interfaces: readonly string[] | null
   readonly last_transaction_hash: string
   readonly last_transaction_lt: string
   readonly status: string
@@ -372,7 +372,7 @@ export interface V3TransactionAccountState {
 
 export interface V3Message {
   readonly hash: string
-  readonly opcode?: number | string
+  readonly opcode?: number | string | null
   readonly source?: string
   readonly destination?: string
   readonly value: string
@@ -399,6 +399,9 @@ export interface JettonContent {
   readonly name?: string
   readonly description?: string
   readonly image?: string
+  readonly _image_small?: string
+  readonly _image_medium?: string
+  readonly _image_big?: string
   readonly symbol?: string
   readonly decimals?: string
   readonly [key: string]: unknown

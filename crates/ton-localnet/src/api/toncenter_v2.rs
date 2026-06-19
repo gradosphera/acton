@@ -55,13 +55,10 @@ pub fn map_transactions_std(txs: &[LocalnetTransaction], limit: usize) -> Value 
 pub fn map_transaction(tx: &LocalnetTransaction) -> Value {
     serde_json::json!({
         "@type": "ext.transaction",
-        "hash": tx.hash.to_base64(),
         "address": { "@type": "accountAddress", "account_address": tx.address.to_string() },
         "account": tx.address.to_string(),
         "utime": tx.utime,
         "data": tx.data.to_base64(),
-        "success": tx.success,
-        "exit_code": tx.exit_code,
         "transaction_id": map_internal_transaction_id(&tx.transaction_id),
         "fee": tx.total_fees.to_string(),
         "storage_fee": tx.storage_fees.to_string(),
@@ -92,7 +89,7 @@ pub fn map_message(msg: &crate::localnet::LocalnetMessage) -> Value {
         return serde_json::json!({ "@type": "msg.message" });
     }
     serde_json::json!({
-        "@type": "raw.message",
+        "@type": "ext.message",
         "hash": msg.hash.to_base64(),
         "opcode": msg.opcode.map(|op| format!("0x{op:08x}")),
         "source": msg.source.as_ref().map(ToString::to_string).unwrap_or_default(),
