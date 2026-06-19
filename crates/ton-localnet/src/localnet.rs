@@ -3,7 +3,7 @@ use crate::executor::TvmEmulatorAdapter;
 use crate::node::{Node, NodeClockInfo, StateSource};
 use crate::node_snapshot::NodeStateSnapshot;
 use crate::storage;
-use crate::storage::{AccountStatus, BlockMeta, MsgMeta, TransactionInfo};
+use crate::storage::{AccountStatus, MsgMeta, TransactionInfo};
 use crate::streaming::StreamingCommitEvent;
 use crate::types::{Addr, BocBytes, Hash256, Lt, Seqno};
 use anyhow::Context;
@@ -42,6 +42,16 @@ impl LocalnetBlockId {
     pub const fn first() -> Self {
         Self {
             workchain: 0,
+            shard: -9223372036854775808,
+            seqno: 0,
+            root_hash: Hash256([0; 32]),
+            file_hash: Hash256([0; 32]),
+        }
+    }
+
+    pub const fn first_masterchain() -> Self {
+        Self {
+            workchain: -1,
             shard: -9223372036854775808,
             seqno: 0,
             root_hash: Hash256([0; 32]),
@@ -170,6 +180,8 @@ pub struct LocalnetMasterchainInfo {
     pub last: LocalnetBlockId,
     pub state_root_hash: Hash256,
     pub init: LocalnetBlockId,
+    pub config: BocBytes,
+    pub prev_blocks: Vec<LocalnetBlockId>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -310,6 +322,14 @@ pub(crate) enum Request {
         resp: oneshot::Sender<anyhow::Result<LocalnetBlockHeader>>,
     },
     GetBlockData {
+        seqno: u32,
+        resp: oneshot::Sender<anyhow::Result<BocBytes>>,
+    },
+    GetMasterchainBlockHeader {
+        seqno: u32,
+        resp: oneshot::Sender<anyhow::Result<LocalnetBlockHeader>>,
+    },
+    GetMasterchainBlockData {
         seqno: u32,
         resp: oneshot::Sender<anyhow::Result<BocBytes>>,
     },
@@ -860,6 +880,25 @@ impl Localnet {
     pub async fn get_block_data(&self, seqno: u32) -> anyhow::Result<BocBytes> {
         let (resp, rx) = oneshot::channel();
         self.tx.send(Request::GetBlockData { seqno, resp }).await?;
+        rx.await?
+    }
+
+    pub async fn get_masterchain_block_header(
+        &self,
+        seqno: u32,
+    ) -> anyhow::Result<LocalnetBlockHeader> {
+        let (resp, rx) = oneshot::channel();
+        self.tx
+            .send(Request::GetMasterchainBlockHeader { seqno, resp })
+            .await?;
+        rx.await?
+    }
+
+    pub async fn get_masterchain_block_data(&self, seqno: u32) -> anyhow::Result<BocBytes> {
+        let (resp, rx) = oneshot::channel();
+        self.tx
+            .send(Request::GetMasterchainBlockData { seqno, resp })
+            .await?;
         rx.await?
     }
 
@@ -1435,6 +1474,14 @@ fn process_loop_request(node: &mut Node, recovery_points: &mut RecoveryPoints, r
             let res = node.get_block_data(seqno);
             let _ = resp.send(res);
         }
+        Request::GetMasterchainBlockHeader { seqno, resp } => {
+            let res = handle_get_masterchain_block_header(node, seqno);
+            let _ = resp.send(res);
+        }
+        Request::GetMasterchainBlockData { seqno, resp } => {
+            let res = node.get_masterchain_block_data(seqno);
+            let _ = resp.send(res);
+        }
         Request::GetBlockTransactions { seqno, resp } => {
             let res = handle_get_block_transactions(node, seqno);
             let _ = resp.send(res);
@@ -1464,14 +1511,14 @@ fn process_loop_request(node: &mut Node, recovery_points: &mut RecoveryPoints, r
             let _ = resp.send(res);
         }
         Request::LookupBlock {
-            workchain: _, // unused since localnet have only one workchain
-            shard: _,     // unused since localnet have only one shard
+            workchain,
+            shard,
             seqno,
             lt,
             unixtime,
             resp,
         } => {
-            let res = handle_lookup_block(node, seqno, lt, unixtime);
+            let res = handle_lookup_block(node, workchain, shard, seqno, lt, unixtime);
             let _ = resp.send(res);
         }
         Request::Faucet {
@@ -2326,6 +2373,23 @@ fn handle_get_block_header(node: &Node, seqno: u32) -> anyhow::Result<LocalnetBl
     })
 }
 
+fn handle_get_masterchain_block_header(
+    node: &Node,
+    seqno: u32,
+) -> anyhow::Result<LocalnetBlockHeader> {
+    let Some(header) = node.get_masterchain_block_header(seqno) else {
+        return Err(LocalnetError::BlockNotFound { seqno }.into());
+    };
+
+    Ok(LocalnetBlockHeader {
+        id: header.block_id(),
+        gen_utime: header.gen_utime,
+        start_lt: header.start_lt,
+        end_lt: header.end_lt,
+        prev_seqno: header.prev_seqno,
+    })
+}
+
 fn handle_get_block_transactions(
     node: &Node,
     seqno: u32,
@@ -2356,22 +2420,45 @@ fn handle_get_block_transactions(
 }
 
 fn handle_get_masterchain_info(node: &Node) -> anyhow::Result<LocalnetMasterchainInfo> {
-    let head_block = node.get_block_header(node.globals.head_seqno);
-    let block_id = head_block
-        .as_ref()
-        .map_or_else(LocalnetBlockId::first, BlockMeta::block_id);
+    if node.globals.head_seqno == 0 {
+        let block_id = LocalnetBlockId::first_masterchain();
+        return Ok(LocalnetMasterchainInfo {
+            state_root_hash: block_id.root_hash,
+            last: block_id.clone(),
+            init: block_id,
+            config: handle_get_config_all(node, Some(node.globals.head_seqno))?,
+            prev_blocks: Vec::new(),
+        });
+    }
+
+    let Some(masterchain_block) = node.get_masterchain_block_header(node.globals.head_seqno) else {
+        return Err(LocalnetError::BlockNotFound {
+            seqno: node.globals.head_seqno,
+        }
+        .into());
+    };
+    let block_id = masterchain_block.block_id();
+    let prev_blocks = node
+        .history
+        .masterchain_blocks
+        .iter()
+        .filter(|block| block.seqno < node.globals.head_seqno)
+        .map(storage::MasterchainBlockMeta::block_id)
+        .collect();
 
     Ok(LocalnetMasterchainInfo {
-        state_root_hash: block_id.root_hash,
+        state_root_hash: masterchain_block.state_root_hash,
         last: block_id,
-        init: LocalnetBlockId::first(),
+        init: LocalnetBlockId::first_masterchain(),
+        config: handle_get_config_all(node, Some(node.globals.head_seqno))?,
+        prev_blocks,
     })
 }
 
 fn handle_get_consensus_block(node: &Node) -> anyhow::Result<LocalnetConsensusBlock> {
     let consensus_block = node.globals.head_seqno;
     let timestamp = node
-        .get_block_header(consensus_block)
+        .get_masterchain_block_header(consensus_block)
         .map(|block| block.gen_utime)
         .unwrap_or_default();
 
@@ -2452,11 +2539,52 @@ fn ensure_seqno_exists(node: &Node, seqno: Option<u32>) -> anyhow::Result<()> {
 
 fn handle_lookup_block(
     node: &Node,
+    workchain: i32,
+    shard: i64,
     seqno: Option<u32>,
     lt: Option<u64>,
     unixtime: Option<u32>,
 ) -> anyhow::Result<LocalnetBlockId> {
-    let found_block = if let Some(s) = seqno {
+    if workchain == -1 {
+        let masterchain_shard = LocalnetBlockId::first_masterchain().shard;
+        if shard != masterchain_shard {
+            return Err(LocalnetError::protocol_violation(format!(
+                "Shard {workchain}:{shard} is not available in localnet masterchain lookup"
+            ))
+            .into());
+        }
+
+        let found_block = if let Some(s) = seqno.filter(|seqno| *seqno > 0) {
+            node.get_masterchain_block_header(s)
+        } else if let Some(l) = lt {
+            node.find_masterchain_block_by_lt(l)
+        } else if let Some(u) = unixtime {
+            node.find_masterchain_block_by_unixtime(u)
+        } else {
+            None
+        };
+
+        let Some(block) = found_block else {
+            return Err(LocalnetError::BlockLookupNotFound {
+                seqno,
+                lt,
+                unixtime,
+            }
+            .into());
+        };
+
+        return Ok(block.block_id());
+    }
+
+    let basechain_shard = LocalnetBlockId::first().shard;
+    if workchain != 0 || shard != basechain_shard {
+        return Err(LocalnetError::protocol_violation(format!(
+            "Shard {workchain}:{shard} is not available in localnet lookup"
+        ))
+        .into());
+    }
+
+    let found_block = if let Some(s) = seqno.filter(|seqno| *seqno > 0) {
         node.get_block_header(s)
     } else if let Some(l) = lt {
         node.find_block_by_lt(l)

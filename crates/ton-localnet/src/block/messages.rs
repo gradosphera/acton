@@ -56,10 +56,9 @@ pub(super) fn build_in_msg_descr(transactions: &[BlockTransaction]) -> anyhow::R
 /// Builds the outbound message descriptor.
 ///
 /// Localnet stores outgoing message cells and can schedule local internal
-/// cascades, but it does not yet keep the outbound queue envelopes required by
-/// `OutMsgDescr::New`/`Immediate`. Returning an empty descriptor keeps the block
-/// structurally valid while transaction discovery remains available through
-/// `AccountBlocks`.
+/// cascades. It does not store the outbound queue envelopes required by
+/// `OutMsgDescr::New`/`Immediate`, so the descriptor is empty and transaction
+/// discovery remains available through `AccountBlocks`.
 pub(super) fn build_out_msg_descr() -> anyhow::Result<OutMsgDescr> {
     OutMsgDescr::try_from_btree(&BTreeMap::<HashBytes, (CurrencyCollection, OutMsg)>::new())
         .context("Failed to build outbound message descriptor")

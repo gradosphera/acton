@@ -1,5 +1,5 @@
-use crate::storage::{AccountMeta, BlockMeta, CellStore, TxMeta};
-use crate::types::{Addr, Hash256, Lt, Seqno};
+use crate::storage::{AccountMeta, BlockMeta, CellStore, MasterchainBlockMeta, TxMeta};
+use crate::types::{Addr, BocBytes, Hash256, Lt, Seqno};
 use std::collections::HashMap;
 use tycho_types::cell::Cell;
 use tycho_types::models::block::ShardIdent;
@@ -10,7 +10,7 @@ use tycho_types::prelude::HashBytes;
 /// The value is intentionally stable and local to Acton. It is not meant to
 /// identify mainnet/testnet consensus data; it only keeps the generated TL-B
 /// structures internally consistent for local tooling.
-pub(crate) const LOCALNET_GLOBAL_ID: i32 = 0;
+pub(crate) const LOCALNET_GLOBAL_ID: i32 = -3;
 
 /// The single shard currently collated by localnet.
 ///
@@ -55,12 +55,54 @@ pub(crate) struct BlockBuildContext<'a> {
     pub end_lt: Lt,
     /// Previous localnet block, if this is not the first block.
     pub prev_block: Option<&'a BlockMeta>,
+    /// Previous masterchain block visible to this shard block.
+    pub master_ref: Option<&'a MasterchainBlockMeta>,
     /// Post-block account metadata map after all transactions have executed.
     pub accounts_after: &'a HashMap<Addr, AccountMeta>,
     /// Transactions executed in this block in collation order.
     pub transactions: &'a [BlockTransaction],
     /// Content-addressed store used to resolve `ShardAccount` cells by hash.
     pub cas: &'a CellStore,
+}
+
+/// Immutable inputs required to assemble a real localnet masterchain block.
+///
+/// Localnet mines a single basechain shard and then creates a masterchain block
+/// that anchors that shard through `McStateExtra.shards`. The masterchain block
+/// intentionally has no account transactions; it exists so `LiteAPI` clients can
+/// discover and prove the basechain shard through real block/state cells instead
+/// of adapter-generated ids.
+pub(crate) struct MasterchainBlockBuildContext<'a> {
+    /// Sequence number of the masterchain block being assembled.
+    pub seqno: Seqno,
+    /// Unix timestamp assigned to the block.
+    pub gen_utime: u32,
+    /// First logical time covered by the corresponding basechain block.
+    pub start_lt: Lt,
+    /// Last logical time covered by the corresponding basechain block.
+    pub end_lt: Lt,
+    /// Previous masterchain block, if this is not the first block.
+    pub prev_block: Option<&'a MasterchainBlockMeta>,
+    /// Previous masterchain state cell loaded from the previous block.
+    pub prev_state: Option<Cell>,
+    /// Basechain block anchored by this masterchain block.
+    pub shard_block: &'a BlockMeta,
+    /// Blockchain config dictionary stored in the masterchain state.
+    pub config_boc: &'a BocBytes,
+    /// Earlier masterchain blocks exposed through `old_mc_blocks`.
+    pub prev_blocks: &'a [MasterchainBlockMeta],
+}
+
+/// Serialized masterchain block and the state hash it declares.
+///
+/// The block `BoC` goes into the content-addressed store under its representation
+/// hash, while `state_root_hash` is returned by `getMasterchainInfo` so tonlib can
+/// compare the trusted masterchain state root with proof virtualization.
+pub(crate) struct MasterchainBlockBuildResult {
+    /// Serialized masterchain `Block` root cell.
+    pub block_boc: BocBytes,
+    /// Hash of the post-block masterchain state.
+    pub state_root_hash: Hash256,
 }
 
 /// Serialized shard state plus aggregate data needed by block assembly.

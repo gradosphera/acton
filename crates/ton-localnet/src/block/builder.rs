@@ -17,10 +17,10 @@ use tycho_types::prelude::HashBytes;
 /// `ShardAccount` cells by the time this function is called. This function
 /// arranges those pieces into the same high-level TL-B structure that external
 /// tooling expects from a shard block: `BlockInfo`, `ValueFlow`, a Merkle state
-/// update, and `BlockExtra` with `AccountBlocks`. It intentionally keeps the
-/// validator-specific parts minimal: there are no signatures, no split/merge
-/// metadata, and no out-queue proofs. The goal is an indexable development
-/// block, not a candidate that could pass validator consensus.
+/// update, and `BlockExtra` with `AccountBlocks`. The block omits
+/// validator-specific artifacts: signatures, split/merge metadata, and
+/// out-queue proofs. The goal is an indexable development block, not a candidate
+/// that could pass validator consensus.
 pub(crate) fn create_block_boc(ctx: BlockBuildContext<'_>) -> anyhow::Result<BocBytes> {
     let (old_state, new_state) = build_old_and_new_states(&ctx)?;
     let state_update = MerkleUpdate {
@@ -77,9 +77,11 @@ pub(crate) fn create_block_boc(ctx: BlockBuildContext<'_>) -> anyhow::Result<Boc
 /// Creates the `BlockInfo` header for a localnet block.
 ///
 /// `BlockInfo` is where external clients get the shard id, seqno, logical time
-/// range, generation time, and previous block reference. Localnet currently
-/// models a single full basechain shard, so split/merge flags and masterchain
-/// references stay empty, while the previous reference is still populated with
+/// range, generation time, and previous block reference. Localnet models a
+/// single full basechain shard, so split/merge flags stay empty. A masterchain
+/// reference is stored because TON shardchain headers use that field to identify
+/// the visible masterchain block; without it proof-checking clients treat the
+/// header as structurally inconsistent. The previous reference is populated with
 /// root/file hashes from the last local block when one exists.
 fn build_block_info(ctx: &BlockBuildContext<'_>) -> anyhow::Result<BlockInfo> {
     let prev_ref = ctx.prev_block.map_or_else(
@@ -98,6 +100,21 @@ fn build_block_info(ctx: &BlockBuildContext<'_>) -> anyhow::Result<BlockInfo> {
                 root_hash: HashBytes(prev.block_hash.0),
                 file_hash: HashBytes(prev.file_hash.0),
             })
+        },
+    );
+
+    let master_ref = ctx.master_ref.map_or_else(
+        || BlockRef {
+            end_lt: 0,
+            seqno: 0,
+            root_hash: HashBytes::ZERO,
+            file_hash: HashBytes::ZERO,
+        },
+        |block| BlockRef {
+            end_lt: block.end_lt,
+            seqno: block.seqno,
+            root_hash: HashBytes(block.block_hash.0),
+            file_hash: HashBytes(block.file_hash.0),
         },
     );
 
@@ -121,7 +138,7 @@ fn build_block_info(ctx: &BlockBuildContext<'_>) -> anyhow::Result<BlockInfo> {
         min_ref_mc_seqno: 0,
         prev_key_block_seqno: 0,
         gen_software: Default::default(),
-        master_ref: None,
+        master_ref: Some(Lazy::new(&master_ref).context("Failed to wrap masterchain reference")?),
         prev_ref: Default::default(),
         prev_vert_ref: None,
     };

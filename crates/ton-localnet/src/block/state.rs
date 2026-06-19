@@ -62,7 +62,7 @@ fn accounts_before_block(
     accounts
 }
 
-/// Serializes a minimal full-shard `ShardStateUnsplit` for localnet.
+/// Serializes the full-shard `ShardStateUnsplit` stored in localnet blocks.
 ///
 /// The state contains the account dictionary and total balance for accounts that
 /// localnet has touched or imported into its CAS. Validator queues, overload

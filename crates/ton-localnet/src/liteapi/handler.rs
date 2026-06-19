@@ -1,6 +1,10 @@
+use super::{LITEAPI_CAPABILITIES, LITEAPI_VERSION};
 use crate::liteapi::convert;
+use crate::liteapi::convert::MASTERCHAIN_WORKCHAIN;
 use crate::liteapi::proof;
-use crate::localnet::{Localnet, LocalnetBlockId, LocalnetRunGetMethodResult, LocalnetTransaction};
+use crate::localnet::{
+    Localnet, LocalnetBlockHeader, LocalnetBlockId, LocalnetRunGetMethodResult, LocalnetTransaction,
+};
 use crate::types::{BocBytes, Hash256};
 use crate::{LiteServerErrorCode, LocalnetError};
 use anyhow::Context;
@@ -11,22 +15,20 @@ use tokio::time::{Instant, sleep};
 use ton_liteapi::liteclient::types::LiteError;
 use ton_liteapi::tl::common::{BlockIdExt, LibraryEntry, String as TlString, TransactionId3};
 use ton_liteapi::tl::request::{
-    GetAccountState, GetAllShardsInfo, GetBlock, GetBlockHeader, GetConfigAll, GetConfigParams,
-    GetLibraries, GetLibrariesWithProof, GetMasterchainInfoExt, GetOneTransaction,
-    GetShardBlockProof, GetShardInfo, GetTransactions, ListBlockTransactions, LookupBlock, Request,
-    RunSmcMethod, SendMessage, WaitMasterchainSeqno, WrappedRequest,
+    GetAccountState, GetAllShardsInfo, GetBlock, GetBlockHeader, GetBlockProof, GetConfigAll,
+    GetConfigParams, GetLibraries, GetLibrariesWithProof, GetOneTransaction, GetShardBlockProof,
+    GetShardInfo, GetTransactions, ListBlockTransactions, LookupBlock, LookupBlockWithProof,
+    Request, RunSmcMethod, SendMessage, WaitMasterchainSeqno, WrappedRequest,
 };
 use ton_liteapi::tl::response::{
     AccountState, AllShardsInfo, BlockData, BlockTransactions, BlockTransactionsExt, ConfigInfo,
-    CurrentTime, Error as TlServerError, LibraryResult, LibraryResultWithProof, Response,
-    RunMethodResult, SendMsgStatus, ShardBlockLink, ShardBlockProof, ShardInfo, TransactionId,
-    TransactionInfo, TransactionList, Version,
+    CurrentTime, Error as TlServerError, LibraryResult, LibraryResultWithProof, LookupBlockResult,
+    PartialBlockProof, Response, RunMethodResult, SendMsgStatus, ShardBlockLink, ShardBlockProof,
+    ShardInfo, TransactionId, TransactionInfo, TransactionList, Version,
 };
 use tvm_ffi::stack::Tuple;
 use tycho_types::boc::Boc;
 use tycho_types::boc::ser::BocHeader;
-
-use super::{LITEAPI_CAPABILITIES, LITEAPI_VERSION};
 
 const SEND_MESSAGE_ACCEPTED_STATUS: u32 = 1;
 const RUN_SMC_METHOD_RESULT_MODE: u32 = 1 << 2;
@@ -61,7 +63,7 @@ async fn handle_request(node: Arc<Localnet>, request: Request) -> anyhow::Result
             let info = node.get_masterchain_info().await?;
             Ok(Response::MasterchainInfo(convert::masterchain_info(info)))
         }
-        Request::GetMasterchainInfoExt(request) => get_masterchain_info_ext(&node, request).await,
+        Request::GetMasterchainInfoExt(_) => get_masterchain_info_ext(&node).await,
         Request::GetTime => Ok(Response::CurrentTime(CurrentTime { now: now() })),
         Request::GetVersion => Ok(Response::Version(Version {
             mode: 0,
@@ -80,6 +82,7 @@ async fn handle_request(node: Arc<Localnet>, request: Request) -> anyhow::Result
         Request::GetOneTransaction(request) => get_one_transaction(&node, request).await,
         Request::GetTransactions(request) => get_transactions(&node, request).await,
         Request::LookupBlock(request) => lookup_block(&node, request).await,
+        Request::LookupBlockWithProof(request) => lookup_block_with_proof(&node, request).await,
         Request::ListBlockTransactions(request) => list_block_transactions(&node, request).await,
         Request::ListBlockTransactionsExt(request) => {
             list_block_transactions_ext(&node, request).await
@@ -89,6 +92,7 @@ async fn handle_request(node: Arc<Localnet>, request: Request) -> anyhow::Result
         Request::GetConfigParams(request) => get_config(&node, ConfigRequest::from(request)).await,
         Request::GetLibraries(request) => get_libraries(&node, request).await,
         Request::GetLibrariesWithProof(request) => get_libraries_with_proof(&node, request).await,
+        Request::GetBlockProof(request) => get_block_proof(request),
         Request::GetShardBlockProof(request) => get_shard_block_proof(&node, request).await,
         unsupported => Err(LocalnetError::protocol_violation(format!(
             "LiteAPI request is not implemented in localnet: {unsupported:?}"
@@ -97,61 +101,106 @@ async fn handle_request(node: Arc<Localnet>, request: Request) -> anyhow::Result
     }
 }
 
-/// Returns the TL block id in the same chain namespace as the incoming request.
+/// Returns the block id matching an already supplied `LiteServer` request id.
 ///
-/// The local database has one real block per seqno, stored as basechain
-/// `workchain=0`. `LiteAPI` clients, however, first address that seqno through a
-/// synthetic masterchain block (`workchain=-1`) and then discover the real
-/// basechain shard from `getAllShardsInfo`. Keeping this mapping explicit
-/// prevents indexers from mistaking the shard block for the masterchain block.
-fn block_id_for_request(request_workchain: i32, local_id: &LocalnetBlockId) -> BlockIdExt {
-    if convert::is_masterchain_workchain(request_workchain) {
-        convert::masterchain_block_id_ext(local_id)
-    } else {
-        convert::block_id_ext(local_id)
+/// Masterchain ids must point at real mined masterchain blocks. A masterchain
+/// request whose hashes do not match the stored block for that seqno is rejected
+/// instead of being mapped back to the basechain block.
+async fn block_id_for_existing_request(
+    node: &Localnet,
+    request_id: &BlockIdExt,
+    local_id: &LocalnetBlockId,
+) -> anyhow::Result<BlockIdExt> {
+    let workchain = request_id.workchain;
+    if workchain != MASTERCHAIN_WORKCHAIN {
+        return Ok(convert::block_id_ext(local_id));
     }
+
+    let masterchain_header =
+        masterchain_anchor_for_request(node, request_id, "LiteAPI request").await?;
+    if masterchain_header.id.seqno != local_id.seqno {
+        return Err(LocalnetError::protocol_violation(format!(
+            "Requested masterchain block seqno {} does not match localnet shard block seqno {}",
+            masterchain_header.id.seqno, local_id.seqno
+        ))
+        .into());
+    }
+
+    Ok(convert::block_id_ext(&masterchain_header.id))
 }
 
-async fn get_masterchain_info_ext(
+/// Loads and validates a real mined masterchain block used as a request anchor.
+///
+/// `LiteAPI` methods such as `getShardInfo` carry a masterchain block id in
+/// `request.id`, while separate request fields select the target shard. This
+/// helper keeps those roles separate and rejects requests that try to use a
+/// basechain block as the masterchain anchor.
+async fn masterchain_anchor_for_request(
     node: &Localnet,
-    _request: GetMasterchainInfoExt,
-) -> anyhow::Result<Response> {
+    request_id: &BlockIdExt,
+    method: &str,
+) -> anyhow::Result<LocalnetBlockHeader> {
+    let workchain = request_id.workchain;
+    if workchain != MASTERCHAIN_WORKCHAIN {
+        return Err(LocalnetError::protocol_violation(format!(
+            "{method} requires a masterchain block id as the anchor, got workchain {}",
+            request_id.workchain
+        ))
+        .into());
+    }
+
+    let seqno = convert::seqno_from_i32(request_id.seqno)?;
+    let header = node.get_masterchain_block_header(seqno).await?;
+    let expected = convert::block_id_ext(&header.id);
+    if &expected != request_id {
+        return Err(LocalnetError::protocol_violation(format!(
+            "{method} masterchain block id does not match localnet masterchain block for seqno {seqno}"
+        ))
+        .into());
+    }
+
+    Ok(header)
+}
+
+async fn get_masterchain_info_ext(node: &Localnet) -> anyhow::Result<Response> {
     let info = node.get_masterchain_info().await?;
     let header = if info.last.seqno == 0 {
         None
     } else {
-        Some(node.get_block_header(info.last.seqno).await?)
+        Some(node.get_masterchain_block_header(info.last.seqno).await?)
     };
     Ok(Response::MasterchainInfoExt(convert::masterchain_info_ext(
         info,
         header.as_ref(),
         now(),
-    )))
+    )?))
 }
 
 async fn get_block(node: &Localnet, request: GetBlock) -> anyhow::Result<Response> {
     let seqno = convert::seqno_from_i32(request.id.seqno)?;
-    let header = node.get_block_header(seqno).await?;
-    let data = node.get_block_data(seqno).await?;
-    Ok(Response::BlockData(BlockData {
-        id: block_id_for_request(request.id.workchain, &header.id),
-        data: data.0,
-    }))
+    let workchain = request.id.workchain;
+    let (id, data) = if workchain == MASTERCHAIN_WORKCHAIN {
+        let header = masterchain_anchor_for_request(node, &request.id, "getBlock").await?;
+        (
+            convert::block_id_ext(&header.id),
+            node.get_masterchain_block_data(seqno).await?.0,
+        )
+    } else {
+        let header = node.get_block_header(seqno).await?;
+        (
+            convert::block_id_ext(&header.id),
+            node.get_block_data(seqno).await?.0,
+        )
+    };
+    Ok(Response::BlockData(BlockData { id, data }))
 }
 
 async fn get_block_header(node: &Localnet, request: GetBlockHeader) -> anyhow::Result<Response> {
     let seqno = convert::seqno_from_i32(request.id.seqno)?;
-    let header = node.get_block_header(seqno).await?;
-    let response = if convert::is_masterchain_workchain(request.id.workchain) {
-        convert::masterchain_block_header(
-            header,
-            request.with_state_update,
-            request.with_value_flow,
-            request.with_extra,
-            request.with_shard_hashes,
-            request.with_prev_blk_signatures,
-        )
-    } else {
+    let workchain = request.id.workchain;
+    let response = if workchain == MASTERCHAIN_WORKCHAIN {
+        let header = masterchain_anchor_for_request(node, &request.id, "getBlockHeader").await?;
+        let header_proof = block_root_proof(node, header.id.workchain, header.id.seqno).await?;
         convert::block_header(
             header,
             request.with_state_update,
@@ -159,9 +208,40 @@ async fn get_block_header(node: &Localnet, request: GetBlockHeader) -> anyhow::R
             request.with_extra,
             request.with_shard_hashes,
             request.with_prev_blk_signatures,
+            header_proof,
+        )
+    } else {
+        let header = node.get_block_header(seqno).await?;
+        let header_proof = block_root_proof(node, header.id.workchain, header.id.seqno).await?;
+        convert::block_header(
+            header,
+            request.with_state_update,
+            request.with_value_flow,
+            request.with_extra,
+            request.with_shard_hashes,
+            request.with_prev_blk_signatures,
+            header_proof,
         )
     };
     Ok(Response::BlockHeader(response))
+}
+
+/// Builds a `MerkleProof` for the exact block root announced in a `LiteAPI` block id.
+///
+/// Tonlib virtualizes the exotic proof cell and checks that the virtualized root
+/// matches the `BlockIdExt` carried next to the proof. Localnet keeps serialized
+/// block `BoC`s for both the basechain shard and the masterchain anchor, so a
+/// full-root proof is sufficient for header, lookup, and transaction-list root
+/// validation.
+async fn block_root_proof(node: &Localnet, workchain: i32, seqno: u32) -> anyhow::Result<Vec<u8>> {
+    let block_data = if workchain == MASTERCHAIN_WORKCHAIN {
+        node.get_masterchain_block_data(seqno).await?
+    } else {
+        node.get_block_data(seqno).await?
+    };
+    let block_cell =
+        Boc::decode(&block_data).context("Failed to decode LiteAPI block proof root")?;
+    proof::merkle_proof_boc(block_cell)
 }
 
 /// Handles `liteServer.sendMessage` by queueing a raw external-in message.
@@ -181,20 +261,19 @@ async fn get_account_state(node: &Localnet, request: GetAccountState) -> anyhow:
     let seqno = convert::seqno_from_i32(request.id.seqno)?;
     let header = node.get_block_header(seqno).await?;
     let address = convert::addr_from_account_id(&request.account);
+    let block_data = node.get_block_data(seqno).await?;
+    let masterchain_block_data = node.get_masterchain_block_data(seqno).await?;
     let shard_account = node
         .get_shard_account_cell(address.to_string(), Some(seqno))
         .await?;
-    let cells = proof::account_state_cells(&address, &shard_account, &header)?;
-    let id = block_id_for_request(request.id.workchain, &header.id);
+    let id = block_id_for_existing_request(node, &request.id, &header.id).await?;
+    let cells = proof::account_state_cells(&shard_account, &block_data, &masterchain_block_data)?;
     let shardblk = convert::block_id_ext(&header.id);
 
     Ok(Response::AccountState(AccountState {
         id,
         shardblk,
-        // tonutils-go decodes AccountState.shard_proof as `tl:"cell optional 2"`.
-        // Empty bytes mean "proof omitted"; a one-cell placeholder fails during
-        // TL parsing before `ProofCheckPolicyUnsafe` can skip proof validation.
-        shard_proof: Vec::new(),
+        shard_proof: cells.shard_proof,
         proof: cells.proof,
         state: cells.state,
     }))
@@ -208,7 +287,9 @@ async fn get_account_state(node: &Localnet, request: GetAccountState) -> anyhow:
 /// With `exact=false`, any shard inside the same workchain resolves to the full
 /// localnet shard; with `exact=true`, the requested shard id must match exactly.
 async fn get_shard_info(node: &Localnet, request: GetShardInfo) -> anyhow::Result<Response> {
-    let seqno = convert::seqno_from_i32(request.id.seqno)?;
+    let masterchain_header =
+        masterchain_anchor_for_request(node, &request.id, "getShardInfo").await?;
+    let seqno = masterchain_header.id.seqno;
     let header = node.get_block_header(seqno).await?;
     let local_shard = header.id.shard as u64;
 
@@ -220,7 +301,7 @@ async fn get_shard_info(node: &Localnet, request: GetShardInfo) -> anyhow::Resul
         .into());
     }
 
-    let id = block_id_for_request(request.id.workchain, &header.id);
+    let id = convert::block_id_ext(&masterchain_header.id);
     let shardblk = convert::block_id_ext(&header.id);
     Ok(Response::ShardInfo(ShardInfo {
         id,
@@ -234,10 +315,13 @@ async fn get_all_shards_info(
     node: &Localnet,
     request: GetAllShardsInfo,
 ) -> anyhow::Result<Response> {
-    let seqno = convert::seqno_from_i32(request.id.seqno)?;
+    let masterchain_header =
+        masterchain_anchor_for_request(node, &request.id, "getAllShardsInfo").await?;
+    let seqno = masterchain_header.id.seqno;
     let header = node.get_block_header(seqno).await?;
+    let id = convert::block_id_ext(&masterchain_header.id);
     Ok(Response::AllShardsInfo(AllShardsInfo {
-        id: block_id_for_request(request.id.workchain, &header.id),
+        id,
         proof: proof::empty_cell_boc(),
         data: proof::all_shards_info_data(&header)?,
     }))
@@ -295,14 +379,13 @@ async fn get_transactions(node: &Localnet, request: GetTransactions) -> anyhow::
 /// The request format is already binary and carries both the numeric method id
 /// and a serialized TVM stack, so this adapter only validates the `LiteServer`
 /// mode bits, decodes the stack `BoC`, and forwards the typed values to the
-/// localnet actor. Proof, c7, and library-extra response modes are rejected for
-/// now because localnet does not yet build the corresponding verified payloads.
+/// localnet actor. Proof, c7, and library-extra response modes are rejected
+/// because this response path returns only the execution result payload.
 async fn run_smc_method(node: &Localnet, request: RunSmcMethod) -> anyhow::Result<Response> {
     if request.mode & !RUN_SMC_METHOD_SUPPORTED_BITS != 0 {
         return Err(LocalnetError::protocol_violation(format!(
-            "Unsupported liteServer.runSmcMethod mode {}: localnet currently supports only result bit {}",
-            request.mode,
-            RUN_SMC_METHOD_RESULT_MODE
+            "Unsupported liteServer.runSmcMethod mode {}: localnet supports only result bit {}",
+            request.mode, RUN_SMC_METHOD_RESULT_MODE
         ))
         .into());
     }
@@ -324,7 +407,7 @@ async fn run_smc_method(node: &Localnet, request: RunSmcMethod) -> anyhow::Resul
         )
         .await?;
 
-    let id = block_id_for_request(request.id.workchain, &result.block_id);
+    let id = block_id_for_existing_request(node, &request.id, &result.block_id).await?;
     let shardblk = convert::block_id_ext(&result.block_id);
     let include_result = request.mode & RUN_SMC_METHOD_RESULT_MODE != 0;
     let account_not_found = run_smc_method_account_not_found(&result);
@@ -369,17 +452,9 @@ async fn lookup_block(node: &Localnet, request: LookupBlock) -> anyhow::Result<R
             request.utime,
         )
         .await?;
-    let header = node.get_block_header(block_id.seqno).await?;
-    let response = if convert::is_masterchain_workchain(requested_workchain) {
-        convert::masterchain_block_header(
-            header,
-            request.with_state_update,
-            request.with_value_flow,
-            request.with_extra,
-            request.with_shard_hashes,
-            request.with_prev_blk_signatures,
-        )
-    } else {
+    let response = if requested_workchain == MASTERCHAIN_WORKCHAIN {
+        let header = node.get_masterchain_block_header(block_id.seqno).await?;
+        let header_proof = block_root_proof(node, header.id.workchain, header.id.seqno).await?;
         convert::block_header(
             header,
             request.with_state_update,
@@ -387,9 +462,140 @@ async fn lookup_block(node: &Localnet, request: LookupBlock) -> anyhow::Result<R
             request.with_extra,
             request.with_shard_hashes,
             request.with_prev_blk_signatures,
+            header_proof,
+        )
+    } else {
+        let header = node.get_block_header(block_id.seqno).await?;
+        let header_proof = block_root_proof(node, header.id.workchain, header.id.seqno).await?;
+        convert::block_header(
+            header,
+            request.with_state_update,
+            request.with_value_flow,
+            request.with_extra,
+            request.with_shard_hashes,
+            request.with_prev_blk_signatures,
+            header_proof,
         )
     };
     Ok(Response::BlockHeader(response))
+}
+
+/// Handles `liteServer.lookupBlockWithProof` for localnet masterchain/shard blocks.
+///
+/// `tonlibjson` uses this proof-bearing lookup path for block and shard helper
+/// methods. Localnet resolves the requested block through the same single-shard
+/// lookup code as `liteServer.lookupBlock`, then returns a one-link proof chain
+/// from the masterchain anchor at the same seqno to the basechain shard block.
+/// Tonlib verifies the link through `McBlockExtra.shards`; localnet does not
+/// model validator signatures, shard splits, or shard merges in this proof.
+async fn lookup_block_with_proof(
+    node: &Localnet,
+    request: LookupBlockWithProof,
+) -> anyhow::Result<Response> {
+    let requested_workchain = request.id.workchain;
+    let block_id = node
+        .lookup_block(
+            requested_workchain,
+            request.id.shard.to_string(),
+            Some(convert::seqno_from_i32(request.id.seqno)?),
+            request.lt,
+            request.utime,
+        )
+        .await?;
+    let header = if requested_workchain == MASTERCHAIN_WORKCHAIN {
+        node.get_masterchain_block_header(block_id.seqno).await?
+    } else {
+        node.get_block_header(block_id.seqno).await?
+    };
+
+    let id = convert::block_id_ext(&header.id);
+    let result_mc_block_id = if requested_workchain == MASTERCHAIN_WORKCHAIN {
+        id.clone()
+    } else {
+        let masterchain_header = node.get_masterchain_block_header(block_id.seqno).await?;
+        convert::block_id_ext(&masterchain_header.id)
+    };
+
+    let (client_mc_state_proof, mc_block_proof) =
+        lookup_block_masterchain_proofs(node, &request.mc_block_id, &result_mc_block_id).await?;
+    let header_cell = lookup_block_header_cell(node, requested_workchain, &header).await?;
+    let header_proof = proof::merkle_proof_boc(header_cell)?;
+    let prev_header_proof = if let Some(prev_seqno) = header.prev_seqno {
+        let prev_header = if requested_workchain == MASTERCHAIN_WORKCHAIN {
+            node.get_masterchain_block_header(prev_seqno).await?
+        } else {
+            node.get_block_header(prev_seqno).await?
+        };
+        let prev_header_cell =
+            lookup_block_header_cell(node, requested_workchain, &prev_header).await?;
+        proof::merkle_proof_boc(prev_header_cell)?
+    } else {
+        proof::empty_cell_boc()
+    };
+
+    let shard_links = if requested_workchain == MASTERCHAIN_WORKCHAIN {
+        Vec::new()
+    } else {
+        vec![ShardBlockLink {
+            id: id.clone(),
+            proof: block_root_proof(node, result_mc_block_id.workchain, block_id.seqno).await?,
+        }]
+    };
+
+    Ok(Response::LookupBlockResult(LookupBlockResult {
+        id,
+        mode: (),
+        mc_block_id: result_mc_block_id,
+        client_mc_state_proof,
+        mc_block_proof,
+        shard_links,
+        header: header_proof,
+        prev_header: prev_header_proof,
+    }))
+}
+
+/// Builds the client-masterchain proof pair used by `lookupBlockWithProof`.
+///
+/// Tonlib passes its latest trusted masterchain block as `client_mc_block_id`.
+/// When the resolved block is anchored by an older masterchain block, tonlib
+/// first validates the latest block proof, extracts its state, and checks that
+/// `old_mc_blocks` contains the older anchor. The first returned field is the
+/// proof of the client masterchain block itself; the second is a proof of that
+/// block's post-state root.
+async fn lookup_block_masterchain_proofs(
+    node: &Localnet,
+    client_mc_block_id: &BlockIdExt,
+    result_mc_block_id: &BlockIdExt,
+) -> anyhow::Result<(Vec<u8>, Vec<u8>)> {
+    if client_mc_block_id == result_mc_block_id {
+        return Ok((proof::empty_cell_boc(), proof::empty_cell_boc()));
+    }
+
+    let client_mc_header =
+        masterchain_anchor_for_request(node, client_mc_block_id, "lookupBlockWithProof").await?;
+    let client_mc_block_boc = node
+        .get_masterchain_block_data(client_mc_header.id.seqno)
+        .await?;
+    let client_mc_block =
+        Boc::decode(&client_mc_block_boc).context("Failed to decode client masterchain block")?;
+
+    Ok((
+        proof::merkle_proof_boc(client_mc_block)?,
+        proof::state_proof_from_block_boc(&client_mc_block_boc)?,
+    ))
+}
+
+async fn lookup_block_header_cell(
+    node: &Localnet,
+    requested_workchain: i32,
+    header: &LocalnetBlockHeader,
+) -> anyhow::Result<tycho_types::cell::Cell> {
+    let data = if requested_workchain == MASTERCHAIN_WORKCHAIN {
+        node.get_masterchain_block_data(header.id.seqno).await?.0
+    } else {
+        node.get_block_data(header.id.seqno).await?.0
+    };
+    Boc::decode(&data).context("Failed to decode lookup block header proof cell")
 }
 
 /// Decodes the `params` field from `liteServer.runSmcMethod` into a TVM stack.
@@ -441,21 +647,36 @@ async fn list_block_transactions(
     request: ListBlockTransactions,
 ) -> anyhow::Result<Response> {
     let seqno = convert::seqno_from_i32(request.id.seqno)?;
-    // The synthetic masterchain is only an anchor for shard discovery; localnet
-    // stores executable transactions on the real basechain shard block.
-    if convert::is_masterchain_workchain(request.id.workchain) {
-        let header = node.get_block_header(seqno).await?;
+    // The masterchain is only an anchor for shard discovery; localnet stores
+    // executable transactions on the real basechain shard block.
+    let workchain = request.id.workchain;
+    if workchain == MASTERCHAIN_WORKCHAIN {
+        let header = node.get_masterchain_block_header(seqno).await?;
+        let proof = block_transactions_proof(
+            node,
+            request.id.workchain,
+            seqno,
+            request.want_proof.is_some(),
+        )
+        .await?;
         return Ok(Response::BlockTransactions(BlockTransactions {
-            id: convert::masterchain_block_id_ext(&header.id),
+            id: convert::block_id_ext(&header.id),
             req_count: request.count,
             incomplete: false,
             ids: Vec::new(),
-            proof: proof::empty_cell_boc(),
+            proof,
         }));
     }
 
     let block = node.get_block_transactions(seqno).await?;
     let id = convert::block_id_ext(&block.id);
+    let proof = block_transactions_proof(
+        node,
+        request.id.workchain,
+        seqno,
+        request.want_proof.is_some(),
+    )
+    .await?;
     let (transactions, incomplete) =
         limit_block_transactions(block.transactions, request.after, request.count);
     let ids = transactions
@@ -468,16 +689,17 @@ async fn list_block_transactions(
         req_count: request.count,
         incomplete,
         ids,
-        proof: proof::empty_cell_boc(),
+        proof,
     }))
 }
 
 /// Handles `liteServer.listBlockTransactionsExt` for localnet blocks.
 ///
 /// This mirrors `liteServer.listBlockTransactions` pagination but returns the
-/// actual transaction cells as a multi-root `BoC`. Proof bytes stay minimal for
-/// now, consistent with the other localnet `LiteAPI` methods that expose data for
-/// indexers without building a full cryptographic proof chain.
+/// actual transaction cells as a multi-root `BoC`. When the client asks for a
+/// proof, localnet returns the same full-root block `MerkleProof` used by the
+/// compact transaction-list response, which is sufficient for tonlib's root hash
+/// validation.
 async fn list_block_transactions_ext(
     node: &Localnet,
     request: ListBlockTransactions,
@@ -485,19 +707,34 @@ async fn list_block_transactions_ext(
     let seqno = convert::seqno_from_i32(request.id.seqno)?;
     // See `list_block_transactions`: masterchain transaction lists are empty by
     // construction, while the same seqno's basechain shard carries real txs.
-    if convert::is_masterchain_workchain(request.id.workchain) {
-        let header = node.get_block_header(seqno).await?;
+    let workchain = request.id.workchain;
+    if workchain == MASTERCHAIN_WORKCHAIN {
+        let header = node.get_masterchain_block_header(seqno).await?;
+        let proof = block_transactions_proof(
+            node,
+            request.id.workchain,
+            seqno,
+            request.want_proof.is_some(),
+        )
+        .await?;
         return Ok(Response::BlockTransactionsExt(BlockTransactionsExt {
-            id: convert::masterchain_block_id_ext(&header.id),
+            id: convert::block_id_ext(&header.id),
             req_count: request.count,
             incomplete: false,
             transactions: transaction_roots_boc(&[])?,
-            proof: proof::empty_cell_boc(),
+            proof,
         }));
     }
 
     let block = node.get_block_transactions(seqno).await?;
     let id = convert::block_id_ext(&block.id);
+    let proof = block_transactions_proof(
+        node,
+        request.id.workchain,
+        seqno,
+        request.want_proof.is_some(),
+    )
+    .await?;
     let (transactions, incomplete) =
         limit_block_transactions(block.transactions, request.after, request.count);
     let transactions = transaction_roots_boc(&transactions)?;
@@ -507,8 +744,27 @@ async fn list_block_transactions_ext(
         req_count: request.count,
         incomplete,
         transactions,
-        proof: proof::empty_cell_boc(),
+        proof,
     }))
+}
+
+/// Returns an optional transaction-list proof matching the requested block.
+///
+/// `liteServer.listBlockTransactions` and `listBlockTransactionsExt` only attach
+/// the block proof when clients set `want_proof`. Without that flag, upstream
+/// liteservers return an empty byte slice, and keeping the same behavior avoids
+/// making tonlib parse a non-proof cell on lightweight pagination requests.
+async fn block_transactions_proof(
+    node: &Localnet,
+    workchain: i32,
+    seqno: u32,
+    want_proof: bool,
+) -> anyhow::Result<Vec<u8>> {
+    if want_proof {
+        block_root_proof(node, workchain, seqno).await
+    } else {
+        Ok(Vec::new())
+    }
 }
 
 /// Applies `LiteAPI` block-transaction pagination to an in-memory localnet block.
@@ -571,6 +827,10 @@ async fn transaction_block_ids(
 /// `liteServer.blockTransactionsExt`: every returned transaction is a separate
 /// root cell in one `BoC`, preserving the original transaction serialization.
 fn transaction_roots_boc(transactions: &[LocalnetTransaction]) -> anyhow::Result<Vec<u8>> {
+    if transactions.is_empty() {
+        return Ok(Vec::new());
+    }
+
     let cells = transactions
         .iter()
         .map(|tx| {
@@ -592,13 +852,20 @@ fn transaction_roots_boc(transactions: &[LocalnetTransaction]) -> anyhow::Result
 async fn get_config(node: &Localnet, request: ConfigRequest) -> anyhow::Result<Response> {
     let seqno = convert::seqno_from_i32(request.id.seqno)?;
     let header = node.get_block_header(seqno).await?;
-    let config_boc = node.get_config_all(Some(seqno)).await?;
+    let id = block_id_for_existing_request(node, &request.id, &header.id).await?;
+    let workchain = request.id.workchain;
+    let (state_proof, config_proof) = if workchain == MASTERCHAIN_WORKCHAIN {
+        let masterchain_block_data = node.get_masterchain_block_data(seqno).await?;
+        proof::config_proofs(&masterchain_block_data)?
+    } else {
+        (proof::empty_cell_boc(), proof::empty_cell_boc())
+    };
 
     Ok(Response::ConfigInfo(ConfigInfo {
         mode: (),
-        id: block_id_for_request(request.id.workchain, &header.id),
-        state_proof: proof::empty_cell_boc(),
-        config_proof: proof::config_proof(&config_boc, &header)?,
+        id,
+        state_proof,
+        config_proof,
         with_state_root: request.with_state_root,
         with_libraries: request.with_libraries,
         with_state_extra_root: request.with_state_extra_root,
@@ -715,6 +982,39 @@ async fn get_libraries_with_proof(
     }))
 }
 
+/// Builds the degenerate `liteServer.getBlockProof` response for a known block.
+///
+/// `tonlibjson` asks for a block proof even when the configured trusted block
+/// and the target block are identical. In that case no Merkle/link step is
+/// required: the proof is complete from the block to itself. Requests spanning
+/// distinct blocks fail explicitly because localnet does not produce validator
+/// block proof chains.
+fn get_block_proof(request: GetBlockProof) -> anyhow::Result<Response> {
+    let to = request
+        .target_block
+        .clone()
+        .unwrap_or_else(|| request.known_block.clone());
+
+    if request.known_block != to {
+        return Err(LocalnetError::protocol_violation(
+            "liteServer.getBlockProof supports only identical known and target blocks",
+        )
+        .into());
+    }
+
+    Ok(Response::PartialBlockProof(PartialBlockProof {
+        complete: true,
+        from: request.known_block,
+        to,
+        steps: Vec::new(),
+    }))
+}
+
+/// Returns the local shard-block link shape for `liteServer.getShardBlockProof`.
+///
+/// The response identifies the latest masterchain block and echoes the requested
+/// shard block id, but it does not include a validator shard-block proof chain.
+/// Tonlib callers that require proof validation still reject this response.
 async fn get_shard_block_proof(
     node: &Localnet,
     request: GetShardBlockProof,

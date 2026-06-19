@@ -306,6 +306,32 @@ impl BlockMeta {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct MasterchainBlockMeta {
+    pub seqno: Seqno,
+    pub prev_seqno: Option<Seqno>,
+    pub gen_utime: u32,
+    pub start_lt: Lt,
+    pub end_lt: Lt,
+    pub shard_block: LocalnetBlockId,
+    pub state_root_hash: Hash256,
+    pub block_hash: Hash256,
+    pub file_hash: Hash256,
+}
+
+impl MasterchainBlockMeta {
+    #[must_use]
+    pub const fn block_id(&self) -> LocalnetBlockId {
+        LocalnetBlockId {
+            workchain: -1,
+            shard: -9223372036854775808,
+            seqno: self.seqno,
+            root_hash: self.block_hash,
+            file_hash: self.file_hash,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TxMeta {
     pub tx_hash: Hash256,
     pub account: Addr,
@@ -425,6 +451,7 @@ pub struct AccountDelta {
 pub struct History {
     pub conn: Option<Arc<Mutex<Connection>>>,
     pub blocks: Vec<BlockMeta>,
+    pub masterchain_blocks: Vec<MasterchainBlockMeta>,
     pub deltas_by_seqno: Vec<Vec<AccountDelta>>,
     pub tx_by_hash: HashMap<Hash256, TxMeta>,
     pub msg_by_hash: HashMap<Hash256, MsgMeta>,
@@ -451,6 +478,7 @@ impl History {
         Self {
             conn: None,
             blocks: Vec::new(),
+            masterchain_blocks: Vec::new(),
             deltas_by_seqno: Vec::new(),
             tx_by_hash: HashMap::new(),
             msg_by_hash: HashMap::new(),
@@ -470,6 +498,7 @@ impl History {
         Self {
             conn: Some(conn),
             blocks: Vec::new(),
+            masterchain_blocks: Vec::new(),
             deltas_by_seqno: Vec::new(),
             tx_by_hash: HashMap::new(),
             msg_by_hash: HashMap::new(),
@@ -667,6 +696,7 @@ impl MessagePool {
 
 pub struct PendingCommit {
     pub block_meta: BlockMeta,
+    pub masterchain_block_meta: Option<MasterchainBlockMeta>,
     pub tx_metas: Vec<TxMeta>,
     pub deltas: Vec<AccountDelta>,
     pub out_msg_hashes: Vec<Hash256>,

@@ -1,37 +1,32 @@
 use crate::localnet::LocalnetBlockHeader;
-use crate::types::{Addr, BocBytes};
+use crate::types::BocBytes;
 use anyhow::Context;
-use std::collections::BTreeMap;
 use tycho_types::boc::Boc;
-use tycho_types::cell::{Cell, CellBuilder, Lazy};
-use tycho_types::dict::{AugDict, Dict};
+use tycho_types::cell::{Cell, CellBuilder};
+use tycho_types::merkle::MerkleProof;
 use tycho_types::models::ShardAccount;
-use tycho_types::models::block::{ShardDescription, ShardHashes, ShardIdent};
-use tycho_types::models::config::{BlockchainConfig, BlockchainConfigParams};
+use tycho_types::models::block::{Block, ShardDescription, ShardHashes, ShardIdent};
 use tycho_types::models::currency::CurrencyCollection;
-use tycho_types::models::shard::{
-    DepthBalanceInfo, McStateExtra, ShardAccounts, ShardStateUnsplit, ValidatorInfo,
-};
 use tycho_types::prelude::HashBytes;
-
-const LOCALNET_GLOBAL_ID: i32 = 0;
 
 /// Account-state payload expected by `liteServer.accountState`.
 ///
-/// `proof` is a two-root `BoC` shaped for tonutils-go's unsafe proof path: the
-/// second root references a full `ShardStateUnsplit`. `state` is the exact
-/// `OptionalAccount` cell from localnet's stored `ShardAccount`.
+/// `shard_proof` links the real masterchain block to the real localnet shard
+/// block through masterchain state. `proof` links the shard block to its
+/// post-block shard state that contains the requested account. `state` is the
+/// exact `OptionalAccount` cell from localnet's stored `ShardAccount`.
 pub(super) struct AccountStateCells {
+    pub shard_proof: Vec<u8>,
     pub proof: Vec<u8>,
     pub state: Vec<u8>,
 }
 
 /// Builds the `liteServer.allShardsInfo.data` `BoC` for the localnet shard.
 ///
-/// Anton asks the masterchain block for shard descriptions and then fetches
-/// block bodies for every returned shard. Localnet has a single full basechain
-/// shard, so the dictionary contains one `ShardDescription` that points back to
-/// the block id already produced by localnet's block builder.
+/// `LiteAPI` clients ask the masterchain block for shard descriptions and then
+/// fetch block bodies for every returned shard. Localnet has a single full
+/// basechain shard, so the dictionary contains one `ShardDescription` that
+/// points back to the block id produced by localnet's block builder.
 pub(super) fn all_shards_info_data(header: &LocalnetBlockHeader) -> anyhow::Result<Vec<u8>> {
     let shards = shard_hashes(header)?;
     let cell = CellBuilder::build_from(&shards).context("Failed to serialize shard hashes")?;
@@ -40,15 +35,13 @@ pub(super) fn all_shards_info_data(header: &LocalnetBlockHeader) -> anyhow::Resu
 
 /// Builds account proof/state cells for `liteServer.accountState`.
 ///
-/// The proof is intentionally minimal and is only meant for local indexers that
-/// disable cryptographic proof checking. It still contains a real
-/// `ShardAccounts` dictionary entry for the requested account, so tonutils-go
-/// can verify the returned account cell hash and balance against the shard
-/// state it parses from the proof.
+/// The account proof uses the real post-block shard state stored in the block's
+/// Merkle update, so tonlib can compare the state hash declared by the block
+/// header with the state root it virtualizes from the proof.
 pub(super) fn account_state_cells(
-    address: &Addr,
     shard_account_boc: &BocBytes,
-    header: &LocalnetBlockHeader,
+    block_boc: &BocBytes,
+    masterchain_block_boc: &BocBytes,
 ) -> anyhow::Result<AccountStateCells> {
     let shard_account_cell =
         Boc::decode(shard_account_boc).context("Failed to decode ShardAccount BOC")?;
@@ -60,85 +53,37 @@ pub(super) fn account_state_cells(
         .load()
         .context("Failed to load OptionalAccount")?;
 
-    let (accounts, total_balance, state) = if let Some(account) = optional_account.0 {
-        let state = Boc::encode(shard_account.account.inner().clone());
-        let balance = account.balance;
-        let mut entries = BTreeMap::new();
-        entries.insert(
-            HashBytes(address.addr),
-            (
-                DepthBalanceInfo {
-                    split_depth: 0,
-                    balance: balance.clone(),
-                },
-                shard_account,
-            ),
-        );
-        let accounts =
-            ShardAccounts::try_from_btree(&entries).context("Failed to build shard accounts")?;
-        (accounts, balance, state)
+    let state = if optional_account.0.is_some() {
+        Boc::encode(shard_account.account.inner().clone())
     } else {
-        (
-            ShardAccounts::default(),
-            CurrencyCollection::ZERO,
-            Vec::new(),
-        )
+        Vec::new()
     };
 
-    let state_cell = shard_state_cell(
-        ShardIdent::new_full(address.workchain),
-        header.id.seqno,
-        header.gen_utime,
-        header.end_lt,
-        accounts,
-        total_balance,
-        None,
-    )?;
-    let proof = two_root_proof_with_state(state_cell)?;
+    let block_cell = Boc::decode(block_boc).context("Failed to decode block BOC")?;
+    let shard_state_cell = shard_state_from_block(&block_cell)?;
+    let proof = two_root_proof(block_cell, shard_state_cell)?;
+    let shard_proof = masterchain_shard_proof_from_boc(masterchain_block_boc)?;
 
-    Ok(AccountStateCells { proof, state })
+    Ok(AccountStateCells {
+        shard_proof,
+        proof,
+        state,
+    })
 }
 
-/// Builds `liteServer.configInfo.config_proof` for Anton's config loader.
+/// Builds `liteServer.configInfo` proofs for tonlib config validation.
 ///
-/// Anton follows the common tonutils-go path of reading the first reference from
-/// `config_proof`, parsing it as `ShardStateUnsplit`, then loading
-/// `McStateExtra.config`. The returned `BoC` is a wrapper cell with exactly that
-/// reference.
-pub(super) fn config_proof(
-    config_boc: &BocBytes,
-    header: &LocalnetBlockHeader,
-) -> anyhow::Result<Vec<u8>> {
-    let config_root = Boc::decode(config_boc).context("Failed to decode config dictionary BOC")?;
-    let shards = shard_hashes(header)?;
-    let config = BlockchainConfig {
-        address: HashBytes::ZERO,
-        params: BlockchainConfigParams::from_raw(config_root),
-    };
-    let custom = McStateExtra {
-        shards,
-        config,
-        validator_info: ValidatorInfo {
-            validator_list_hash_short: 0,
-            catchain_seqno: 0,
-            nx_cc_updated: false,
-        },
-        prev_blocks: AugDict::new(),
-        after_key_block: false,
-        last_key_block: None,
-        block_create_stats: None,
-        global_balance: CurrencyCollection::ZERO,
-    };
-    let state_cell = shard_state_cell(
-        ShardIdent::MASTERCHAIN,
-        header.id.seqno,
-        header.gen_utime,
-        header.end_lt,
-        ShardAccounts::default(),
-        CurrencyCollection::ZERO,
-        Some(custom),
-    )?;
-    wrapper_with_ref(state_cell).map(Boc::encode)
+/// `state_proof` is a Merkle proof of the stored masterchain block;
+/// `config_proof` is a Merkle proof of the exact masterchain state declared by
+/// that block. Tonlib virtualizes both and checks that the state root hash from
+/// the block's `state_update.new` equals the virtualized state proof hash before
+/// it extracts `McStateExtra.config`.
+pub(super) fn config_proofs(
+    masterchain_block_boc: &BocBytes,
+) -> anyhow::Result<(Vec<u8>, Vec<u8>)> {
+    let block = Boc::decode(masterchain_block_boc).context("Failed to decode masterchain block")?;
+    let state = shard_state_from_block(&block)?;
+    Ok((merkle_proof_boc(block)?, merkle_proof_boc(state)?))
 }
 
 /// Builds the `liteServer.shardInfo.shard_descr` `BoC` for localnet's shard.
@@ -154,13 +99,37 @@ pub(super) fn shard_description_data(header: &LocalnetBlockHeader) -> anyhow::Re
     Ok(Boc::encode(cell))
 }
 
-/// Minimal valid proof placeholder for local `LiteAPI` responses.
+/// Encodes an empty ordinary cell for TL fields that still expect cell bytes.
 ///
 /// Several tonutils-go response structs decode proof `bytes` fields as `BoC`
-/// cells during TL parsing, even when proof checking is disabled. Returning an
-/// empty byte vector therefore breaks clients before they can ignore the proof.
+/// cells during TL parsing even when the specific response path does not perform
+/// proof validation. Those fields need a parseable cell instead of an omitted
+/// byte slice.
 pub(super) fn empty_cell_boc() -> Vec<u8> {
     Boc::encode(Cell::default())
+}
+
+/// Wraps a cell into a single-root `MerkleProof` `BoC`.
+///
+/// `tonlibjson` expects proof-bearing header fields such as
+/// `lookupBlockResult.header` to deserialize as a single exotic Merkle proof
+/// cell and then virtualizes that proof back into the block header cell. This
+/// helper builds exactly that shape for either a real shard block or a real
+/// localnet masterchain block.
+pub(super) fn merkle_proof_boc(cell: Cell) -> anyhow::Result<Vec<u8>> {
+    merkle_proof_cell(cell).map(Boc::encode)
+}
+
+/// Builds a single-root `MerkleProof` for the post-state declared by a block `BoC`.
+///
+/// Stored localnet masterchain blocks contain a normal `MerkleUpdate`. `LiteAPI`
+/// proof responses often need the virtualized post-state root separately from
+/// the block root, so this helper extracts `state_update.new` and wraps it in the
+/// same proof cell shape used for block roots.
+pub(super) fn state_proof_from_block_boc(block_boc: &BocBytes) -> anyhow::Result<Vec<u8>> {
+    let block_cell = Boc::decode(block_boc).context("Failed to decode block BoC")?;
+    let state = shard_state_from_block(&block_cell)?;
+    merkle_proof_boc(state)
 }
 
 fn shard_hashes(header: &LocalnetBlockHeader) -> anyhow::Result<ShardHashes> {
@@ -193,51 +162,31 @@ const fn localnet_shard_description(header: &LocalnetBlockHeader) -> ShardDescri
     }
 }
 
-fn shard_state_cell(
-    shard_ident: ShardIdent,
-    seqno: u32,
-    gen_utime: u32,
-    gen_lt: u64,
-    accounts: ShardAccounts,
-    total_balance: CurrencyCollection,
-    custom: Option<McStateExtra>,
-) -> anyhow::Result<Cell> {
-    let custom = custom
-        .as_ref()
-        .map(Lazy::new)
-        .transpose()
-        .context("Failed to wrap masterchain state extra")?;
-    let state = ShardStateUnsplit {
-        global_id: LOCALNET_GLOBAL_ID,
-        shard_ident,
-        seqno,
-        vert_seqno: 0,
-        gen_utime,
-        gen_lt,
-        min_ref_mc_seqno: 0,
-        out_msg_queue_info: Cell::default(),
-        before_split: false,
-        accounts: Lazy::new(&accounts).context("Failed to wrap shard accounts")?,
-        overload_history: 0,
-        underload_history: 0,
-        total_balance,
-        total_validator_fees: CurrencyCollection::ZERO,
-        libraries: Dict::new(),
-        master_ref: None,
-        custom,
-    };
-    CellBuilder::build_from(&state).context("Failed to serialize shard state")
+fn shard_state_from_block(block_cell: &Cell) -> anyhow::Result<Cell> {
+    let block = block_cell
+        .parse::<Block>()
+        .context("Failed to parse block cell")?;
+    let state_update = block
+        .load_state_update()
+        .context("Failed to load block state update")?;
+    Ok(state_update.new)
 }
 
-fn two_root_proof_with_state(state_cell: Cell) -> anyhow::Result<Vec<u8>> {
-    let wrapper = wrapper_with_ref(state_cell)?;
-    Ok(Boc::encode_pair((Cell::default(), wrapper)))
+fn masterchain_shard_proof_from_boc(masterchain_block_boc: &BocBytes) -> anyhow::Result<Vec<u8>> {
+    let block = Boc::decode(masterchain_block_boc).context("Failed to decode masterchain block")?;
+    let state = shard_state_from_block(&block)?;
+    two_root_proof(block, state)
 }
 
-fn wrapper_with_ref(cell: Cell) -> anyhow::Result<Cell> {
-    let mut builder = CellBuilder::new();
-    builder
-        .store_reference(cell)
-        .context("Failed to store state reference")?;
-    builder.build().context("Failed to build proof wrapper")
+fn two_root_proof(block_cell: Cell, state_cell: Cell) -> anyhow::Result<Vec<u8>> {
+    let block_proof = merkle_proof_cell(block_cell)?;
+    let state_proof = merkle_proof_cell(state_cell)?;
+    Ok(Boc::encode_pair((block_proof, state_proof)))
+}
+
+fn merkle_proof_cell(cell: Cell) -> anyhow::Result<Cell> {
+    let hash = *cell.hash(0);
+    let depth = cell.depth(0);
+    let proof = MerkleProof { hash, depth, cell };
+    CellBuilder::build_from(&proof).context("Failed to build Merkle proof cell")
 }

@@ -1,7 +1,8 @@
 use crate::LocalnetError;
 use crate::block::{
-    create_block_boc, file_hash as block_file_hash,
-    types::{BlockBuildContext, BlockTransaction},
+    create_block_boc, create_masterchain_block_boc, file_hash as block_file_hash,
+    masterchain_state_from_block_boc,
+    types::{BlockBuildContext, BlockTransaction, MasterchainBlockBuildContext},
 };
 use crate::executor::{ExecContext, TvmExecutor};
 use crate::localnet::{LocalnetBlockId, compute_normalized_ext_in_hash};
@@ -12,8 +13,8 @@ use crate::remote::{
 use crate::storage::{self, GlobalLibraryEntry, JettonMasterMeta, NftItemMeta};
 use crate::storage::{
     AccountDelta, AccountMeta, AccountStateSnapshot, AccountStatus, BlockMeta, CellStore, Globals,
-    History, Indexes, LatestState, MessageInfo, MessagePool, MsgMeta, PendingCommit, ReverseLtKey,
-    TraceNode, TransactionInfo, TxMeta,
+    History, Indexes, LatestState, MasterchainBlockMeta, MessageInfo, MessagePool, MsgMeta,
+    PendingCommit, ReverseLtKey, TraceNode, TransactionInfo, TxMeta,
 };
 use crate::streaming::StreamingCommitEvent;
 use crate::types::{Addr, BocBytes, Hash256, Lt, Seqno};
@@ -117,6 +118,10 @@ impl Node {
                 [],
             )?;
             conn.execute(
+                "CREATE TABLE IF NOT EXISTS masterchain_blocks (seqno INTEGER PRIMARY KEY, data BLOB)",
+                [],
+            )?;
+            conn.execute(
                 "CREATE TABLE IF NOT EXISTS transactions (hash BLOB PRIMARY KEY, data BLOB, account BLOB, lt INTEGER, seqno INTEGER)",
                 [],
             )?;
@@ -156,6 +161,17 @@ impl Node {
                 let block = block?;
                 head_seqno = block.seqno;
                 history.blocks.push(block);
+            }
+
+            let mut stmt =
+                conn.prepare("SELECT data FROM masterchain_blocks ORDER BY seqno ASC")?;
+            let block_iter = stmt.query_map([], |row| {
+                let data: Vec<u8> = row.get(0)?;
+                serde_json::from_slice::<MasterchainBlockMeta>(&data)
+                    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))
+            })?;
+            for block in block_iter {
+                history.masterchain_blocks.push(block?);
             }
 
             // Load transactions into indexes
@@ -451,12 +467,24 @@ impl Node {
             .iter()
             .map(|commit| commit.block_tx.clone())
             .collect::<Vec<_>>();
+        let prev_masterchain_block = self.history.masterchain_blocks.last().cloned();
+        let prev_masterchain_blocks = self.history.masterchain_blocks.clone();
+        let prev_masterchain_state = if let Some(block) = &prev_masterchain_block {
+            let block_boc = self
+                .cas
+                .get(&block.block_hash)
+                .context("Previous masterchain block BOC missing")?;
+            Some(masterchain_state_from_block_boc(&block_boc)?)
+        } else {
+            None
+        };
         let block_boc = create_block_boc(BlockBuildContext {
             seqno,
             gen_utime,
             start_lt,
             end_lt,
             prev_block: self.history.blocks.last(),
+            master_ref: prev_masterchain_block.as_ref(),
             accounts_after: &self.latest.accounts,
             transactions: &block_transactions,
             cas: &self.cas,
@@ -475,9 +503,40 @@ impl Node {
             block_hash,
             file_hash,
         };
+        let config_boc = self
+            .cas
+            .get(&self.globals.config_boc_hash)
+            .context("Config missing")?;
+        let masterchain_block = create_masterchain_block_boc(MasterchainBlockBuildContext {
+            seqno,
+            gen_utime,
+            start_lt,
+            end_lt,
+            prev_block: prev_masterchain_block.as_ref(),
+            prev_state: prev_masterchain_state,
+            shard_block: &block_meta,
+            config_boc: &config_boc,
+            prev_blocks: &prev_masterchain_blocks,
+        })?;
+        let masterchain_block_hash = masterchain_block.block_boc.hash()?;
+        let masterchain_file_hash = block_file_hash(&masterchain_block.block_boc);
+        self.cas
+            .put(masterchain_block.block_boc, masterchain_block_hash);
+        let masterchain_block_meta = MasterchainBlockMeta {
+            seqno,
+            prev_seqno: if seqno > 1 { Some(seqno - 1) } else { None },
+            gen_utime,
+            start_lt,
+            end_lt,
+            shard_block: block_meta.block_id(),
+            state_root_hash: masterchain_block.state_root_hash,
+            block_hash: masterchain_block_hash,
+            file_hash: masterchain_file_hash,
+        };
 
         let pending = PendingCommit {
             block_meta: block_meta.clone(),
+            masterchain_block_meta: Some(masterchain_block_meta),
             tx_metas: tx_commits
                 .iter()
                 .map(|commit| commit.tx_meta.clone())
@@ -1213,6 +1272,13 @@ impl Node {
                 "INSERT OR REPLACE INTO blocks (seqno, data) VALUES (?1, ?2)",
                 params![pending.block_meta.seqno, block_data],
             )?;
+            if let Some(masterchain_block_meta) = &pending.masterchain_block_meta {
+                let block_data = serde_json::to_vec(masterchain_block_meta)?;
+                conn.execute(
+                    "INSERT OR REPLACE INTO masterchain_blocks (seqno, data) VALUES (?1, ?2)",
+                    params![masterchain_block_meta.seqno, block_data],
+                )?;
+            }
 
             // Save transactions
             for tx_meta in &pending.tx_metas {
@@ -1267,6 +1333,9 @@ impl Node {
 
         // History
         self.history.blocks.push(pending.block_meta.clone());
+        if let Some(masterchain_block_meta) = pending.masterchain_block_meta.clone() {
+            self.history.masterchain_blocks.push(masterchain_block_meta);
+        }
 
         let seqno = pending.block_meta.seqno;
         if self.history.deltas_by_seqno.len() < seqno as usize {
@@ -1416,6 +1485,15 @@ impl Node {
         }
     }
 
+    #[must_use]
+    pub fn get_masterchain_block_header(&self, seqno: Seqno) -> Option<MasterchainBlockMeta> {
+        if seqno == 0 || seqno as usize > self.history.masterchain_blocks.len() {
+            None
+        } else {
+            Some(self.history.masterchain_blocks[seqno as usize - 1].clone())
+        }
+    }
+
     /// Returns the serialized TON block `BoC` for a mined localnet block.
     ///
     /// Blocks are assembled during mining and stored in the content-addressed
@@ -1432,6 +1510,21 @@ impl Node {
             .ok_or_else(|| LocalnetError::BlockDataNotFound { seqno }.into())
     }
 
+    /// Returns the serialized TON masterchain block `BoC` for a mined localnet block.
+    ///
+    /// Masterchain blocks are mined together with basechain blocks and stored in
+    /// the same content-addressed store. They contain no localnet transactions;
+    /// their state anchors config and the basechain shard descriptor for the
+    /// matching sequence number.
+    pub fn get_masterchain_block_data(&self, seqno: Seqno) -> anyhow::Result<BocBytes> {
+        let block = self
+            .get_masterchain_block_header(seqno)
+            .ok_or(LocalnetError::BlockNotFound { seqno })?;
+        self.cas
+            .get(&block.block_hash)
+            .ok_or_else(|| LocalnetError::BlockDataNotFound { seqno }.into())
+    }
+
     #[must_use]
     pub fn find_block_by_lt(&self, lt: Lt) -> Option<BlockMeta> {
         self.history
@@ -1442,10 +1535,28 @@ impl Node {
     }
 
     #[must_use]
+    pub fn find_masterchain_block_by_lt(&self, lt: Lt) -> Option<MasterchainBlockMeta> {
+        self.history
+            .masterchain_blocks
+            .iter()
+            .find(|b| lt >= b.start_lt && lt <= b.end_lt)
+            .cloned()
+    }
+
+    #[must_use]
     pub fn find_block_by_unixtime(&self, utime: u32) -> Option<BlockMeta> {
         // Find block with gen_utime closest but not greater than utime
         self.history
             .blocks
+            .iter()
+            .rfind(|b| b.gen_utime <= utime)
+            .cloned()
+    }
+
+    #[must_use]
+    pub fn find_masterchain_block_by_unixtime(&self, utime: u32) -> Option<MasterchainBlockMeta> {
+        self.history
+            .masterchain_blocks
             .iter()
             .rfind(|b| b.gen_utime <= utime)
             .cloned()
@@ -2593,6 +2704,7 @@ mod tests {
         };
         node.apply_commit(PendingCommit {
             block_meta,
+            masterchain_block_meta: None,
             tx_metas: vec![tx_meta.clone()],
             deltas: Vec::new(),
             out_msg_hashes: vec![out_msg_hash],
@@ -3172,6 +3284,7 @@ mod tests {
                 block_hash,
                 file_hash: block_hash,
             },
+            masterchain_block_meta: None,
             tx_metas: vec![parent_tx, child_tx],
             deltas: Vec::new(),
             out_msg_hashes: vec![internal_msg_hash],
