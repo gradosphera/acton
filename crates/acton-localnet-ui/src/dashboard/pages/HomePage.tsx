@@ -1,24 +1,27 @@
-import {
-  ArrowUpRight,
-  BookOpen,
-  ChartNoAxesColumn,
-  Check,
-  CircleUserRound,
-  Copy,
-  Link2,
-  SquareStack,
-  Wallet,
-} from "lucide-react"
+import {BookOpen, Check, Copy, Link2, SquareStack} from "lucide-react"
 import * as React from "react"
 import {Card, CardContent, CardDescription, CardHeader, CardTitle, useToast} from "@acton/shared-ui"
 import {useNavigate} from "react-router-dom"
+import type {ContractABI} from "@ton/tolk-abi-to-typescript"
 
 import type {TonClient} from "../../explorer/api/client"
-import type {LocalnetNodeInfo, V3TransactionListItem} from "../../explorer/api/types"
-import {formatDuration, formatNano, formatTimeAgo, hashToHex} from "../../explorer/components/utils"
+import {addressKey, buildMessageNamesByOpcodeHex} from "../../explorer/api/compilerAbi"
+import type {
+  LocalnetNodeInfo,
+  V3AccountState,
+  V3TransactionListItem,
+} from "../../explorer/api/types"
+import {
+  DeveloperAccountList,
+  type DeveloperAccountListItem,
+} from "../../explorer/components/DeveloperAccountList"
+import {
+  DeveloperTransactionList,
+  type DeveloperMessageNamesByAddress,
+} from "../../explorer/components/DeveloperTransactionList"
+import {formatDuration} from "../../explorer/components/utils"
 import {useAddressBook} from "../../explorer/hooks/useAddressBook"
 import {collectRecentAccounts} from "../dashboardUtils"
-import {HomeAddressLabel} from "../HomeAddressLabel"
 
 import styles from "../DashboardPage.module.css"
 
@@ -31,7 +34,7 @@ interface HomePageProps {
 
 interface HomeState {
   readonly transactions: readonly V3TransactionListItem[]
-  readonly accountBalances: Readonly<Record<string, string>>
+  readonly accountStatesByAddress: Readonly<Record<string, V3AccountState>>
   readonly isLoading: boolean
   readonly error?: string
 }
@@ -44,9 +47,12 @@ export const HomePage: React.FC<HomePageProps> = ({client}) => {
   const [copiedEndpoint, setCopiedEndpoint] = React.useState<string>()
   const [homeState, setHomeState] = React.useState<HomeState>({
     transactions: [],
-    accountBalances: {},
+    accountStatesByAddress: {},
     isLoading: true,
   })
+  const [compilerAbiByAddress, setCompilerAbiByAddress] = React.useState<
+    Map<string, ContractABI | undefined>
+  >(new Map())
   const endpoints = React.useMemo(() => client.getEndpoints(), [client])
   const endpointRows = React.useMemo(
     () =>
@@ -73,6 +79,14 @@ export const HomePage: React.FC<HomePageProps> = ({client}) => {
     () => collectRecentAccounts(homeState.transactions),
     [homeState.transactions],
   )
+  const recentAccountItems = React.useMemo<readonly DeveloperAccountListItem[]>(
+    () =>
+      recentAccounts.map(address => ({
+        address,
+        state: homeState.accountStatesByAddress[addressKey(address)],
+      })),
+    [homeState.accountStatesByAddress, recentAccounts],
+  )
   const displayedAddresses = React.useMemo(() => {
     const addresses = new Set<string>()
     for (const transaction of homeState.transactions) {
@@ -80,12 +94,39 @@ export const HomePage: React.FC<HomePageProps> = ({client}) => {
       if (transaction.in_msg?.source) {
         addresses.add(transaction.in_msg.source)
       }
+      if (transaction.in_msg?.destination) {
+        addresses.add(transaction.in_msg.destination)
+      }
+      for (const message of transaction.out_msgs) {
+        if (message.source) {
+          addresses.add(message.source)
+        }
+        if (message.destination) {
+          addresses.add(message.destination)
+        }
+      }
     }
     for (const account of recentAccounts) {
       addresses.add(account)
     }
     return [...addresses]
   }, [homeState.transactions, recentAccounts])
+  const messageNamesByAddress = React.useMemo<DeveloperMessageNamesByAddress>(() => {
+    const next = new Map<
+      string,
+      {
+        readonly incoming: ReadonlyMap<string, string>
+        readonly outgoing: ReadonlyMap<string, string>
+      }
+    >()
+    for (const [address, abi] of compilerAbiByAddress) {
+      next.set(address, {
+        incoming: buildMessageNamesByOpcodeHex(abi, "incoming_messages"),
+        outgoing: buildMessageNamesByOpcodeHex(abi, "outgoing_messages"),
+      })
+    }
+    return next
+  }, [compilerAbiByAddress])
 
   React.useEffect(() => {
     let cancelled = false
@@ -135,23 +176,23 @@ export const HomePage: React.FC<HomePageProps> = ({client}) => {
         const transactionsResponse = await client.getRecentTransactions(8)
         const transactions = transactionsResponse.transactions
         const accounts = collectRecentAccounts(transactions)
-        let accountBalances: Record<string, string> = {}
+        let accountStatesByAddress: Record<string, V3AccountState> = {}
 
         if (accounts.length > 0) {
           try {
             const accountStates = await client.getAccountStates(accounts, false)
-            accountBalances = Object.fromEntries(
-              accountStates.accounts.map(account => [account.address, account.balance]),
+            accountStatesByAddress = Object.fromEntries(
+              accountStates.accounts.map(account => [addressKey(account.address), account]),
             )
           } catch (error) {
-            console.error("Failed to fetch recent account balances", error)
+            console.error("Failed to fetch recent account states", error)
           }
         }
 
         if (!cancelled) {
           setHomeState({
             transactions,
-            accountBalances,
+            accountStatesByAddress,
             isLoading: false,
           })
         }
@@ -160,7 +201,7 @@ export const HomePage: React.FC<HomePageProps> = ({client}) => {
           const message = error instanceof Error ? error.message : "Failed to load dashboard"
           setHomeState(current => ({
             transactions: current.transactions,
-            accountBalances: current.accountBalances,
+            accountStatesByAddress: current.accountStatesByAddress,
             isLoading: false,
             error: current.transactions.length === 0 ? message : undefined,
           }))
@@ -188,6 +229,64 @@ export const HomePage: React.FC<HomePageProps> = ({client}) => {
   React.useEffect(() => {
     void prefetchNames(displayedAddresses)
   }, [displayedAddresses, prefetchNames])
+
+  React.useEffect(() => {
+    let isActive = true
+
+    const loadMessageNames = async () => {
+      if (displayedAddresses.length === 0) {
+        setCompilerAbiByAddress(new Map())
+        return
+      }
+
+      const states = await client.getAccountStates(displayedAddresses, false).catch(error => {
+        console.error("Failed to fetch transaction account states", error)
+        return undefined
+      })
+
+      if (!isActive) {
+        return
+      }
+
+      const addressToCodeHash = new Map<string, string>()
+      for (const account of states?.accounts ?? []) {
+        if (account.code_hash) {
+          addressToCodeHash.set(addressKey(account.address), account.code_hash)
+        }
+      }
+
+      const codeHashes = [...new Set(addressToCodeHash.values())]
+      const fetchedAbis =
+        codeHashes.length > 0
+          ? await client
+              .getCompilerAbis(codeHashes)
+              .catch((): Awaited<ReturnType<TonClient["getCompilerAbis"]>> => ({}))
+          : {}
+
+      if (!isActive) {
+        return
+      }
+
+      const abiByCodeHash = new Map<string, ContractABI | undefined>()
+      for (const codeHash of codeHashes) {
+        abiByCodeHash.set(codeHash, fetchedAbis[codeHash]?.compiler_abi)
+      }
+
+      const next = new Map<string, ContractABI | undefined>()
+      for (const address of displayedAddresses) {
+        const key = addressKey(address)
+        const codeHash = addressToCodeHash.get(key)
+        next.set(key, codeHash ? abiByCodeHash.get(codeHash) : undefined)
+      }
+      setCompilerAbiByAddress(next)
+    }
+
+    void loadMessageNames()
+
+    return () => {
+      isActive = false
+    }
+  }, [client, displayedAddresses])
 
   React.useEffect(() => {
     if (!copiedEndpoint) {
@@ -229,156 +328,7 @@ export const HomePage: React.FC<HomePageProps> = ({client}) => {
       </section>
 
       <section className={styles.homeLayout}>
-        <div className={styles.homeMainColumn}>
-          <Card className={`${styles.dashboardCard} ${styles.homeCard}`}>
-            <CardHeader className={styles.dashboardCardHeader}>
-              <div className={styles.cardTitleRow}>
-                <div className={styles.cardIcon}>
-                  <ChartNoAxesColumn size={16} />
-                </div>
-                <div>
-                  <CardTitle className={styles.dashboardCardTitle}>Recent transactions</CardTitle>
-                  <CardDescription className={styles.dashboardCardDescription}>
-                    Fresh activity from the local network.
-                  </CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className={styles.dashboardCardContent}>
-              {homeState.error ? (
-                <div className={styles.emptyState}>{homeState.error}</div>
-              ) : homeState.isLoading ? (
-                <div className={styles.skeletonList} aria-label="Loading transactions">
-                  {[0, 1, 2, 3].map(index => (
-                    <div key={index} className={styles.skeletonRow}>
-                      <div className={styles.skeletonMain}>
-                        <span className={`${styles.skeletonLine} ${styles.skeletonLinePrimary}`} />
-                        <span
-                          className={`${styles.skeletonLine} ${styles.skeletonLineSecondary}`}
-                        />
-                      </div>
-                      <span className={`${styles.skeletonLine} ${styles.skeletonLineMeta}`} />
-                    </div>
-                  ))}
-                </div>
-              ) : homeState.transactions.length === 0 ? (
-                <div className={styles.emptyState}>No transactions yet.</div>
-              ) : (
-                <div className={styles.listTable}>
-                  {homeState.transactions.map(transaction => (
-                    <button
-                      key={transaction.hash}
-                      type="button"
-                      className={styles.listRowButton}
-                      onClick={() => {
-                        const hashHex = hashToHex(transaction.hash)
-                        if (hashHex) {
-                          void navigate(`/explorer/tx/${encodeURIComponent(hashHex)}`)
-                        }
-                      }}
-                    >
-                      <div className={styles.rowMain}>
-                        <div className={styles.rowTopLine}>
-                          <div className={styles.rowPrimary}>
-                            <HomeAddressLabel address={transaction.account} />
-                          </div>
-                          {transaction.description.compute_ph.success ? undefined : (
-                            <span className={`${styles.statusBadge} ${styles.statusError}`}>
-                              Exit {transaction.description.compute_ph.exit_code}
-                            </span>
-                          )}
-                        </div>
-                        <div className={styles.rowSecondaryDetail}>
-                          From:{" "}
-                          <HomeAddressLabel
-                            address={transaction.in_msg?.source}
-                            className={styles.rowInlineAddress}
-                          />{" "}
-                          · Value: {formatNano(transaction.in_msg?.value || "0")} GRAM
-                        </div>
-                      </div>
-                      <div className={styles.rowMeta}>
-                        <div className={styles.rowPrimary}>#{transaction.mc_block_seqno}</div>
-                        <div className={styles.rowSecondary}>{formatTimeAgo(transaction.now)}</div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className={`${styles.dashboardCard} ${styles.homeCard}`}>
-            <CardHeader className={styles.dashboardCardHeader}>
-              <div className={styles.cardTitleRow}>
-                <div className={styles.cardIcon}>
-                  <Wallet size={16} />
-                </div>
-                <div>
-                  <CardTitle className={styles.dashboardCardTitle}>Recent accounts</CardTitle>
-                  <CardDescription className={styles.dashboardCardDescription}>
-                    Accounts touched by the latest transactions.
-                  </CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className={styles.dashboardCardContent}>
-              {homeState.error ? (
-                <div className={styles.emptyState}>{homeState.error}</div>
-              ) : homeState.isLoading ? (
-                <div className={styles.skeletonList} aria-label="Loading accounts">
-                  {[0, 1, 2, 3].map(index => (
-                    <div key={index} className={styles.skeletonRow}>
-                      <span className={styles.skeletonAvatar} />
-                      <div className={styles.skeletonMain}>
-                        <span className={`${styles.skeletonLine} ${styles.skeletonLinePrimary}`} />
-                        <span
-                          className={`${styles.skeletonLine} ${styles.skeletonLineSecondary}`}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : recentAccounts.length === 0 ? (
-                <div className={styles.emptyState}>No accounts yet.</div>
-              ) : (
-                <div className={styles.accountList}>
-                  {recentAccounts.map(account => {
-                    const balance = homeState.accountBalances[account]
-
-                    return (
-                      <button
-                        key={account}
-                        type="button"
-                        className={styles.accountItem}
-                        onClick={() => {
-                          void navigate(`/explorer/address/${encodeURIComponent(account)}`)
-                        }}
-                      >
-                        <span className={styles.accountIcon}>
-                          <CircleUserRound size={14} />
-                        </span>
-                        <span className={styles.accountText}>
-                          <span className={styles.accountName}>
-                            <HomeAddressLabel address={account} />
-                          </span>
-                          <span className={styles.accountBalance}>
-                            {balance === undefined
-                              ? "Balance unavailable"
-                              : `${formatNano(balance)} GRAM`}
-                          </span>
-                        </span>
-                        <ArrowUpRight size={14} className={styles.accountArrow} />
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        <aside className={styles.homeSideColumn}>
+        <div className={styles.homeTopRow}>
           <Card className={`${styles.dashboardCard} ${styles.homeCard}`}>
             <CardHeader className={styles.dashboardCardHeader}>
               <div className={styles.cardTitleRow}>
@@ -456,7 +406,68 @@ export const HomePage: React.FC<HomePageProps> = ({client}) => {
               })}
             </CardContent>
           </Card>
-        </aside>
+        </div>
+
+        {homeState.error ? (
+          <div className={`${styles.homeTransactionsCard} ${styles.emptyState}`}>
+            {homeState.error}
+          </div>
+        ) : homeState.isLoading ? (
+          <div className={`${styles.homeTransactionsCard} ${styles.skeletonList}`}>
+            {[0, 1, 2, 3].map(index => (
+              <div key={index} className={styles.skeletonRow}>
+                <div className={styles.skeletonMain}>
+                  <span className={`${styles.skeletonLine} ${styles.skeletonLinePrimary}`} />
+                  <span className={`${styles.skeletonLine} ${styles.skeletonLineSecondary}`} />
+                </div>
+                <span className={`${styles.skeletonLine} ${styles.skeletonLineMeta}`} />
+              </div>
+            ))}
+          </div>
+        ) : homeState.transactions.length === 0 ? (
+          <div className={`${styles.homeTransactionsCard} ${styles.emptyState}`}>
+            No transactions yet.
+          </div>
+        ) : (
+          <DeveloperTransactionList
+            className={styles.homeTransactionsCard}
+            title="Recent transactions"
+            transactions={homeState.transactions}
+            messageNamesByAddress={messageNamesByAddress}
+            onTransactionClick={hashHex => {
+              void navigate(`/explorer/tx/${encodeURIComponent(hashHex)}`)
+            }}
+            onAddressClick={address => {
+              void navigate(`/explorer/address/${encodeURIComponent(address)}`)
+            }}
+          />
+        )}
+
+        <div className={styles.homeMainColumn}>
+          {homeState.error ? (
+            <div className={styles.emptyState}>{homeState.error}</div>
+          ) : homeState.isLoading ? (
+            <div className={styles.skeletonList} aria-label="Loading accounts">
+              {[0, 1, 2, 3].map(index => (
+                <div key={index} className={styles.skeletonRow}>
+                  <div className={styles.skeletonMain}>
+                    <span className={`${styles.skeletonLine} ${styles.skeletonLinePrimary}`} />
+                    <span className={`${styles.skeletonLine} ${styles.skeletonLineSecondary}`} />
+                  </div>
+                  <span className={`${styles.skeletonLine} ${styles.skeletonLineMeta}`} />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <DeveloperAccountList
+              title="Recent accounts"
+              accounts={recentAccountItems}
+              onAddressClick={address => {
+                void navigate(`/explorer/address/${encodeURIComponent(address)}`)
+              }}
+            />
+          )}
+        </div>
       </section>
     </>
   )

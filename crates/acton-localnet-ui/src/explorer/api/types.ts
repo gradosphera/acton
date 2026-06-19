@@ -336,6 +336,7 @@ export interface V3TransactionAccountState {
 
 export interface V3Message {
   readonly hash: string
+  readonly opcode?: number | string
   readonly source?: string
   readonly destination?: string
   readonly value: string
