@@ -508,6 +508,8 @@ pub struct LocalnetSettings {
     pub block_interval_ms: Option<u64>,
     /// Disable automatic block production for `acton localnet start`
     pub no_mining: Option<bool>,
+    /// Mine blocks even when there are no pending messages
+    pub mine_empty_blocks: Option<bool>,
 }
 
 const fn default_localnet_port() -> Option<u16> {
@@ -2214,6 +2216,7 @@ rate-limit = 3
 response-delay-ms = 300
 block-interval-ms = 250
 no-mining = true
+mine-empty-blocks = true
 "#;
 
         let config: ActonConfig = toml::from_str(toml_content).unwrap();
@@ -2229,5 +2232,6 @@ no-mining = true
         assert_eq!(localnet.response_delay_ms, Some(300));
         assert_eq!(localnet.block_interval_ms, Some(250));
         assert_eq!(localnet.no_mining, Some(true));
+        assert_eq!(localnet.mine_empty_blocks, Some(true));
     }
 }

@@ -1145,6 +1145,11 @@ pub enum LocalnetCommand {
         no_mining: bool,
         #[arg(
             long,
+            help = "Mine blocks even when no messages are pending (default: [localnet].mine-empty-blocks or false)"
+        )]
+        mine_empty_blocks: bool,
+        #[arg(
+            long,
             help = "Load Localnet state from JSON snapshot before startup",
             conflicts_with = "db_path", // for now
             value_name = "PATH"
@@ -2472,6 +2477,7 @@ fn main() {
                 response_delay_ms,
                 block_interval_ms,
                 no_mining,
+                mine_empty_blocks,
                 load_state,
                 dump_state,
                 require_auth,
@@ -2485,6 +2491,7 @@ fn main() {
                     response_delay_ms,
                     block_interval_ms,
                     no_mining,
+                    mine_empty_blocks,
                 );
                 let rt = tokio::runtime::Builder::new_multi_thread()
                     .enable_all()
@@ -2501,6 +2508,7 @@ fn main() {
                         resolved_localnet.response_delay_ms,
                         resolved_localnet.block_interval_ms,
                         resolved_localnet.no_mining,
+                        resolved_localnet.mine_empty_blocks,
                         load_state,
                         dump_state,
                         require_auth,
@@ -2703,10 +2711,11 @@ struct ResolvedLocalnetSettings {
     response_delay_ms: Option<u64>,
     block_interval_ms: u64,
     no_mining: bool,
+    mine_empty_blocks: bool,
 }
 
 fn resolve_localnet_port(cli_port: Option<u16>) -> u16 {
-    resolve_localnet_settings(cli_port, None, None, None, None, None, None, false).port
+    resolve_localnet_settings(cli_port, None, None, None, None, None, None, false, false).port
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -2719,6 +2728,7 @@ fn resolve_localnet_settings(
     cli_response_delay_ms: Option<u64>,
     cli_block_interval_ms: Option<u64>,
     cli_no_mining: bool,
+    cli_mine_empty_blocks: bool,
 ) -> ResolvedLocalnetSettings {
     let config = load_localnet_settings_from_config();
     ResolvedLocalnetSettings {
@@ -2732,6 +2742,7 @@ fn resolve_localnet_settings(
             .or(config.block_interval_ms)
             .unwrap_or(ton_localnet::DEFAULT_BLOCK_INTERVAL_MS),
         no_mining: cli_no_mining || config.no_mining.unwrap_or(false),
+        mine_empty_blocks: cli_mine_empty_blocks || config.mine_empty_blocks.unwrap_or(false),
     }
 }
 

@@ -15,7 +15,9 @@ use ton::ton_wallet::WalletVersion;
 use ton_localnet::node::StateSource;
 use ton_localnet::remote::RemoteProvider;
 use ton_localnet::storage::AccountStatus;
-use ton_localnet::{Localnet, ServerArgs, ServerError, StartupWallet, run_server};
+use ton_localnet::{
+    Localnet, LocalnetMiningMode, ServerArgs, ServerError, StartupWallet, run_server,
+};
 use ton_retrace::Network;
 use toncenter_keys::LOCALNET_API_KEY_ENV;
 use tycho_types::boc::BocRepr;
@@ -42,6 +44,7 @@ pub async fn localnet_start_cmd(
     response_delay_ms: Option<u64>,
     block_interval_ms: u64,
     no_mining: bool,
+    mine_empty_blocks: bool,
     load_state: Option<String>,
     dump_state: Option<String>,
     require_auth: bool,
@@ -72,6 +75,9 @@ pub async fn localnet_start_cmd(
         db_path.clone(),
         Duration::from_millis(block_interval_ms),
         !no_mining,
+        LocalnetMiningMode {
+            skip_empty_blocks: !mine_empty_blocks,
+        },
     ));
     if let Some(path) = load_state.as_deref() {
         node.load_state(path.to_owned())
@@ -424,11 +430,16 @@ pub async fn localnet_mine_cmd(
         .get("last_block_seqno")
         .and_then(serde_json::Value::as_u64)
         .unwrap_or_default();
+    let skipped_empty_blocks = result
+        .get("skipped_empty_blocks")
+        .and_then(serde_json::Value::as_u64)
+        .unwrap_or_default();
     println!(
-        "{} mined {} localnet block{}; latest seqno {}",
+        "{} mined {} localnet block{}; skipped {} empty; latest seqno {}",
         "Successfully".green().bold(),
         blocks_mined,
         if blocks_mined == 1 { "" } else { "s" },
+        skipped_empty_blocks,
         last_block_seqno
     );
 

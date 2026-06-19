@@ -1,11 +1,11 @@
 use super::utils::handle_result;
 use crate::api::toncenter_v2 as v2;
-use crate::localnet::Localnet;
+use crate::localnet::{Localnet, LocalnetMiningMode};
 use crate::server::models::{
     FaucetRequest, GetApiCallsRequest, GetVerifiedSourceRequest, IncreaseTimeRequest,
     MineBlocksRequest, RegisterCompilerAbisRequest, RevertRecoveryPointRequest, SendBocRequest,
-    SetAddressNameRequest, SetNetworkConditionsRequest, SetNextBlockTimestampRequest,
-    SetShardAccountRequest, SetTimeRequest, StatePathRequest,
+    SetAddressNameRequest, SetMiningModeRequest, SetNetworkConditionsRequest,
+    SetNextBlockTimestampRequest, SetShardAccountRequest, SetTimeRequest, StatePathRequest,
 };
 use crate::server::{
     ApiCallLog, NetworkConditions, NetworkConditionsInfo, StartupWallet, StateSourceInfo,
@@ -45,6 +45,7 @@ struct LocalnetAdminStatus {
     current_unix_time: u32,
     time_offset_seconds: i64,
     next_block_timestamp: Option<u32>,
+    mining_mode: LocalnetMiningMode,
     #[serde(flatten)]
     state_source: StateSourceInfo,
     network_conditions: NetworkConditionsInfo,
@@ -59,6 +60,7 @@ pub async fn get_status(
         async move {
             let masterchain_info = node.get_masterchain_info().await?;
             let clock_info = node.clock_info().await?;
+            let mining_mode = node.get_mining_mode().await?;
 
             Ok(LocalnetAdminStatus {
                 uptime_seconds: node.uptime_seconds(),
@@ -66,6 +68,7 @@ pub async fn get_status(
                 current_unix_time: clock_info.current_unix_time,
                 time_offset_seconds: clock_info.time_offset_seconds,
                 next_block_timestamp: clock_info.next_block_timestamp,
+                mining_mode,
                 state_source: state_source.as_ref().clone(),
                 network_conditions: network_conditions.info(),
             })
@@ -108,6 +111,19 @@ pub async fn mine_blocks(State(node): State<Arc<Localnet>>, body: Bytes) -> Json
             };
             node.mine_blocks(payload.blocks.unwrap_or(1)).await
         },
+        |res| serde_json::to_value(res).unwrap_or(Value::Null),
+    )
+    .await
+}
+
+pub async fn set_mining_mode(
+    State(node): State<Arc<Localnet>>,
+    Json(payload): Json<SetMiningModeRequest>,
+) -> Json<Value> {
+    handle_result(
+        node.set_mining_mode(LocalnetMiningMode {
+            skip_empty_blocks: payload.skip_empty_blocks,
+        }),
         |res| serde_json::to_value(res).unwrap_or(Value::Null),
     )
     .await

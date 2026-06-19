@@ -13,5 +13,5 @@ pub mod storage;
 pub mod streaming;
 pub mod types;
 pub(crate) use error::{LiteServerErrorCode, LocalnetError};
-pub use localnet::{DEFAULT_BLOCK_INTERVAL_MS, Localnet};
+pub use localnet::{DEFAULT_BLOCK_INTERVAL_MS, Localnet, LocalnetMiningMode};
 pub use server::{ServerArgs, ServerError, StartupWallet, run_server};

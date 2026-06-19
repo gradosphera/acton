@@ -203,6 +203,11 @@ pub struct MineBlocksRequest {
 }
 
 #[derive(Deserialize)]
+pub struct SetMiningModeRequest {
+    pub skip_empty_blocks: bool,
+}
+
+#[derive(Deserialize)]
 pub struct RevertRecoveryPointRequest {
     pub id: u64,
 }

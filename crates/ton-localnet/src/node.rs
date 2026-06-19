@@ -401,6 +401,14 @@ impl Node {
         Ok((block_meta, tx_meta))
     }
 
+    pub fn mine_block_if_pending(&mut self) -> anyhow::Result<Option<BlockMeta>> {
+        if !self.has_pending_messages() {
+            return Ok(None);
+        }
+
+        self.mine_block().map(Some)
+    }
+
     pub fn mine_block(&mut self) -> anyhow::Result<BlockMeta> {
         let seqno = self.globals.head_seqno + 1;
         let prev_lt = self.globals.global_lt;

@@ -193,8 +193,22 @@ pub struct LocalnetConsensusBlock {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct LocalnetMineResult {
     pub blocks_mined: u32,
+    pub skipped_empty_blocks: u32,
     pub last_block_seqno: Seqno,
     pub blocks: Vec<LocalnetBlockId>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
+pub struct LocalnetMiningMode {
+    pub skip_empty_blocks: bool,
+}
+
+impl Default for LocalnetMiningMode {
+    fn default() -> Self {
+        Self {
+            skip_empty_blocks: true,
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -461,6 +475,13 @@ pub(crate) enum Request {
         count: u32,
         resp: oneshot::Sender<anyhow::Result<LocalnetMineResult>>,
     },
+    GetMiningMode {
+        resp: oneshot::Sender<anyhow::Result<LocalnetMiningMode>>,
+    },
+    SetMiningMode {
+        mode: LocalnetMiningMode,
+        resp: oneshot::Sender<anyhow::Result<LocalnetMiningMode>>,
+    },
     GetClockInfo {
         resp: oneshot::Sender<anyhow::Result<NodeClockInfo>>,
     },
@@ -535,6 +556,7 @@ impl Localnet {
         db_path: Option<String>,
         block_interval: Duration,
         auto_mining: bool,
+        mining_mode: LocalnetMiningMode,
     ) -> Self {
         let (tx, rx) = mpsc::channel(100);
         let (events_tx, _) = broadcast::channel(1024);
@@ -549,6 +571,7 @@ impl Localnet {
                 db_path,
                 block_interval,
                 auto_mining,
+                mining_mode,
             ) {
                 tracing::error!("Node loop failed: {:?}", e);
             }
@@ -1248,6 +1271,21 @@ impl Localnet {
         rx.await?
     }
 
+    pub async fn get_mining_mode(&self) -> anyhow::Result<LocalnetMiningMode> {
+        let (resp, rx) = oneshot::channel();
+        self.tx.send(Request::GetMiningMode { resp }).await?;
+        rx.await?
+    }
+
+    pub async fn set_mining_mode(
+        &self,
+        mode: LocalnetMiningMode,
+    ) -> anyhow::Result<LocalnetMiningMode> {
+        let (resp, rx) = oneshot::channel();
+        self.tx.send(Request::SetMiningMode { mode, resp }).await?;
+        rx.await?
+    }
+
     pub async fn clock_info(&self) -> anyhow::Result<NodeClockInfo> {
         let (resp, rx) = oneshot::channel();
         self.tx.send(Request::GetClockInfo { resp }).await?;
@@ -1294,18 +1332,20 @@ fn run_node_loop(
     db_path: Option<String>,
     block_interval: Duration,
     auto_mining: bool,
+    mut mining_mode: LocalnetMiningMode,
 ) -> anyhow::Result<()> {
     let mut node = create_node(events_tx, state_source, db_path)?;
     let mut recovery_points = RecoveryPoints::default();
     tracing::info!(
-        "TON localnet started, block interval: {}ms, auto mining: {}",
+        "TON localnet started, block interval: {}ms, auto mining: {}, skip empty blocks: {}",
         block_interval.as_millis(),
-        auto_mining
+        auto_mining,
+        mining_mode.skip_empty_blocks
     );
 
     if !auto_mining {
         while let Some(req) = rx.blocking_recv() {
-            process_loop_request(&mut node, &mut recovery_points, req);
+            process_loop_request(&mut node, &mut recovery_points, &mut mining_mode, req);
         }
         return Ok(());
     }
@@ -1314,7 +1354,7 @@ fn run_node_loop(
         .enable_time()
         .build()
         .context("Failed to create localnet node runtime")?;
-    runtime.block_on(run_node_loop_async(rx, node, block_interval))
+    runtime.block_on(run_node_loop_async(rx, node, block_interval, mining_mode))
 }
 
 fn create_node(
@@ -1336,58 +1376,91 @@ async fn run_node_loop_async(
     mut rx: mpsc::Receiver<Request>,
     mut node: Node,
     block_interval: Duration,
+    mut mining_mode: LocalnetMiningMode,
 ) -> anyhow::Result<()> {
     let mut next_block_at = Instant::now() + block_interval;
     let mut recovery_points = RecoveryPoints::default();
 
     loop {
         if Instant::now() >= next_block_at {
-            next_block_at = mine_scheduled_block(&mut node, block_interval);
+            next_block_at = mine_scheduled_block(&mut node, block_interval, mining_mode);
             continue;
         }
 
         tokio::select! {
             biased;
             () = tokio::time::sleep_until(next_block_at) => {
-                next_block_at = mine_scheduled_block(&mut node, block_interval);
+                next_block_at = mine_scheduled_block(&mut node, block_interval, mining_mode);
             }
             req = rx.recv() => {
                 let Some(req) = req else {
                     return Ok(());
                 };
-                process_loop_request(&mut node, &mut recovery_points, req);
+                process_loop_request(&mut node, &mut recovery_points, &mut mining_mode, req);
             }
         }
     }
 }
 
-fn mine_scheduled_block(node: &mut Node, block_interval: Duration) -> Instant {
-    if let Err(e) = node.mine_block() {
+fn mine_scheduled_block(
+    node: &mut Node,
+    block_interval: Duration,
+    mining_mode: LocalnetMiningMode,
+) -> Instant {
+    if let Err(e) = mine_block_with_mode(node, mining_mode) {
         tracing::error!("Block mining failed: {:?}", e);
     }
     Instant::now() + block_interval
 }
 
-fn handle_mine_blocks(node: &mut Node, count: u32) -> anyhow::Result<LocalnetMineResult> {
+fn mine_block_with_mode(
+    node: &mut Node,
+    mining_mode: LocalnetMiningMode,
+) -> anyhow::Result<Option<storage::BlockMeta>> {
+    if mining_mode.skip_empty_blocks {
+        node.mine_block_if_pending()
+    } else {
+        node.mine_block().map(Some)
+    }
+}
+
+fn handle_mine_blocks(
+    node: &mut Node,
+    count: u32,
+    mining_mode: LocalnetMiningMode,
+) -> anyhow::Result<LocalnetMineResult> {
     anyhow::ensure!(count > 0, "blocks must be greater than 0");
 
     let mut blocks = Vec::with_capacity(count as usize);
+    let mut skipped_empty_blocks = 0;
     for _ in 0..count {
-        let block = node.mine_block()?;
-        blocks.push(block.block_id());
+        match mine_block_with_mode(node, mining_mode)? {
+            Some(block) => blocks.push(block.block_id()),
+            None => skipped_empty_blocks += 1,
+        }
     }
 
     let last_block_seqno = blocks
         .last()
         .map_or(node.globals.head_seqno, |block| block.seqno);
+    let blocks_mined = blocks
+        .len()
+        .try_into()
+        .context("mined blocks count exceeds u32")?;
     Ok(LocalnetMineResult {
-        blocks_mined: count,
+        blocks_mined,
+        skipped_empty_blocks,
         last_block_seqno,
         blocks,
     })
 }
 
-fn process_loop_request(node: &mut Node, recovery_points: &mut RecoveryPoints, req: Request) {
+fn process_loop_request(
+    node: &mut Node,
+    recovery_points: &mut RecoveryPoints,
+    mining_mode: &mut LocalnetMiningMode,
+    req: Request,
+) {
     tracing::debug!("Node loop processing request: {:?}", req);
     match req {
         Request::SendBoc { boc, resp } => {
@@ -1689,8 +1762,19 @@ fn process_loop_request(node: &mut Node, recovery_points: &mut RecoveryPoints, r
             let _ = resp.send(res);
         }
         Request::MineBlocks { count, resp } => {
-            let res = handle_mine_blocks(node, count);
+            let res = handle_mine_blocks(node, count, *mining_mode);
             let _ = resp.send(res);
+        }
+        Request::GetMiningMode { resp } => {
+            let _ = resp.send(Ok(*mining_mode));
+        }
+        Request::SetMiningMode { mode, resp } => {
+            *mining_mode = mode;
+            tracing::info!(
+                "Localnet mining mode changed, skip empty blocks: {}",
+                mining_mode.skip_empty_blocks
+            );
+            let _ = resp.send(Ok(*mining_mode));
         }
         Request::GetClockInfo { resp } => {
             let res = node.clock_info();
@@ -2641,6 +2725,7 @@ fn handle_lookup_block(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::executor::{ExecContext, ExecResult, TvmExecutor};
     use tycho_types::boc::BocRepr;
     use tycho_types::cell::{CellSliceParts, HashBytes};
     use tycho_types::models::{CurrencyCollection, IntAddr, IntMsgInfo, OwnedMessage};
@@ -2668,6 +2753,61 @@ mod tests {
 
         assert_eq!(mapped.opcode, Some(REGULAR_OPCODE));
         assert!(mapped.bounced);
+    }
+
+    #[test]
+    fn handle_mine_blocks_skips_empty_blocks_by_default() {
+        let mut node = make_test_node();
+
+        let result = handle_mine_blocks(&mut node, 3, LocalnetMiningMode::default())
+            .expect("manual mining must succeed");
+
+        assert_eq!(result.blocks_mined, 0);
+        assert_eq!(result.skipped_empty_blocks, 3);
+        assert!(result.blocks.is_empty());
+        assert_eq!(result.last_block_seqno, 0);
+        assert_eq!(node.globals.head_seqno, 0);
+    }
+
+    #[test]
+    fn handle_mine_blocks_can_mine_empty_blocks_when_enabled() {
+        let mut node = make_test_node();
+
+        let result = handle_mine_blocks(
+            &mut node,
+            2,
+            LocalnetMiningMode {
+                skip_empty_blocks: false,
+            },
+        )
+        .expect("manual mining must succeed");
+
+        assert_eq!(result.blocks_mined, 2);
+        assert_eq!(result.skipped_empty_blocks, 0);
+        assert_eq!(result.blocks.len(), 2);
+        assert_eq!(result.last_block_seqno, 2);
+        assert_eq!(node.globals.head_seqno, 2);
+    }
+
+    struct NoopExecutor;
+
+    impl TvmExecutor for NoopExecutor {
+        fn execute(
+            &self,
+            _shard_account: &BocBytes,
+            _in_msg: &BocBytes,
+            _ctx: &ExecContext,
+            _config: &BocBytes,
+            _libs: Option<&BocBytes>,
+        ) -> anyhow::Result<ExecResult> {
+            anyhow::bail!("NoopExecutor should not be used in empty block mining tests")
+        }
+    }
+
+    fn make_test_node() -> Node {
+        let config_boc = BocBytes::from_base64(DEFAULT_CONFIG).expect("must decode default config");
+        Node::new(Box::new(NoopExecutor), config_boc, StateSource::Local)
+            .expect("must create test node")
     }
 
     fn internal_message_boc(bounced: bool, body_words: &[u32]) -> BocBytes {
