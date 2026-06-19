@@ -65,6 +65,14 @@ pub(crate) struct BlockBuildContext<'a> {
     pub cas: &'a CellStore,
 }
 
+/// Serialized shard block plus values already known while it was assembled.
+pub(crate) struct BlockBuildResult {
+    /// Serialized basechain `Block` root cell.
+    pub block_boc: BocBytes,
+    /// Representation hash of the block root cell.
+    pub block_hash: Hash256,
+}
+
 /// Immutable inputs required to assemble a real localnet masterchain block.
 ///
 /// Localnet mines a single basechain shard and then creates a masterchain block
@@ -87,8 +95,8 @@ pub(crate) struct MasterchainBlockBuildContext<'a> {
     pub prev_state: Option<Cell>,
     /// Basechain block anchored by this masterchain block.
     pub shard_block: &'a BlockMeta,
-    /// Blockchain config dictionary stored in the masterchain state.
-    pub config_boc: &'a BocBytes,
+    /// Blockchain config dictionary root stored in the masterchain state.
+    pub config_cell: &'a Cell,
     /// Earlier masterchain blocks exposed through `old_mc_blocks`.
     pub prev_blocks: &'a [MasterchainBlockMeta],
 }
@@ -101,8 +109,12 @@ pub(crate) struct MasterchainBlockBuildContext<'a> {
 pub(crate) struct MasterchainBlockBuildResult {
     /// Serialized masterchain `Block` root cell.
     pub block_boc: BocBytes,
+    /// Representation hash of the masterchain block root cell.
+    pub block_hash: Hash256,
     /// Hash of the post-block masterchain state.
     pub state_root_hash: Hash256,
+    /// Post-block masterchain state cell.
+    pub state_cell: Cell,
 }
 
 /// Serialized shard state plus aggregate data needed by block assembly.

@@ -1,7 +1,7 @@
 use crate::LocalnetError;
 use crate::block::{
     create_block_boc, create_masterchain_block_boc, file_hash as block_file_hash,
-    masterchain_state_from_block_boc,
+    masterchain_state_from_block_cell,
     types::{BlockBuildContext, BlockTransaction, MasterchainBlockBuildContext},
 };
 use crate::executor::{ExecContext, TvmExecutor};
@@ -59,6 +59,8 @@ pub struct Node {
     pub streaming_events: Option<broadcast::Sender<StreamingCommitEvent>>,
     pub time_offset_seconds: i64,
     pub next_block_timestamp: Option<u32>,
+    pub config_cell: Cell,
+    pub latest_masterchain_state: Option<Cell>,
 }
 
 const CASCADE_TX_HARD_LIMIT: usize = 10_000;
@@ -142,7 +144,9 @@ impl Node {
             None
         };
 
-        let config_hash = config_boc.hash()?;
+        let config_cell =
+            Boc::decode(&config_boc).context("Failed to decode blockchain config BOC")?;
+        let config_hash = Hash256::from(config_cell.repr_hash());
 
         let mut history = History::new();
         let mut latest = LatestState::new();
@@ -322,6 +326,8 @@ impl Node {
             streaming_events: None,
             time_offset_seconds,
             next_block_timestamp: None,
+            config_cell,
+            latest_masterchain_state: None,
         };
         node.rebuild_global_libraries_from_accounts()?;
         Ok(node)
@@ -470,15 +476,21 @@ impl Node {
         let prev_masterchain_block = self.history.masterchain_blocks.last().cloned();
         let prev_masterchain_blocks = self.history.masterchain_blocks.clone();
         let prev_masterchain_state = if let Some(block) = &prev_masterchain_block {
-            let block_boc = self
-                .cas
-                .get(&block.block_hash)
-                .context("Previous masterchain block BOC missing")?;
-            Some(masterchain_state_from_block_boc(&block_boc)?)
+            if let Some(state) = &self.latest_masterchain_state
+                && Hash256::from(state.repr_hash()) == block.state_root_hash
+            {
+                Some(state.clone())
+            } else {
+                let block_cell = self
+                    .cas
+                    .get_cell(&block.block_hash)
+                    .context("Previous masterchain block BOC missing")?;
+                Some(masterchain_state_from_block_cell(&block_cell)?)
+            }
         } else {
             None
         };
-        let block_boc = create_block_boc(BlockBuildContext {
+        let block = create_block_boc(BlockBuildContext {
             seqno,
             gen_utime,
             start_lt,
@@ -489,9 +501,9 @@ impl Node {
             transactions: &block_transactions,
             cas: &self.cas,
         })?;
-        let block_hash = block_boc.hash()?;
-        let file_hash = block_file_hash(&block_boc);
-        self.cas.put(block_boc, block_hash);
+        let block_hash = block.block_hash;
+        let file_hash = block_file_hash(&block.block_boc);
+        self.cas.put(block.block_boc, block_hash);
 
         let block_meta = BlockMeta {
             seqno,
@@ -503,10 +515,12 @@ impl Node {
             block_hash,
             file_hash,
         };
-        let config_boc = self
-            .cas
-            .get(&self.globals.config_boc_hash)
-            .context("Config missing")?;
+        if Hash256::from(self.config_cell.repr_hash()) != self.globals.config_boc_hash {
+            self.config_cell = self
+                .cas
+                .get_cell(&self.globals.config_boc_hash)
+                .context("Config missing")?;
+        }
         let masterchain_block = create_masterchain_block_boc(MasterchainBlockBuildContext {
             seqno,
             gen_utime,
@@ -515,13 +529,14 @@ impl Node {
             prev_block: prev_masterchain_block.as_ref(),
             prev_state: prev_masterchain_state,
             shard_block: &block_meta,
-            config_boc: &config_boc,
+            config_cell: &self.config_cell,
             prev_blocks: &prev_masterchain_blocks,
         })?;
-        let masterchain_block_hash = masterchain_block.block_boc.hash()?;
+        let masterchain_block_hash = masterchain_block.block_hash;
         let masterchain_file_hash = block_file_hash(&masterchain_block.block_boc);
         self.cas
             .put(masterchain_block.block_boc, masterchain_block_hash);
+        let next_masterchain_state = masterchain_block.state_cell;
         let masterchain_block_meta = MasterchainBlockMeta {
             seqno,
             prev_seqno: if seqno > 1 { Some(seqno - 1) } else { None },
@@ -557,6 +572,7 @@ impl Node {
         };
 
         self.apply_commit(pending)?;
+        self.latest_masterchain_state = Some(next_masterchain_state);
         Ok(block_meta)
     }
 

@@ -53,9 +53,12 @@ pub(crate) fn create_masterchain_block_boc(
     };
     let cell = CellBuilder::build_from(&block).context("Failed to serialize masterchain block")?;
 
+    let block_hash = Hash256::from(cell.repr_hash());
     Ok(MasterchainBlockBuildResult {
         block_boc: Boc::encode(cell).into(),
+        block_hash,
         state_root_hash: Hash256::from(new_state.repr_hash()),
+        state_cell: new_state,
     })
 }
 
@@ -65,8 +68,7 @@ pub(crate) fn create_masterchain_block_boc(
 /// Merkle update. Keeping this extraction in the block module lets `Node` avoid
 /// knowing the internal TL-B layout of a block when it prepares the next mining
 /// step.
-pub(crate) fn masterchain_state_from_block_boc(boc: &[u8]) -> anyhow::Result<Cell> {
-    let block_cell = Boc::decode(boc).context("Failed to decode masterchain block BOC")?;
+pub(crate) fn masterchain_state_from_block_cell(block_cell: &Cell) -> anyhow::Result<Cell> {
     let block = block_cell
         .parse::<Block>()
         .context("Failed to parse masterchain block")?;
@@ -155,7 +157,7 @@ fn masterchain_block_info(ctx: &MasterchainBlockBuildContext<'_>) -> anyhow::Res
 fn masterchain_state_cell(ctx: &MasterchainBlockBuildContext<'_>) -> anyhow::Result<Cell> {
     let custom = McStateExtra {
         shards: shard_hashes(ctx)?,
-        config: blockchain_config(ctx.config_boc)?,
+        config: blockchain_config(ctx.config_cell),
         validator_info: ValidatorInfo {
             validator_list_hash_short: 0,
             catchain_seqno: 0,
@@ -235,12 +237,11 @@ fn shard_hashes(ctx: &MasterchainBlockBuildContext<'_>) -> anyhow::Result<ShardH
 /// Storing it in the real masterchain state lets `liteServer.getConfig*`
 /// responses prove config parameters against the block returned by
 /// `getMasterchainInfo`.
-fn blockchain_config(config_boc: &[u8]) -> anyhow::Result<BlockchainConfig> {
-    let config_root = Boc::decode(config_boc).context("Failed to decode blockchain config BOC")?;
-    Ok(BlockchainConfig {
+fn blockchain_config(config_root: &Cell) -> BlockchainConfig {
+    BlockchainConfig {
         address: HashBytes::ZERO,
-        params: BlockchainConfigParams::from_raw(config_root),
-    })
+        params: BlockchainConfigParams::from_raw(config_root.clone()),
+    }
 }
 
 /// Builds the `old_mc_blocks` dictionary for masterchain state history.

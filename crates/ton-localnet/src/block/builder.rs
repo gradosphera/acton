@@ -1,7 +1,9 @@
 use crate::block::account_blocks::build_account_blocks;
 use crate::block::messages::{build_in_msg_descr, build_out_msg_descr};
 use crate::block::state::build_old_and_new_states;
-use crate::block::types::{BlockBuildContext, LOCALNET_GLOBAL_ID, LOCALNET_SHARD};
+use crate::block::types::{
+    BlockBuildContext, BlockBuildResult, LOCALNET_GLOBAL_ID, LOCALNET_SHARD,
+};
 use crate::types::{BocBytes, Hash256};
 use anyhow::Context;
 use tycho_types::boc::Boc;
@@ -21,7 +23,7 @@ use tycho_types::prelude::HashBytes;
 /// validator-specific artifacts: signatures, split/merge metadata, and
 /// out-queue proofs. The goal is an indexable development block, not a candidate
 /// that could pass validator consensus.
-pub(crate) fn create_block_boc(ctx: BlockBuildContext<'_>) -> anyhow::Result<BocBytes> {
+pub(crate) fn create_block_boc(ctx: BlockBuildContext<'_>) -> anyhow::Result<BlockBuildResult> {
     let (old_state, new_state) = build_old_and_new_states(&ctx)?;
     let state_update = MerkleUpdate {
         old_hash: *old_state.cell.repr_hash(),
@@ -71,7 +73,11 @@ pub(crate) fn create_block_boc(ctx: BlockBuildContext<'_>) -> anyhow::Result<Boc
     };
 
     let cell = CellBuilder::build_from(&block).context("Failed to serialize block")?;
-    Ok(Boc::encode(cell).into())
+    let block_hash = Hash256::from(cell.repr_hash());
+    Ok(BlockBuildResult {
+        block_boc: Boc::encode(cell).into(),
+        block_hash,
+    })
 }
 
 /// Creates the `BlockInfo` header for a localnet block.

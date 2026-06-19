@@ -4,6 +4,7 @@ use crate::storage::{
     MsgMeta, NftItemMeta, ReverseLtKey, TxMeta,
 };
 use crate::types::{Addr, BocBytes, Hash256, Lt, Seqno};
+use anyhow::Context;
 use core::cmp;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
@@ -269,6 +270,11 @@ impl Node {
             queue_policy: snapshot.globals.queue_policy,
             checkpoint_every: snapshot.globals.checkpoint_every,
         };
+        self.config_cell = self
+            .cas
+            .get_cell(&self.globals.config_boc_hash)
+            .context("Config missing")?;
+        self.latest_masterchain_state = None;
         self.time_offset_seconds = snapshot.time_offset_seconds;
         self.next_block_timestamp = snapshot.next_block_timestamp;
         if let Some(latest_block) = self.history.blocks.last() {
