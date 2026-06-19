@@ -3,7 +3,7 @@ use crate::executor::TvmEmulatorAdapter;
 use crate::node::{Node, NodeClockInfo, StateSource};
 use crate::node_snapshot::NodeStateSnapshot;
 use crate::storage;
-use crate::storage::{AccountStatus, MsgMeta, TransactionInfo};
+use crate::storage::{AccountStatus, BlockMeta, MasterchainBlockMeta, MsgMeta, TransactionInfo};
 use crate::streaming::StreamingCommitEvent;
 use crate::types::{Addr, BocBytes, Hash256, Lt, Seqno};
 use anyhow::Context;
@@ -36,6 +36,21 @@ pub struct LocalnetBlockId {
     pub seqno: Seqno,
     pub root_hash: Hash256,
     pub file_hash: Hash256,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct LocalnetBlock {
+    pub workchain: i32,
+    pub shard: i64,
+    pub seqno: Seqno,
+    pub root_hash: Hash256,
+    pub file_hash: Hash256,
+    pub gen_utime: u32,
+    pub start_lt: Lt,
+    pub end_lt: Lt,
+    pub tx_count: usize,
+    pub prev_blocks: Vec<LocalnetBlockId>,
+    pub masterchain_block_ref: Option<LocalnetBlockId>,
 }
 
 impl LocalnetBlockId {
@@ -302,6 +317,9 @@ pub(crate) enum Request {
     },
     GetAllTransactions {
         resp: oneshot::Sender<anyhow::Result<Vec<LocalnetTransaction>>>,
+    },
+    GetBlocks {
+        resp: oneshot::Sender<anyhow::Result<Vec<LocalnetBlock>>>,
     },
     GetPendingTransactions {
         resp: oneshot::Sender<anyhow::Result<Vec<LocalnetTransaction>>>,
@@ -758,6 +776,12 @@ impl Localnet {
     pub async fn get_all_transactions(&self) -> anyhow::Result<Vec<LocalnetTransaction>> {
         let (resp, rx) = oneshot::channel();
         self.tx.send(Request::GetAllTransactions { resp }).await?;
+        rx.await?
+    }
+
+    pub async fn get_blocks(&self) -> anyhow::Result<Vec<LocalnetBlock>> {
+        let (resp, rx) = oneshot::channel();
+        self.tx.send(Request::GetBlocks { resp }).await?;
         rx.await?
     }
 
@@ -1416,7 +1440,7 @@ fn mine_scheduled_block(
 fn mine_block_with_mode(
     node: &mut Node,
     mining_mode: LocalnetMiningMode,
-) -> anyhow::Result<Option<storage::BlockMeta>> {
+) -> anyhow::Result<Option<BlockMeta>> {
     if mining_mode.skip_empty_blocks {
         node.mine_block_if_pending()
     } else {
@@ -1520,6 +1544,10 @@ fn process_loop_request(
         }
         Request::GetAllTransactions { resp } => {
             let res = handle_get_all_transactions(node);
+            let _ = resp.send(res);
+        }
+        Request::GetBlocks { resp } => {
+            let res = handle_get_blocks(node);
             let _ = resp.send(res);
         }
         Request::GetPendingTransactions { resp } => {
@@ -2134,6 +2162,89 @@ fn handle_get_all_transactions(node: &Node) -> anyhow::Result<Vec<LocalnetTransa
     Ok(result)
 }
 
+fn handle_get_blocks(node: &Node) -> anyhow::Result<Vec<LocalnetBlock>> {
+    let masterchain_by_seqno = node
+        .history
+        .masterchain_blocks
+        .iter()
+        .map(|block| (block.seqno, block))
+        .collect::<std::collections::HashMap<_, _>>();
+
+    let mut blocks =
+        Vec::with_capacity(node.history.blocks.len() + node.history.masterchain_blocks.len());
+    blocks.extend(node.history.masterchain_blocks.iter().map(|block| {
+        localnet_block_from_masterchain_meta(block, &node.history.masterchain_blocks)
+    }));
+    blocks.extend(node.history.blocks.iter().map(|block| {
+        localnet_block_from_block_meta(
+            block,
+            &node.history.blocks,
+            masterchain_by_seqno.get(&block.seqno).copied(),
+        )
+    }));
+
+    Ok(blocks)
+}
+
+fn localnet_block_from_block_meta(
+    block: &BlockMeta,
+    blocks: &[BlockMeta],
+    masterchain_block: Option<&MasterchainBlockMeta>,
+) -> LocalnetBlock {
+    let id = block.block_id();
+    LocalnetBlock {
+        workchain: id.workchain,
+        shard: id.shard,
+        seqno: id.seqno,
+        root_hash: id.root_hash,
+        file_hash: id.file_hash,
+        gen_utime: block.gen_utime,
+        start_lt: block.start_lt,
+        end_lt: block.end_lt,
+        tx_count: block.tx_hashes.len(),
+        prev_blocks: block
+            .prev_seqno
+            .and_then(|seqno| {
+                blocks
+                    .iter()
+                    .find(|candidate| candidate.seqno == seqno)
+                    .map(BlockMeta::block_id)
+            })
+            .into_iter()
+            .collect(),
+        masterchain_block_ref: masterchain_block.map(MasterchainBlockMeta::block_id),
+    }
+}
+
+fn localnet_block_from_masterchain_meta(
+    block: &MasterchainBlockMeta,
+    masterchain_blocks: &[MasterchainBlockMeta],
+) -> LocalnetBlock {
+    let id = block.block_id();
+    LocalnetBlock {
+        workchain: id.workchain,
+        shard: id.shard,
+        seqno: id.seqno,
+        root_hash: id.root_hash,
+        file_hash: id.file_hash,
+        gen_utime: block.gen_utime,
+        start_lt: block.start_lt,
+        end_lt: block.end_lt,
+        tx_count: 0,
+        prev_blocks: block
+            .prev_seqno
+            .and_then(|seqno| {
+                masterchain_blocks
+                    .iter()
+                    .find(|candidate| candidate.seqno == seqno)
+                    .map(MasterchainBlockMeta::block_id)
+            })
+            .into_iter()
+            .collect(),
+        masterchain_block_ref: None,
+    }
+}
+
 fn handle_get_pending_transactions(node: &Node) -> anyhow::Result<Vec<LocalnetTransaction>> {
     let mut pending_tx_hashes = Vec::new();
     let mut seen = HashSet::new();
@@ -2559,7 +2670,7 @@ fn handle_get_masterchain_info(node: &Node) -> anyhow::Result<LocalnetMasterchai
         .masterchain_blocks
         .iter()
         .filter(|block| block.seqno < node.globals.head_seqno)
-        .map(storage::MasterchainBlockMeta::block_id)
+        .map(MasterchainBlockMeta::block_id)
         .collect();
 
     Ok(LocalnetMasterchainInfo {

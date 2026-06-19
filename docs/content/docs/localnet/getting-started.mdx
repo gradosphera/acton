@@ -19,6 +19,17 @@ You can verify that the server is running:
 curl -s "http://127.0.0.1:5411/api/v2/getMasterchainInfo"
 ```
 
+## Explore Blocks
+
+Open `http://127.0.0.1:5411/explorer/blocks` to inspect the latest
+transactions, masterchain blocks, workchain blocks, and block details in the
+local dashboard.
+
+The same block metadata is available through the TonCenter v3-compatible
+`GET /api/v3/blocks` endpoint. It supports filtering by `workchain`, `shard`,
+`seqno`, `root_hash`, `file_hash`, `mc_seqno`, generated time, logical time,
+`limit`, `offset`, and `sort`.
+
 ## Fund an Address
 
 Use the built-in faucet command:

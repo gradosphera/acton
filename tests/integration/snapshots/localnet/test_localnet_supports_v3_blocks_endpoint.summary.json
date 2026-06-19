@@ -1,0 +1,184 @@
+{
+  "all": {
+    "has_masterchain": true,
+    "has_workchain": true,
+    "non_empty": true,
+    "shape": {
+      "has_block_id": true,
+      "has_hashes": true,
+      "has_masterchain_ref": true,
+      "has_prev_blocks": true,
+      "has_string_time_and_lt": true,
+      "has_toncenter_fields": true,
+      "has_tx_count": true
+    },
+    "sorted_desc": true
+  },
+  "bad_requests": {
+    "invalid_hash": {
+      "code": 400,
+      "has_error": true,
+      "status": 400
+    },
+    "invalid_limit": {
+      "code": 400,
+      "has_error": true,
+      "status": 400
+    },
+    "invalid_sort": {
+      "code": 400,
+      "has_error": true,
+      "status": 400
+    },
+    "seqno_without_shard": {
+      "code": 400,
+      "has_error": true,
+      "status": 400
+    },
+    "shard_without_workchain": {
+      "code": 400,
+      "has_error": true,
+      "status": 400
+    }
+  },
+  "filters": {
+    "empty_workchain": {
+      "count": 0
+    },
+    "end_lt_inclusive": {
+      "contains_expected": true,
+      "count": 1,
+      "first_matches_expected": true,
+      "shape": {
+        "has_block_id": true,
+        "has_hashes": true,
+        "has_masterchain_ref": true,
+        "has_prev_blocks": true,
+        "has_string_time_and_lt": true,
+        "has_toncenter_fields": true,
+        "has_tx_count": true
+      }
+    },
+    "end_utime_inclusive": {
+      "contains_expected": true,
+      "count": 1,
+      "first_matches_expected": true,
+      "shape": {
+        "has_block_id": true,
+        "has_hashes": true,
+        "has_masterchain_ref": true,
+        "has_prev_blocks": true,
+        "has_string_time_and_lt": true,
+        "has_toncenter_fields": true,
+        "has_tx_count": true
+      }
+    },
+    "exact_masterchain": {
+      "contains_expected": true,
+      "count": 1,
+      "first_matches_expected": true,
+      "shape": {
+        "has_block_id": true,
+        "has_hashes": true,
+        "has_masterchain_ref": true,
+        "has_prev_blocks": true,
+        "has_string_time_and_lt": true,
+        "has_toncenter_fields": true,
+        "has_tx_count": true
+      }
+    },
+    "exact_workchain": {
+      "contains_expected": true,
+      "count": 1,
+      "first_matches_expected": true,
+      "shape": {
+        "has_block_id": true,
+        "has_hashes": true,
+        "has_masterchain_ref": true,
+        "has_prev_blocks": true,
+        "has_string_time_and_lt": true,
+        "has_toncenter_fields": true,
+        "has_tx_count": true
+      }
+    },
+    "file_hash": {
+      "contains_expected": true,
+      "count": 1,
+      "first_matches_expected": true,
+      "shape": {
+        "has_block_id": true,
+        "has_hashes": true,
+        "has_masterchain_ref": true,
+        "has_prev_blocks": true,
+        "has_string_time_and_lt": true,
+        "has_toncenter_fields": true,
+        "has_tx_count": true
+      }
+    },
+    "masterchain_only": {
+      "all_match_workchain": true,
+      "non_empty": true,
+      "sorted_desc": true
+    },
+    "mc_seqno": {
+      "all_match_mc_seqno": true,
+      "contains_workchain_block": true
+    },
+    "root_hash": {
+      "contains_expected": true,
+      "count": 1,
+      "first_matches_expected": true,
+      "shape": {
+        "has_block_id": true,
+        "has_hashes": true,
+        "has_masterchain_ref": true,
+        "has_prev_blocks": true,
+        "has_string_time_and_lt": true,
+        "has_toncenter_fields": true,
+        "has_tx_count": true
+      }
+    },
+    "start_lt_inclusive": {
+      "contains_expected": true,
+      "count": 1,
+      "first_matches_expected": true,
+      "shape": {
+        "has_block_id": true,
+        "has_hashes": true,
+        "has_masterchain_ref": true,
+        "has_prev_blocks": true,
+        "has_string_time_and_lt": true,
+        "has_toncenter_fields": true,
+        "has_tx_count": true
+      }
+    },
+    "start_utime_inclusive": {
+      "contains_expected": true,
+      "count": 1,
+      "first_matches_expected": true,
+      "shape": {
+        "has_block_id": true,
+        "has_hashes": true,
+        "has_masterchain_ref": true,
+        "has_prev_blocks": true,
+        "has_string_time_and_lt": true,
+        "has_toncenter_fields": true,
+        "has_tx_count": true
+      }
+    },
+    "workchain_only": {
+      "all_match_workchain": true,
+      "non_empty": true,
+      "sorted_desc": true
+    }
+  },
+  "mine": {
+    "mined_at_least_requested": true,
+    "ok": true
+  },
+  "pagination": {
+    "first_count": 1,
+    "offset_moves_window": true,
+    "second_count": 1
+  }
+}

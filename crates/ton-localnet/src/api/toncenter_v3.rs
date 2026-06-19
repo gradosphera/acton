@@ -1,5 +1,5 @@
 use crate::localnet::{
-    LocalnetAcceptedExternalMessage, LocalnetAccountState, LocalnetMessage,
+    LocalnetAcceptedExternalMessage, LocalnetAccountState, LocalnetBlock, LocalnetMessage,
     LocalnetRunGetMethodResult, LocalnetTransaction, convert_to_message_struct,
 };
 use crate::storage::{
@@ -223,6 +223,63 @@ pub fn map_transactions_response(transactions: &[LocalnetTransaction]) -> Value 
     serde_json::json!({
         "address_book": {},
         "transactions": transactions.iter().map(map_v3_transaction).collect::<Vec<_>>()
+    })
+}
+
+pub fn map_blocks_response(blocks: &[LocalnetBlock]) -> Value {
+    serde_json::json!({
+        "blocks": blocks.iter().map(map_v3_block).collect::<Vec<_>>()
+    })
+}
+
+fn map_v3_block(block: &LocalnetBlock) -> Value {
+    let masterchain_block_ref = block
+        .masterchain_block_ref
+        .as_ref()
+        .map_or(Value::Null, map_v3_block_id);
+    let master_ref_seqno = block
+        .masterchain_block_ref
+        .as_ref()
+        .map_or(Value::Null, |block_id| serde_json::json!(block_id.seqno));
+
+    serde_json::json!({
+        "workchain": block.workchain,
+        "shard": block.shard.to_string(),
+        "seqno": block.seqno,
+        "root_hash": block.root_hash.to_base64(),
+        "file_hash": block.file_hash.to_base64(),
+        "start_lt": block.start_lt.to_string(),
+        "end_lt": block.end_lt.to_string(),
+        "gen_utime": block.gen_utime.to_string(),
+        "tx_count": block.tx_count,
+        "prev_blocks": block.prev_blocks.iter().map(map_v3_block_id).collect::<Vec<_>>(),
+        "masterchain_block_ref": masterchain_block_ref,
+        "master_ref_seqno": master_ref_seqno,
+        "after_merge": false,
+        "after_split": false,
+        "before_split": false,
+        "created_by": zero_hash_base64(),
+        "flags": 0,
+        "gen_catchain_seqno": 0,
+        "global_id": 0,
+        "key_block": false,
+        "min_ref_mc_seqno": 0,
+        "prev_key_block_seqno": 0,
+        "rand_seed": zero_hash_base64(),
+        "validator_list_hash_short": 0,
+        "version": 0,
+        "vert_seqno": 0,
+        "vert_seqno_incr": false,
+        "want_merge": false,
+        "want_split": false,
+    })
+}
+
+fn map_v3_block_id(block: &crate::localnet::LocalnetBlockId) -> Value {
+    serde_json::json!({
+        "workchain": block.workchain,
+        "shard": block.shard.to_string(),
+        "seqno": block.seqno,
     })
 }
 

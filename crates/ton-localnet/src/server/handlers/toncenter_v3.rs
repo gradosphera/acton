@@ -1,9 +1,9 @@
 use super::utils::parse_method_name;
 use crate::api::toncenter_v3;
-use crate::localnet::{Localnet, LocalnetAddressInfo, LocalnetTransaction};
+use crate::localnet::{Localnet, LocalnetAddressInfo, LocalnetBlock, LocalnetTransaction};
 use crate::server::models::{
     EmulateTraceRequest, GetAccountStatesV3Request, GetAddressInformationV3Request,
-    GetJettonMastersRequest, GetJettonWalletsRequest, GetNftItemsRequest,
+    GetBlocksV3Query, GetJettonMastersRequest, GetJettonWalletsRequest, GetNftItemsRequest,
     GetPendingTransactionsV3Query, GetTracesQuery, GetTransactionsByMessageV3Query,
     GetTransactionsV3Query, RunGetMethodRequest, SendBocRequest,
 };
@@ -121,6 +121,22 @@ pub async fn get_transactions_v3(
     handle_v3_result(node.get_all_transactions(), move |txs| {
         let filtered = filter_transactions_v3(txs, &parsed);
         v3::map_transactions_response(&filtered)
+    })
+    .await
+}
+
+pub async fn get_blocks_v3(
+    State(node): State<Arc<Localnet>>,
+    Query(payload): Query<GetBlocksV3Query>,
+) -> impl IntoResponse {
+    let parsed = match parse_blocks_v3_query(payload) {
+        Ok(parsed) => parsed,
+        Err(e) => return v3_bad_request(e.to_string()),
+    };
+
+    handle_v3_result(node.get_blocks(), move |blocks| {
+        let filtered = filter_blocks_v3(blocks, &parsed);
+        v3::map_blocks_response(&filtered)
     })
     .await
 }
@@ -389,6 +405,22 @@ struct ParsedTransactionsV3Query {
     sort: SortOrder,
 }
 
+struct ParsedBlocksV3Query {
+    workchain: Option<i32>,
+    shard: Option<i64>,
+    seqno: Option<u32>,
+    root_hash: Option<Hash256>,
+    file_hash: Option<Hash256>,
+    mc_seqno: Option<u32>,
+    start_utime: Option<u32>,
+    end_utime: Option<u32>,
+    start_lt: Option<u64>,
+    end_lt: Option<u64>,
+    limit: usize,
+    offset: usize,
+    sort: SortOrder,
+}
+
 struct ParsedTransactionsByMessageV3Query {
     msg_hash: Option<Hash256>,
     body_hash: Option<Hash256>,
@@ -434,6 +466,46 @@ fn parse_transactions_v3_query(
         exclude_account: parse_optional_address(payload.exclude_account)?,
         hash: payload.hash.as_deref().map(parse_hash_any).transpose()?,
         lt: payload.lt,
+        start_utime: payload.start_utime,
+        end_utime: payload.end_utime,
+        start_lt: payload.start_lt,
+        end_lt: payload.end_lt,
+        limit,
+        offset,
+        sort,
+    })
+}
+
+fn parse_blocks_v3_query(payload: GetBlocksV3Query) -> anyhow::Result<ParsedBlocksV3Query> {
+    if payload.shard.is_some() && payload.workchain.is_none() {
+        anyhow::bail!("`shard` requires `workchain`");
+    }
+    if payload.seqno.is_some() && (payload.workchain.is_none() || payload.shard.is_none()) {
+        anyhow::bail!("`seqno` requires both `workchain` and `shard`");
+    }
+
+    let (limit, offset) = parse_limit_offset(payload.limit, payload.offset)?;
+    let sort = parse_sort(payload.sort)?;
+
+    Ok(ParsedBlocksV3Query {
+        workchain: payload.workchain,
+        shard: payload
+            .shard
+            .as_deref()
+            .map(parse_shard_query)
+            .transpose()?,
+        seqno: payload.seqno,
+        root_hash: payload
+            .root_hash
+            .as_deref()
+            .map(parse_hash_any)
+            .transpose()?,
+        file_hash: payload
+            .file_hash
+            .as_deref()
+            .map(parse_hash_any)
+            .transpose()?,
+        mc_seqno: payload.mc_seqno,
         start_utime: payload.start_utime,
         end_utime: payload.end_utime,
         start_lt: payload.start_lt,
@@ -615,6 +687,84 @@ fn filter_transactions_v3(
         .collect()
 }
 
+fn filter_blocks_v3(blocks: &[LocalnetBlock], query: &ParsedBlocksV3Query) -> Vec<LocalnetBlock> {
+    let mut filtered = blocks
+        .iter()
+        .filter(|block| {
+            if let Some(workchain) = query.workchain
+                && block.workchain != workchain
+            {
+                return false;
+            }
+            if let Some(shard) = query.shard
+                && block.shard != shard
+            {
+                return false;
+            }
+            if let Some(seqno) = query.seqno
+                && block.seqno != seqno
+            {
+                return false;
+            }
+            if let Some(root_hash) = query.root_hash
+                && block.root_hash != root_hash
+            {
+                return false;
+            }
+            if let Some(file_hash) = query.file_hash
+                && block.file_hash != file_hash
+            {
+                return false;
+            }
+            if let Some(mc_seqno) = query.mc_seqno
+                && block.workchain != -1
+                && block
+                    .masterchain_block_ref
+                    .as_ref()
+                    .map(|ref_block| ref_block.seqno)
+                    != Some(mc_seqno)
+            {
+                return false;
+            }
+            if let Some(mc_seqno) = query.mc_seqno
+                && block.workchain == -1
+                && block.seqno != mc_seqno
+            {
+                return false;
+            }
+            if let Some(start_utime) = query.start_utime
+                && block.gen_utime < start_utime
+            {
+                return false;
+            }
+            if let Some(end_utime) = query.end_utime
+                && block.gen_utime > end_utime
+            {
+                return false;
+            }
+            if let Some(start_lt) = query.start_lt
+                && block.start_lt < start_lt
+            {
+                return false;
+            }
+            if let Some(end_lt) = query.end_lt
+                && block.start_lt > end_lt
+            {
+                return false;
+            }
+            true
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+
+    sort_blocks(&mut filtered, query.sort);
+    filtered
+        .into_iter()
+        .skip(query.offset)
+        .take(query.limit)
+        .collect()
+}
+
 fn filter_transactions_by_message_v3(
     txs: &[LocalnetTransaction],
     query: &ParsedTransactionsByMessageV3Query,
@@ -710,6 +860,27 @@ fn sort_transactions(transactions: &mut [LocalnetTransaction], order: SortOrder)
                     .lt
                     .cmp(&a.transaction_id.lt)
                     .then_with(|| b.hash.cmp(&a.hash))
+            });
+        }
+    }
+}
+
+fn sort_blocks(blocks: &mut [LocalnetBlock], order: SortOrder) {
+    match order {
+        SortOrder::Asc => {
+            blocks.sort_by(|a, b| {
+                a.gen_utime
+                    .cmp(&b.gen_utime)
+                    .then_with(|| a.seqno.cmp(&b.seqno))
+                    .then_with(|| a.workchain.cmp(&b.workchain))
+            });
+        }
+        SortOrder::Desc => {
+            blocks.sort_by(|a, b| {
+                b.gen_utime
+                    .cmp(&a.gen_utime)
+                    .then_with(|| b.seqno.cmp(&a.seqno))
+                    .then_with(|| b.workchain.cmp(&a.workchain))
             });
         }
     }

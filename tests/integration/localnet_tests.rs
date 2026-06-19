@@ -3679,6 +3679,227 @@ fn localnet_supports_v3_transactions_endpoints() {
 }
 
 #[test]
+fn localnet_supports_v3_blocks_endpoint() {
+    let project = ProjectBuilder::new("localnet-v3-blocks-endpoint").build();
+    let acton_toml_path = project.path().join("Acton.toml");
+    let mut acton_toml =
+        fs::read_to_string(&acton_toml_path).expect("failed to read generated Acton.toml");
+    acton_toml.push_str("\n[localnet]\nno-mining = true\nmine-empty-blocks = true\n");
+    fs::write(&acton_toml_path, acton_toml).expect("failed to enable manual empty block mining");
+
+    let node = project.localnet().start();
+    let mine = node.post_json("/acton_mine", &json!({ "blocks": 4 }));
+    let mine_payload = response_payload(&mine);
+
+    let all_desc = wait_for_ok_response(
+        &node,
+        "/api/v3/blocks?limit=100&sort=desc",
+        Duration::from_secs(12),
+    );
+    let all_blocks = v3_blocks_from_response(&all_desc);
+    let workchain_block = all_blocks
+        .iter()
+        .find(|block| block["workchain"].as_i64() == Some(0))
+        .unwrap_or_else(|| {
+            panic!(
+                "Expected workchain block in /api/v3/blocks:\n{}",
+                serde_json::to_string_pretty(&all_desc).unwrap_or_default()
+            )
+        });
+    let masterchain_block = all_blocks
+        .iter()
+        .find(|block| block["workchain"].as_i64() == Some(-1))
+        .unwrap_or_else(|| {
+            panic!(
+                "Expected masterchain block in /api/v3/blocks:\n{}",
+                serde_json::to_string_pretty(&all_desc).unwrap_or_default()
+            )
+        });
+    let workchain_shard = workchain_block["shard"]
+        .as_str()
+        .expect("workchain block shard must be string");
+    let workchain_seqno = workchain_block["seqno"]
+        .as_u64()
+        .expect("workchain block seqno must be integer");
+    let workchain_root_hash = workchain_block["root_hash"]
+        .as_str()
+        .expect("workchain block root_hash must be string");
+    let workchain_file_hash = workchain_block["file_hash"]
+        .as_str()
+        .expect("workchain block file_hash must be string");
+    let workchain_gen_utime = block_gen_utime(workchain_block);
+    let workchain_start_lt = block_start_lt(workchain_block);
+    let workchain_mc_seqno = workchain_block["masterchain_block_ref"]["seqno"]
+        .as_u64()
+        .or_else(|| workchain_block["master_ref_seqno"].as_u64())
+        .expect("workchain block must reference a masterchain block");
+    let masterchain_shard = masterchain_block["shard"]
+        .as_str()
+        .expect("masterchain block shard must be string");
+    let masterchain_seqno = masterchain_block["seqno"]
+        .as_u64()
+        .expect("masterchain block seqno must be integer");
+
+    let workchain_shard_query = encode_query_component(workchain_shard);
+    let workchain_root_hash_query = encode_query_component(workchain_root_hash);
+    let workchain_file_hash_query = encode_query_component(workchain_file_hash);
+    let masterchain_shard_query = encode_query_component(masterchain_shard);
+
+    let only_workchain = wait_for_ok_response(
+        &node,
+        "/api/v3/blocks?workchain=0&limit=100&sort=desc",
+        Duration::from_secs(12),
+    );
+    let only_masterchain = wait_for_ok_response(
+        &node,
+        "/api/v3/blocks?workchain=-1&limit=100&sort=desc",
+        Duration::from_secs(12),
+    );
+    let exact_workchain = wait_for_ok_response(
+        &node,
+        &format!(
+            "/api/v3/blocks?workchain=0&shard={workchain_shard_query}&seqno={workchain_seqno}&limit=10"
+        ),
+        Duration::from_secs(12),
+    );
+    let exact_masterchain = wait_for_ok_response(
+        &node,
+        &format!(
+            "/api/v3/blocks?workchain=-1&shard={masterchain_shard_query}&seqno={masterchain_seqno}&limit=10"
+        ),
+        Duration::from_secs(12),
+    );
+    let by_root_hash = wait_for_ok_response(
+        &node,
+        &format!("/api/v3/blocks?root_hash={workchain_root_hash_query}&limit=10"),
+        Duration::from_secs(12),
+    );
+    let by_file_hash = wait_for_ok_response(
+        &node,
+        &format!("/api/v3/blocks?file_hash={workchain_file_hash_query}&limit=10"),
+        Duration::from_secs(12),
+    );
+    let by_mc_seqno = wait_for_ok_response(
+        &node,
+        &format!("/api/v3/blocks?mc_seqno={workchain_mc_seqno}&limit=100&sort=desc"),
+        Duration::from_secs(12),
+    );
+    let start_utime_inclusive = wait_for_ok_response(
+        &node,
+        &format!(
+            "/api/v3/blocks?root_hash={workchain_root_hash_query}&start_utime={workchain_gen_utime}&limit=10"
+        ),
+        Duration::from_secs(12),
+    );
+    let end_utime_inclusive = wait_for_ok_response(
+        &node,
+        &format!(
+            "/api/v3/blocks?root_hash={workchain_root_hash_query}&end_utime={workchain_gen_utime}&limit=10"
+        ),
+        Duration::from_secs(12),
+    );
+    let start_lt_inclusive = wait_for_ok_response(
+        &node,
+        &format!(
+            "/api/v3/blocks?root_hash={workchain_root_hash_query}&start_lt={workchain_start_lt}&limit=10"
+        ),
+        Duration::from_secs(12),
+    );
+    let end_lt_inclusive = wait_for_ok_response(
+        &node,
+        &format!(
+            "/api/v3/blocks?root_hash={workchain_root_hash_query}&end_lt={workchain_start_lt}&limit=10"
+        ),
+        Duration::from_secs(12),
+    );
+    let paged_first = wait_for_ok_response(
+        &node,
+        "/api/v3/blocks?limit=1&offset=0&sort=desc",
+        Duration::from_secs(12),
+    );
+    let paged_second = wait_for_ok_response(
+        &node,
+        "/api/v3/blocks?limit=1&offset=1&sort=desc",
+        Duration::from_secs(12),
+    );
+    let empty_workchain = wait_for_ok_response(
+        &node,
+        "/api/v3/blocks?workchain=42&limit=10",
+        Duration::from_secs(12),
+    );
+
+    let (shard_without_workchain_status, shard_without_workchain) =
+        node.get_json_with_status("/api/v3/blocks?shard=8000000000000000");
+    let (seqno_without_shard_status, seqno_without_shard) =
+        node.get_json_with_status("/api/v3/blocks?workchain=0&seqno=1");
+    let (invalid_sort_status, invalid_sort) =
+        node.get_json_with_status("/api/v3/blocks?sort=invalid");
+    let (invalid_limit_status, invalid_limit) = node.get_json_with_status("/api/v3/blocks?limit=0");
+    let (invalid_hash_status, invalid_hash) =
+        node.get_json_with_status("/api/v3/blocks?root_hash=not-a-hash");
+
+    let paged_first_blocks = v3_blocks_from_response(&paged_first);
+    let paged_second_blocks = v3_blocks_from_response(&paged_second);
+
+    let summary = json!({
+        "mine": {
+            "ok": mine["ok"].as_bool(),
+            "mined_at_least_requested": mine_payload["last_block_seqno"]
+                .as_u64()
+                .is_some_and(|seqno| seqno >= 4),
+        },
+        "all": {
+            "non_empty": !all_blocks.is_empty(),
+            "has_masterchain": all_blocks.iter().any(|block| block["workchain"].as_i64() == Some(-1)),
+            "has_workchain": all_blocks.iter().any(|block| block["workchain"].as_i64() == Some(0)),
+            "sorted_desc": blocks_sorted_by_gen_utime(all_blocks, false),
+            "shape": block_shape_summary(all_blocks.first()),
+        },
+        "filters": {
+            "workchain_only": block_filter_summary(&only_workchain, 0),
+            "masterchain_only": block_filter_summary(&only_masterchain, -1),
+            "exact_workchain": exact_block_summary(&exact_workchain, workchain_block),
+            "exact_masterchain": exact_block_summary(&exact_masterchain, masterchain_block),
+            "root_hash": exact_block_summary(&by_root_hash, workchain_block),
+            "file_hash": exact_block_summary(&by_file_hash, workchain_block),
+            "mc_seqno": {
+                "contains_workchain_block": contains_block_id(v3_blocks_from_response(&by_mc_seqno), workchain_block),
+                "all_match_mc_seqno": v3_blocks_from_response(&by_mc_seqno)
+                    .iter()
+                    .all(|block| block_matches_mc_seqno(block, workchain_mc_seqno)),
+            },
+            "start_utime_inclusive": exact_block_summary(&start_utime_inclusive, workchain_block),
+            "end_utime_inclusive": exact_block_summary(&end_utime_inclusive, workchain_block),
+            "start_lt_inclusive": exact_block_summary(&start_lt_inclusive, workchain_block),
+            "end_lt_inclusive": exact_block_summary(&end_lt_inclusive, workchain_block),
+            "empty_workchain": {
+                "count": v3_blocks_from_response(&empty_workchain).len(),
+            },
+        },
+        "pagination": {
+            "first_count": paged_first_blocks.len(),
+            "second_count": paged_second_blocks.len(),
+            "offset_moves_window": paged_first_blocks.first().zip(paged_second_blocks.first())
+                .is_some_and(|(first, second)| !same_block_id(first, second)),
+        },
+        "bad_requests": {
+            "shard_without_workchain": v3_bad_request_summary(shard_without_workchain_status, &shard_without_workchain),
+            "seqno_without_shard": v3_bad_request_summary(seqno_without_shard_status, &seqno_without_shard),
+            "invalid_sort": v3_bad_request_summary(invalid_sort_status, &invalid_sort),
+            "invalid_limit": v3_bad_request_summary(invalid_limit_status, &invalid_limit),
+            "invalid_hash": v3_bad_request_summary(invalid_hash_status, &invalid_hash),
+        },
+    });
+
+    assertion().eq(
+        format!("{}\n", pretty_json_for_snapshot(&summary, project.path())),
+        snapbox::file!("snapshots/localnet/test_localnet_supports_v3_blocks_endpoint.summary.json"),
+    );
+
+    node.stop();
+}
+
+#[test]
 fn localnet_batches_pending_faucet_messages_into_one_scheduled_block() {
     let project = ProjectBuilder::new("localnet-batch-faucet-scheduled-block").build();
     let node = project
@@ -5022,6 +5243,21 @@ fn v3_transactions_from_response(response: &Value) -> &[Value] {
         )
 }
 
+fn v3_blocks_from_response(response: &Value) -> &[Value] {
+    response_payload(response)
+        .get("blocks")
+        .and_then(Value::as_array)
+        .map_or_else(
+            || {
+                panic!(
+                    "Expected `blocks` array in response payload:\n{}",
+                    serde_json::to_string_pretty(response).unwrap_or_default()
+                )
+            },
+            Vec::as_slice,
+        )
+}
+
 fn hashes_equivalent(left: &str, right: &str) -> bool {
     normalize_hash_to_bytes(left) == normalize_hash_to_bytes(right)
 }
@@ -5198,6 +5434,114 @@ fn contains_tx_hash(transactions: &[Value], hash: &str) -> bool {
     transactions
         .iter()
         .any(|tx| tx["hash"].as_str() == Some(hash))
+}
+
+fn block_filter_summary(response: &Value, expected_workchain: i64) -> Value {
+    let blocks = v3_blocks_from_response(response);
+    json!({
+        "non_empty": !blocks.is_empty(),
+        "all_match_workchain": blocks
+            .iter()
+            .all(|block| block["workchain"].as_i64() == Some(expected_workchain)),
+        "sorted_desc": blocks_sorted_by_gen_utime(blocks, false),
+    })
+}
+
+fn exact_block_summary(response: &Value, expected: &Value) -> Value {
+    let blocks = v3_blocks_from_response(response);
+    json!({
+        "count": blocks.len(),
+        "contains_expected": contains_block_id(blocks, expected),
+        "first_matches_expected": blocks.first().is_some_and(|block| same_block_id(block, expected)),
+        "shape": block_shape_summary(blocks.first()),
+    })
+}
+
+fn block_shape_summary(block: Option<&Value>) -> Value {
+    let Some(block) = block else {
+        return Value::Null;
+    };
+
+    json!({
+        "has_block_id": block["workchain"].is_i64()
+            && block["shard"].is_string()
+            && block["seqno"].is_u64(),
+        "has_hashes": block["root_hash"].as_str().is_some_and(|hash| normalize_hash_to_bytes(hash).is_some())
+            && block["file_hash"].as_str().is_some_and(|hash| normalize_hash_to_bytes(hash).is_some()),
+        "has_string_time_and_lt": block["gen_utime"].is_string()
+            && block["start_lt"].is_string()
+            && block["end_lt"].is_string(),
+        "has_tx_count": block["tx_count"].is_u64(),
+        "has_prev_blocks": block["prev_blocks"].is_array(),
+        "has_masterchain_ref": block.get("masterchain_block_ref").is_some(),
+        "has_toncenter_fields": block["after_merge"].is_boolean()
+            && block["after_split"].is_boolean()
+            && block["before_split"].is_boolean()
+            && block["created_by"].as_str().is_some_and(|hash| normalize_hash_to_bytes(hash).is_some())
+            && block["flags"].is_u64()
+            && block["gen_catchain_seqno"].is_u64()
+            && block["global_id"].is_u64()
+            && block["key_block"].is_boolean()
+            && block["min_ref_mc_seqno"].is_u64()
+            && block["prev_key_block_seqno"].is_u64()
+            && block["rand_seed"].as_str().is_some_and(|hash| normalize_hash_to_bytes(hash).is_some())
+            && block["validator_list_hash_short"].is_u64()
+            && block["version"].is_u64()
+            && block["vert_seqno"].is_u64()
+            && block["vert_seqno_incr"].is_boolean()
+            && block["want_merge"].is_boolean()
+            && block["want_split"].is_boolean(),
+    })
+}
+
+fn contains_block_id(blocks: &[Value], expected: &Value) -> bool {
+    blocks.iter().any(|block| same_block_id(block, expected))
+}
+
+fn same_block_id(left: &Value, right: &Value) -> bool {
+    left["workchain"].as_i64() == right["workchain"].as_i64()
+        && left["shard"].as_str() == right["shard"].as_str()
+        && left["seqno"].as_u64() == right["seqno"].as_u64()
+}
+
+fn block_matches_mc_seqno(block: &Value, expected_mc_seqno: u64) -> bool {
+    if block["workchain"].as_i64() == Some(-1) {
+        return block["seqno"].as_u64() == Some(expected_mc_seqno);
+    }
+
+    block["masterchain_block_ref"]["seqno"].as_u64() == Some(expected_mc_seqno)
+        || block["master_ref_seqno"].as_u64() == Some(expected_mc_seqno)
+}
+
+fn block_gen_utime(block: &Value) -> u64 {
+    block["gen_utime"]
+        .as_str()
+        .and_then(|value| value.parse::<u64>().ok())
+        .or_else(|| block["gen_utime"].as_u64())
+        .expect("block gen_utime must parse as u64")
+}
+
+fn block_start_lt(block: &Value) -> u64 {
+    block["start_lt"]
+        .as_str()
+        .and_then(|value| value.parse::<u64>().ok())
+        .expect("block start_lt must parse as u64")
+}
+
+fn blocks_sorted_by_gen_utime(blocks: &[Value], asc: bool) -> bool {
+    blocks.windows(2).all(|window| {
+        let left = block_gen_utime(&window[0]);
+        let right = block_gen_utime(&window[1]);
+        if asc { left <= right } else { left >= right }
+    })
+}
+
+fn v3_bad_request_summary(status: u16, response: &Value) -> Value {
+    json!({
+        "status": status,
+        "code": response["code"].as_u64(),
+        "has_error": response["error"].as_str().is_some_and(|error| !error.is_empty()),
+    })
 }
 
 fn find_trace_node<'a>(node: &'a Value, tx_hash: &str) -> Option<&'a Value> {

@@ -54,11 +54,12 @@ local development flows that need to inject a raw internal message.
 
 ## TonCenter v3 Coverage Matrix
 
-Acton local development node currently supports 11 TonCenter v3 endpoints:
+Acton local development node currently supports 12 TonCenter v3 endpoints:
 
 | Method | Endpoint                        | Available in local node | Purpose                                                              |
 |--------|---------------------------------|-------------------------|----------------------------------------------------------------------|
 | `GET`  | `/api/v3/traces`                | ✅                       | Returns transaction trace tree for a transaction hash.               |
+| `GET`  | `/api/v3/blocks`                | ✅                       | Returns block metadata with TonCenter v3 blockchain filters.         |
 | `GET`  | `/api/v3/accountStates`         | ✅                       | Returns account states with `interfaces` and token metadata.         |
 | `GET`  | `/api/v3/addressInformation`    | ✅                       | Returns account state in `V2AddressInformation` shape.               |
 | `GET`  | `/api/v3/transactions`          | ✅                       | Returns transactions with TonCenter v3 blockchain filters.           |

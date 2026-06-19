@@ -10,6 +10,138 @@
   "host": "",
   "basePath": "",
   "paths": {
+    "/api/v3/blocks": {
+      "get": {
+        "security": [
+          {
+            "APIKeyHeader": []
+          },
+          {
+            "APIKeyQuery": []
+          }
+        ],
+        "description": "Get blocks by specified filter.",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "tags": ["blockchain"],
+        "summary": "Get Blocks",
+        "operationId": "api_v3_get_blocks",
+        "parameters": [
+          {
+            "type": "integer",
+            "format": "int32",
+            "description": "Block workchain.",
+            "name": "workchain",
+            "in": "query"
+          },
+          {
+            "type": "string",
+            "description": "Block shard id. Must be sent with *workchain*. Example: `8000000000000000`.",
+            "name": "shard",
+            "in": "query"
+          },
+          {
+            "type": "integer",
+            "format": "int32",
+            "description": "Block seqno. Must be sent with *workchain* and *shard*.",
+            "name": "seqno",
+            "in": "query"
+          },
+          {
+            "type": "string",
+            "description": "Block root hash.",
+            "name": "root_hash",
+            "in": "query"
+          },
+          {
+            "type": "string",
+            "description": "Block file hash.",
+            "name": "file_hash",
+            "in": "query"
+          },
+          {
+            "type": "integer",
+            "format": "int32",
+            "description": "Masterchain block seqno. For masterchain blocks this matches block seqno; for workchain blocks this matches the referenced masterchain block.",
+            "name": "mc_seqno",
+            "in": "query"
+          },
+          {
+            "minimum": 0,
+            "type": "integer",
+            "format": "int32",
+            "description": "Query blocks generated after the given UTC timestamp.",
+            "name": "start_utime",
+            "in": "query"
+          },
+          {
+            "minimum": 0,
+            "type": "integer",
+            "format": "int32",
+            "description": "Query blocks generated before the given UTC timestamp.",
+            "name": "end_utime",
+            "in": "query"
+          },
+          {
+            "minimum": 0,
+            "type": "integer",
+            "format": "int64",
+            "description": "Query blocks with start logical time greater than or equal to the given value.",
+            "name": "start_lt",
+            "in": "query"
+          },
+          {
+            "minimum": 0,
+            "type": "integer",
+            "format": "int64",
+            "description": "Query blocks with start logical time less than or equal to the given value.",
+            "name": "end_lt",
+            "in": "query"
+          },
+          {
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer",
+            "format": "int32",
+            "default": 10,
+            "description": "Limit number of queried rows. Use with *offset* to batch read.",
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "minimum": 0,
+            "type": "integer",
+            "format": "int32",
+            "default": 0,
+            "description": "Skip first N rows. Use with *limit* to batch read.",
+            "name": "offset",
+            "in": "query"
+          },
+          {
+            "enum": ["asc", "desc"],
+            "type": "string",
+            "default": "desc",
+            "description": "Sort blocks by generation time and seqno.",
+            "name": "sort",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/BlocksResponse"
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/RequestError"
+            }
+          }
+        }
+      }
+    },
     "/api/v3/traces": {
       "get": {
         "security": [

@@ -160,6 +160,23 @@ pub struct GetTransactionsV3Query {
 }
 
 #[derive(Deserialize)]
+pub struct GetBlocksV3Query {
+    pub workchain: Option<i32>,
+    pub shard: Option<String>,
+    pub seqno: Option<u32>,
+    pub root_hash: Option<String>,
+    pub file_hash: Option<String>,
+    pub mc_seqno: Option<u32>,
+    pub start_utime: Option<u32>,
+    pub end_utime: Option<u32>,
+    pub start_lt: Option<u64>,
+    pub end_lt: Option<u64>,
+    pub limit: Option<usize>,
+    pub offset: Option<usize>,
+    pub sort: Option<String>,
+}
+
+#[derive(Deserialize)]
 pub struct GetTransactionsByMessageV3Query {
     pub msg_hash: Option<String>,
     pub body_hash: Option<String>,
