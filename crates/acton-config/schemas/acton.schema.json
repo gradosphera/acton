@@ -488,6 +488,10 @@
             }
           ]
         },
+        "mine-empty-blocks": {
+          "description": "Mine blocks even when there are no pending messages",
+          "type": "boolean"
+        },
         "no-mining": {
           "description": "Disable automatic block production for `acton localnet start`",
           "type": "boolean"
