@@ -2,6 +2,7 @@ use crate::common::acton_exe;
 use crate::support::project::{ActonCommand, Project};
 use reqwest::blocking::Client;
 use serde_json::Value;
+use std::fs::{self, File, OpenOptions};
 use std::io::Read;
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
@@ -16,6 +17,7 @@ pub(crate) struct LocalnetBuilder<'a> {
     project: &'a Project,
     current_dir: PathBuf,
     port: u16,
+    port_reservation: Option<PortReservation>,
     args: Vec<String>,
     auth_token: Option<String>,
     ready_timeout: Duration,
@@ -31,10 +33,13 @@ impl Project {
 #[allow(dead_code)]
 impl<'a> LocalnetBuilder<'a> {
     fn new(project: &'a Project) -> Self {
+        let port_reservation = reserve_available_port_pair();
+        let port = port_reservation.port;
         Self {
             project,
             current_dir: project.path().to_path_buf(),
-            port: find_available_port(),
+            port,
+            port_reservation: Some(port_reservation),
             args: Vec::new(),
             auth_token: None,
             ready_timeout: DEFAULT_READY_TIMEOUT,
@@ -48,6 +53,7 @@ impl<'a> LocalnetBuilder<'a> {
 
     pub(crate) fn port(mut self, port: u16) -> Self {
         self.port = port;
+        self.port_reservation = None;
         self
     }
 
@@ -85,57 +91,103 @@ impl<'a> LocalnetBuilder<'a> {
     }
 
     pub(crate) fn start(self) -> LocalnetHandle {
+        let LocalnetBuilder {
+            project,
+            current_dir,
+            port,
+            port_reservation,
+            args,
+            auth_token,
+            ready_timeout,
+        } = self;
+
         let mut cmd = Command::new(acton_exe());
         cmd.arg("localnet")
             .arg("start")
             .arg("--port")
-            .arg(self.port.to_string());
-        if !self.args.iter().any(|arg| arg == "--block-interval-ms") {
+            .arg(port.to_string());
+        if !args.iter().any(|arg| arg == "--block-interval-ms") {
             cmd.arg("--block-interval-ms").arg("50");
         }
-        cmd.args(&self.args)
-            .current_dir(&self.current_dir)
+        cmd.args(&args)
+            .current_dir(&current_dir)
             .env("NO_COLOR", "1")
-            .env("HOME", self.project.isolated_home())
-            .env("USERPROFILE", self.project.isolated_home())
+            .env("HOME", project.isolated_home())
+            .env("USERPROFILE", project.isolated_home())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
-        if let Some(auth_token) = self.auth_token.as_deref() {
+        if let Some(auth_token) = auth_token.as_deref() {
             cmd.env("ACTON_LOCALNET_AUTH_TOKEN", auth_token);
         }
 
+        let port_locks = release_port_reservation(port_reservation);
         let child = cmd.spawn().unwrap_or_else(|e| {
-            panic!(
-                "Failed to start `acton localnet start --port {}`: {}",
-                self.port, e
-            )
+            panic!("Failed to start `acton localnet start --port {port}`: {e}")
         });
 
         let mut handle = LocalnetHandle {
             child: Some(child),
-            port: self.port,
-            base_url: format!("http://127.0.0.1:{}", self.port),
-            auth_token: self.auth_token,
+            port,
+            base_url: format!("http://127.0.0.1:{port}"),
+            auth_token,
             client: Client::builder()
                 .timeout(Duration::from_secs(5))
                 .build()
                 .expect("Failed to create HTTP client for localnet tests"),
+            _port_locks: port_locks,
         };
 
-        match handle.wait_until_ready(self.ready_timeout) {
+        match handle.wait_until_ready(ready_timeout) {
             Ok(base_url) => {
                 handle.base_url = base_url;
             }
             Err(err) => {
                 let logs = handle.terminate_and_collect_output();
-                panic!(
-                    "Localnet failed to become ready on port {}: {}\n{}",
-                    self.port, err, logs
-                );
+                panic!("Localnet failed to become ready on port {port}: {err}\n{logs}");
             }
         }
 
         handle
+    }
+}
+
+struct PortReservation {
+    port: u16,
+    _http_listener: TcpListener,
+    _liteapi_listener: TcpListener,
+    locks: PortLocks,
+}
+
+struct PortLocks {
+    _locks: Vec<PortLock>,
+}
+
+struct PortLock {
+    path: PathBuf,
+    _file: File,
+}
+
+impl PortLocks {
+    fn try_acquire(ports: &[u16]) -> Option<Self> {
+        let dir = PathBuf::from("/tmp/acton-localnet-test-ports");
+        fs::create_dir_all(&dir).expect("Failed to create localnet test port lock directory");
+
+        let mut locks = Vec::with_capacity(ports.len());
+        for port in ports {
+            let path = dir.join(format!("port-{port}.lock"));
+            let Ok(file) = OpenOptions::new().write(true).create_new(true).open(&path) else {
+                return None;
+            };
+            locks.push(PortLock { path, _file: file });
+        }
+
+        Some(Self { _locks: locks })
+    }
+}
+
+impl Drop for PortLock {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.path);
     }
 }
 
@@ -145,6 +197,7 @@ pub(crate) struct LocalnetHandle {
     base_url: String,
     auth_token: Option<String>,
     client: Client,
+    _port_locks: Option<PortLocks>,
 }
 
 #[allow(dead_code)]
@@ -331,13 +384,44 @@ impl Drop for LocalnetHandle {
     }
 }
 
-fn find_available_port() -> u16 {
-    let listener = TcpListener::bind(("127.0.0.1", 0))
-        .expect("Failed to reserve an ephemeral port for localnet tests");
-    listener
-        .local_addr()
-        .expect("Failed to read ephemeral port address")
-        .port()
+fn reserve_available_port_pair() -> PortReservation {
+    for _ in 0..100 {
+        let http_listener = TcpListener::bind(("127.0.0.1", 0))
+            .expect("Failed to reserve an ephemeral port for localnet tests");
+        let port = http_listener
+            .local_addr()
+            .expect("Failed to read ephemeral port address")
+            .port();
+        let Some(liteapi_port) = port.checked_add(1) else {
+            continue;
+        };
+        let Some(locks) = PortLocks::try_acquire(&[port, liteapi_port]) else {
+            continue;
+        };
+        if let Ok(liteapi_listener) = TcpListener::bind(("127.0.0.1", liteapi_port)) {
+            return PortReservation {
+                port,
+                _http_listener: http_listener,
+                _liteapi_listener: liteapi_listener,
+                locks,
+            };
+        }
+    }
+
+    panic!("Failed to reserve adjacent ephemeral ports for localnet tests");
+}
+
+fn release_port_reservation(port_reservation: Option<PortReservation>) -> Option<PortLocks> {
+    let reservation = port_reservation?;
+    let PortReservation {
+        _http_listener,
+        _liteapi_listener,
+        locks,
+        ..
+    } = reservation;
+    drop(_http_listener);
+    drop(_liteapi_listener);
+    Some(locks)
 }
 
 fn normalize_path(path: &str) -> String {
