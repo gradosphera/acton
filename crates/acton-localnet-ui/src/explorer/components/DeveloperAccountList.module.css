@@ -11,7 +11,7 @@
 
 .table {
   width: 100%;
-  min-width: 560px;
+  min-width: 680px;
   border-collapse: collapse;
   table-layout: fixed;
 }
@@ -186,7 +186,7 @@
 
 .balanceHeader,
 .balanceCell {
-  width: 190px;
+  width: 260px;
   padding-right: 18px !important;
   text-align: right !important;
   white-space: nowrap;

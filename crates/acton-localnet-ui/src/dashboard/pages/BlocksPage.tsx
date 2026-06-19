@@ -715,7 +715,9 @@ function formatPrevRefs(block: V3Block): {value: string; title: string} {
   }
 
   const fullRefs = refs.map(ref => `${ref.workchain}:${ref.shard}:${ref.seqno}`)
-  const compactRefs = refs.map(ref => `${ref.workchain}:${compactMiddle(ref.shard, 8)}:${ref.seqno}`)
+  const compactRefs = refs.map(
+    ref => `${ref.workchain}:${compactMiddle(ref.shard, 8)}:${ref.seqno}`,
+  )
   return {value: compactRefs.join(", "), title: fullRefs.join(", ")}
 }
 

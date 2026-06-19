@@ -796,9 +796,9 @@
 .homeTopRow {
   min-width: 0;
   display: grid;
-  grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
+  grid-template-columns: minmax(560px, 1fr) minmax(0, 1fr);
   gap: 18px;
-  align-items: stretch;
+  align-items: start;
 }
 
 .homeMainColumn,
@@ -821,7 +821,11 @@
 }
 
 .homeCard.homeCard {
-  border-radius: 18px;
+  overflow: hidden;
+  border-color: var(--tonscan-border, var(--litenode-border-subtle));
+  border-radius: 12px;
+  background: var(--tonscan-card-bg, var(--litenode-surface));
+  box-shadow: none;
 }
 
 .dashboardCardHeader.dashboardCardHeader {
@@ -834,6 +838,29 @@
 
 .dashboardCardHeader .cardTitleRow {
   margin-bottom: 10px;
+}
+
+.homeCard .dashboardCardHeader.dashboardCardHeader {
+  min-height: 52px;
+  padding: 0 18px;
+  border-bottom: 1px solid var(--tonscan-border, var(--litenode-border-subtle));
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.homeCard .dashboardCardContent.dashboardCardContent {
+  padding: 0;
+}
+
+.homeCard .dashboardCardTitle.dashboardCardTitle {
+  margin: 0;
+  font-size: 0.86rem;
+  font-weight: 750;
+  line-height: 1;
+  text-align: left;
 }
 
 .dashboardCardTitle.dashboardCardTitle {
@@ -856,12 +883,6 @@
   gap: 18px;
   align-items: start;
   justify-content: start;
-}
-
-.metricValue {
-  margin-top: 6px;
-  font-size: 2rem;
-  line-height: 1;
 }
 
 .assetCard {
@@ -1002,24 +1023,103 @@
   margin-top: 4px;
 }
 
-.metricMeta {
-  margin-top: 18px;
-  color: var(--litenode-text-muted);
-  font-size: 0.88rem;
-}
-
 .endpointList,
+.nodeInfoList,
 .accountList {
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
-.endpointRow {
-  display: flex;
+.homeCard .endpointList,
+.homeCard .nodeInfoList {
+  gap: 0;
+}
+
+.homeCard .nodeInfoList {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.nodeInfoRow {
+  min-height: 46px;
+  padding: 0 18px;
+  border-top: 1px solid var(--tonscan-border, var(--litenode-border-subtle));
+  display: grid;
+  grid-template-columns: minmax(112px, auto) minmax(0, 1fr);
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 16px;
+  box-sizing: border-box;
+}
+
+.nodeInfoRow:first-child {
+  border-top: 0;
+}
+
+.homeCard .nodeInfoRow:nth-child(-n + 2) {
+  border-top: 0;
+}
+
+.homeCard .nodeInfoRow:nth-child(2n) {
+  border-left: 1px solid var(--tonscan-border, var(--litenode-border-subtle));
+}
+
+.nodeInfoLabel {
+  min-width: 0;
+  color: var(--litenode-text-muted);
+  font-size: 0.7rem;
+  font-weight: 650;
+  letter-spacing: 0;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.nodeInfoValue {
+  min-width: 0;
+  color: var(--litenode-text);
+  font-size: 0.82rem;
+  font-weight: 500;
+  line-height: 1.35;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nodeInfoValueLink {
+  min-width: 0;
+  color: var(--tonscan-link, var(--litenode-accent));
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: right;
+  justify-self: end;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.nodeInfoValueLink:hover {
+  text-decoration: underline;
+}
+
+.nodeInfoValueLink:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--litenode-focus-strong);
+}
+
+.nodeInfoValueSkeleton {
+  width: min(92px, 72%);
+  justify-self: end;
+}
+
+.endpointRow {
+  display: grid;
+  grid-template-columns: minmax(112px, auto) minmax(0, 1fr);
+  align-items: center;
+  justify-content: flex-start;
+  gap: 16px;
   min-width: 0;
   padding: 11px 12px;
   border: 1px solid var(--litenode-border-subtle);
@@ -1028,11 +1128,20 @@
   color: inherit;
 }
 
-.endpointText {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
+.homeCard .endpointRow {
+  display: grid;
+  grid-template-columns: minmax(112px, auto) minmax(0, 1fr);
+  align-items: center;
+  min-height: 46px;
+  padding: 0 18px;
+  border: 0;
+  border-top: 1px solid var(--tonscan-border, var(--litenode-border-subtle));
+  border-radius: 0;
+  background: transparent;
+}
+
+.homeCard .endpointRow:first-child {
+  border-top: 0;
 }
 
 .endpointLabel,
@@ -1041,7 +1150,17 @@
   font-size: 0.8rem;
 }
 
+.homeCard .endpointLabel {
+  min-width: 0;
+  font-size: 0.7rem;
+  font-weight: 650;
+  letter-spacing: 0;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
 .endpointValue {
+  min-width: 0;
   color: var(--litenode-text);
   font-size: 0.82rem;
   line-height: 1.35;
@@ -1050,21 +1169,34 @@
   white-space: nowrap;
 }
 
+.endpointValueRow {
+  min-width: 0;
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-self: end;
+  gap: 8px;
+}
+
 .endpointActions {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 2px;
   flex: 0 0 auto;
 }
 
+.homeCard .endpointActions {
+  align-self: center;
+}
+
 .endpointButton {
-  width: 30px;
-  height: 30px;
+  width: 24px;
+  height: 24px;
   padding: 0;
-  border: 1px solid var(--litenode-border-subtle);
-  border-radius: 8px;
+  border: 0;
+  border-radius: 6px;
   color: var(--litenode-text-muted);
-  background: var(--litenode-surface);
+  background: transparent;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -1077,7 +1209,6 @@
 
 .endpointButton:hover {
   color: var(--litenode-text);
-  border-color: var(--litenode-border-control);
   background: var(--litenode-surface-hover);
 }
 
@@ -1088,8 +1219,7 @@
 
 .endpointButtonCopied {
   color: var(--litenode-text);
-  border-color: var(--litenode-border-control);
-  background: var(--litenode-surface-active);
+  background: transparent;
 }
 
 .listTable {
@@ -2380,7 +2510,6 @@
   .blockSummaryRow:first-child {
     border-top: 0;
   }
-
 }
 
 @media (max-width: 920px) {
@@ -2790,5 +2919,23 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+}
+
+@media (max-width: 680px) {
+  .homeCard .nodeInfoList {
+    grid-template-columns: 1fr;
+  }
+
+  .homeCard .nodeInfoRow:nth-child(-n + 2) {
+    border-top: 1px solid var(--tonscan-border, var(--litenode-border-subtle));
+  }
+
+  .homeCard .nodeInfoRow:first-child {
+    border-top: 0;
+  }
+
+  .homeCard .nodeInfoRow:nth-child(2n) {
+    border-left: 0;
   }
 }

@@ -1,7 +1,7 @@
-import {BookOpen, Check, Copy, Link2, SquareStack} from "lucide-react"
+import {BookOpen, Check, Copy} from "lucide-react"
 import * as React from "react"
-import {Card, CardContent, CardDescription, CardHeader, CardTitle, useToast} from "@acton/shared-ui"
-import {useNavigate} from "react-router-dom"
+import {Card, CardContent, CardHeader, CardTitle, useToast} from "@acton/shared-ui"
+import {Link, useNavigate} from "react-router-dom"
 
 import type {TonClient} from "../../explorer/api/client"
 import {addressKey} from "../../explorer/api/compilerAbi"
@@ -28,6 +28,7 @@ import styles from "../DashboardPage.module.css"
 
 const HOME_RECENT_TRANSACTIONS_REFRESH_MS = 2000
 const HOME_NODE_INFO_REFRESH_MS = 1000
+const MASTERCHAIN_BLOCK_SHARD = "-9223372036854775808"
 
 interface HomePageProps {
   readonly client: TonClient
@@ -38,6 +39,13 @@ interface HomeState {
   readonly accountStatesByAddress: Readonly<Record<string, V3AccountState>>
   readonly isLoading: boolean
   readonly error?: string
+}
+
+interface NodeInfoRow {
+  readonly label: string
+  readonly value?: string
+  readonly to?: string
+  readonly isLoading?: boolean
 }
 
 export const HomePage: React.FC<HomePageProps> = ({client}) => {
@@ -73,6 +81,49 @@ export const HomePage: React.FC<HomePageProps> = ({client}) => {
       ].filter(endpoint => endpoint.value.length > 0),
     [endpoints],
   )
+  const nodeInfoRows = React.useMemo<readonly NodeInfoRow[]>(() => {
+    const isLoading = nodeInfo === undefined
+
+    return [
+      {
+        label: "Latest block",
+        value: nodeInfo?.last_block_seqno.toString(),
+        to: nodeInfo ? getMasterchainBlockPath(nodeInfo.last_block_seqno) : undefined,
+        isLoading,
+      },
+      {
+        label: "Uptime",
+        value: nodeInfo ? formatDuration(nodeInfo.uptime_seconds) : undefined,
+        isLoading,
+      },
+      {
+        label: "State source",
+        value: nodeInfo ? formatNodeInfoValue(nodeInfo.state_source) : undefined,
+        isLoading,
+      },
+      {
+        label: "Fork network",
+        value: nodeInfo ? formatOptionalNodeInfoValue(nodeInfo.fork_network) : undefined,
+        isLoading,
+      },
+      {
+        label: "Fork block",
+        value: nodeInfo
+          ? formatOptionalNodeInfoValue(nodeInfo.fork_block_number?.toLocaleString())
+          : undefined,
+        isLoading,
+      },
+      {
+        label: "Response delay",
+        value: nodeInfo
+          ? nodeInfo.network_conditions
+            ? `${nodeInfo.network_conditions.response_delay_ms} ms`
+            : "—"
+          : undefined,
+        isLoading,
+      },
+    ]
+  }, [nodeInfo])
   const recentAccounts = React.useMemo(
     () => collectRecentAccounts(homeState.transactions),
     [homeState.transactions],
@@ -235,43 +286,38 @@ export const HomePage: React.FC<HomePageProps> = ({client}) => {
         <div className={styles.homeTopRow}>
           <Card className={`${styles.dashboardCard} ${styles.homeCard}`}>
             <CardHeader className={styles.dashboardCardHeader}>
-              <div className={styles.cardTitleRow}>
-                <div className={styles.cardIcon}>
-                  <SquareStack size={16} />
-                </div>
-                <div>
-                  <CardTitle className={styles.dashboardCardTitle}>Current block</CardTitle>
-                  <CardDescription className={styles.dashboardCardDescription}>
-                    Latest masterchain sequence number.
-                  </CardDescription>
-                </div>
-              </div>
+              <CardTitle className={styles.dashboardCardTitle}>Node info</CardTitle>
             </CardHeader>
-            <CardContent className={styles.dashboardCardContent}>
-              <div className={styles.metricValue}>
-                {nodeInfo ? `#${nodeInfo.last_block_seqno}` : "—"}
-              </div>
-              <div className={styles.metricMeta}>
-                {nodeInfo
-                  ? `${formatDuration(nodeInfo.uptime_seconds)} uptime`
-                  : "Waiting for node info"}
-              </div>
+            <CardContent className={`${styles.dashboardCardContent} ${styles.nodeInfoList}`}>
+              {nodeInfoRows.map(row => {
+                const value = row.value ?? "—"
+
+                return (
+                  <div key={row.label} className={styles.nodeInfoRow}>
+                    <span className={styles.nodeInfoLabel}>{row.label}</span>
+                    {row.isLoading ? (
+                      <span
+                        className={`${styles.skeletonLine} ${styles.nodeInfoValueSkeleton}`}
+                        aria-label={`Loading ${row.label}`}
+                      />
+                    ) : row.to ? (
+                      <Link className={styles.nodeInfoValueLink} to={row.to} title={value}>
+                        {value}
+                      </Link>
+                    ) : (
+                      <span className={styles.nodeInfoValue} title={value}>
+                        {value}
+                      </span>
+                    )}
+                  </div>
+                )
+              })}
             </CardContent>
           </Card>
 
           <Card className={`${styles.dashboardCard} ${styles.homeCard}`}>
             <CardHeader className={styles.dashboardCardHeader}>
-              <div className={styles.cardTitleRow}>
-                <div className={styles.cardIcon}>
-                  <Link2 size={16} />
-                </div>
-                <div>
-                  <CardTitle className={styles.dashboardCardTitle}>Endpoints</CardTitle>
-                  <CardDescription className={styles.dashboardCardDescription}>
-                    Active local URLs for the current node.
-                  </CardDescription>
-                </div>
-              </div>
+              <CardTitle className={styles.dashboardCardTitle}>Endpoints</CardTitle>
             </CardHeader>
             <CardContent className={`${styles.dashboardCardContent} ${styles.endpointList}`}>
               {endpointRows.map(endpoint => {
@@ -279,31 +325,31 @@ export const HomePage: React.FC<HomePageProps> = ({client}) => {
 
                 return (
                   <div key={endpoint.label} className={styles.endpointRow}>
-                    <span className={styles.endpointText}>
-                      <span className={styles.endpointLabel}>{endpoint.label}</span>
+                    <span className={styles.endpointLabel}>{endpoint.label}</span>
+                    <span className={styles.endpointValueRow}>
                       <span className={styles.endpointValue}>{endpoint.value}</span>
-                    </span>
-                    <span className={styles.endpointActions}>
-                      <button
-                        type="button"
-                        className={`${styles.endpointButton} ${isCopied ? styles.endpointButtonCopied : ""}`}
-                        aria-label={
-                          isCopied ? "Endpoint copied" : `Copy ${endpoint.label} endpoint`
-                        }
-                        title={isCopied ? "Copied" : "Copy endpoint"}
-                        onClick={() => void copyEndpoint(endpoint.value)}
-                      >
-                        {isCopied ? <Check size={14} /> : <Copy size={14} />}
-                      </button>
-                      <button
-                        type="button"
-                        className={styles.endpointButton}
-                        aria-label={`Open ${endpoint.label} reference`}
-                        title="Open API reference"
-                        onClick={() => void navigate(endpoint.referencePath)}
-                      >
-                        <BookOpen size={14} />
-                      </button>
+                      <span className={styles.endpointActions}>
+                        <button
+                          type="button"
+                          className={`${styles.endpointButton} ${isCopied ? styles.endpointButtonCopied : ""}`}
+                          aria-label={
+                            isCopied ? "Endpoint copied" : `Copy ${endpoint.label} endpoint`
+                          }
+                          title={isCopied ? "Copied" : "Copy endpoint"}
+                          onClick={() => void copyEndpoint(endpoint.value)}
+                        >
+                          {isCopied ? <Check size={14} /> : <Copy size={14} />}
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.endpointButton}
+                          aria-label={`Open ${endpoint.label} reference`}
+                          title="Open API reference"
+                          onClick={() => void navigate(endpoint.referencePath)}
+                        >
+                          <BookOpen size={14} />
+                        </button>
+                      </span>
                     </span>
                   </div>
                 )
@@ -358,4 +404,25 @@ export const HomePage: React.FC<HomePageProps> = ({client}) => {
       </section>
     </>
   )
+}
+
+function formatNodeInfoValue(value: string): string {
+  const normalized = value.trim()
+  if (normalized.length === 0) {
+    return "—"
+  }
+
+  return normalized.replace(/_/g, " ")
+}
+
+function formatOptionalNodeInfoValue(value: string | null | undefined): string {
+  if (value === undefined || value === null) {
+    return "—"
+  }
+
+  return formatNodeInfoValue(value)
+}
+
+function getMasterchainBlockPath(seqno: number): string {
+  return `/block/-1/${encodeURIComponent(MASTERCHAIN_BLOCK_SHARD)}/${seqno}`
 }
