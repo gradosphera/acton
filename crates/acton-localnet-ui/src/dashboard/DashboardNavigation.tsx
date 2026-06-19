@@ -1,6 +1,7 @@
 import {
   Activity,
   ArrowUpRight,
+  Boxes,
   BookOpen,
   Brackets,
   Check,
@@ -53,6 +54,7 @@ interface SidebarItem {
 const mainItems: SidebarItem[] = [
   {label: "Home", icon: LayoutGrid, path: "/dashboard"},
   {label: "Explorer", icon: SearchIcon, path: "/explorer"},
+  {label: "Blocks", icon: Boxes, path: "/explorer/blocks"},
   {label: "Wallets", icon: Wallet, path: "/wallets"},
   {label: "Faucet", icon: HandCoins, path: "/faucet"},
   {label: "Tokens", icon: Coins, path: "/tokens"},
@@ -99,7 +101,7 @@ export const DashboardNavigation: React.FC<DashboardNavigationProps> = ({
   const closeMobileMenu = React.useCallback(() => setMobileMenuOpen(false), [])
 
   React.useEffect(() => {
-    if (!location.pathname.startsWith("/explorer")) {
+    if (!location.pathname.startsWith("/explorer") || location.pathname === "/explorer/blocks") {
       return
     }
 
@@ -194,8 +196,13 @@ export const DashboardNavigation: React.FC<DashboardNavigationProps> = ({
                     const targetPath = item.path === "/explorer" ? explorerPath : item.path
                     const isActive =
                       item.path === "/explorer"
-                        ? location.pathname.startsWith("/explorer")
-                        : item.path === location.pathname
+                        ? location.pathname.startsWith("/explorer") &&
+                          location.pathname !== "/explorer/blocks"
+                        : item.path === "/explorer/blocks"
+                          ? location.pathname === "/explorer/blocks" ||
+                            location.pathname === "/blocks" ||
+                            location.pathname.startsWith("/block/")
+                          : item.path === location.pathname
 
                     return (
                       <button

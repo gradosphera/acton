@@ -203,6 +203,48 @@
   text-align: right;
 }
 
+.skeletonLine {
+  position: relative;
+  display: block;
+  height: 11px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--litenode-text) 8%, var(--litenode-surface-subtle));
+}
+
+.skeletonLine::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--litenode-text) 8%, transparent),
+    transparent
+  );
+  transform: translateX(-100%);
+  animation: developerAccountSkeletonShimmer 1300ms ease-in-out infinite;
+}
+
+.skeletonAccount {
+  width: min(260px, 76%);
+}
+
+.skeletonStatus {
+  width: 62px;
+  height: 22px;
+  border-radius: 6px;
+}
+
+.skeletonType {
+  width: min(96px, 78%);
+}
+
+.skeletonBalance {
+  width: 92px;
+  margin-left: auto;
+}
+
 .emptyState {
   min-height: 62px;
   border: 1px solid var(--litenode-border-subtle);
@@ -214,6 +256,12 @@
   justify-content: center;
   box-sizing: border-box;
   font-size: 0.9rem;
+}
+
+@keyframes developerAccountSkeletonShimmer {
+  to {
+    transform: translateX(100%);
+  }
 }
 
 @media (max-width: 720px) {

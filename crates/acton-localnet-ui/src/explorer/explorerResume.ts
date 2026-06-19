@@ -23,5 +23,5 @@ export function writeExplorerLastPath(path: string): void {
 }
 
 function isExplorerPath(path: string): boolean {
-  return path === "/explorer" || path.startsWith("/explorer/")
+  return path === "/explorer" || (path.startsWith("/explorer/") && !path.startsWith("/explorer/blocks"))
 }

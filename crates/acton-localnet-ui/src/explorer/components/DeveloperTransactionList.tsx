@@ -45,23 +45,75 @@ interface DeveloperTransactionListProps {
   readonly className?: string
   readonly title?: string
   readonly emptyState?: React.ReactNode
+  readonly maxRows?: number
   readonly messageNamesByAddress?: DeveloperMessageNamesByAddress
   readonly onTransactionClick?: (hashHex: string, transaction: DeveloperTransaction) => void
   readonly onAddressClick?: (address: string) => void
 }
+
+export const DeveloperTransactionListSkeleton: React.FC<{
+  readonly className?: string
+  readonly title?: string
+  readonly rows?: number
+}> = ({className, title, rows = 5}) => (
+  <div
+    className={`${styles.tableWrap} ${className ?? ""}`}
+    aria-label={title ? `Loading ${title}` : "Loading transactions"}
+  >
+    {title ? <div className={styles.tableTitle}>{title}</div> : null}
+    <table className={styles.table}>
+      <thead>
+        <tr>
+          <th className={styles.timeHeader}>Time</th>
+          <th className={styles.fromHeader}>From</th>
+          <th className={styles.directionHeader} aria-label="Direction" />
+          <th>To</th>
+          <th className={styles.opcodeHeader}>Opcode</th>
+          <th className={styles.valueHeader}>Value</th>
+        </tr>
+      </thead>
+      <tbody>
+        {Array.from({length: rows}, (_, index) => (
+          <tr key={`developer-transaction-skeleton-${index}`} className={styles.row}>
+            <td className={styles.timeCell}>
+              <span className={`${styles.skeletonLine} ${styles.skeletonTime}`} />
+            </td>
+            <td className={`${styles.addressCell} ${styles.fromCell}`}>
+              <span className={`${styles.skeletonLine} ${styles.skeletonAddress}`} />
+            </td>
+            <td className={styles.directionCell}>
+              <span className={`${styles.skeletonLine} ${styles.skeletonDirection}`} />
+            </td>
+            <td className={styles.addressCell}>
+              <span className={`${styles.skeletonLine} ${styles.skeletonAddress}`} />
+            </td>
+            <td className={styles.opcodeCell}>
+              <span className={`${styles.skeletonLine} ${styles.skeletonOpcode}`} />
+            </td>
+            <td className={styles.valueCell}>
+              <span className={`${styles.skeletonLine} ${styles.skeletonValue}`} />
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+)
 
 export const DeveloperTransactionList: React.FC<DeveloperTransactionListProps> = ({
   transactions,
   className,
   title,
   emptyState = "No transactions yet.",
+  maxRows,
   messageNamesByAddress,
   onTransactionClick,
   onAddressClick,
 }) => {
-  const rows = transactions.flatMap(transaction =>
+  const allRows = transactions.flatMap(transaction =>
     buildDeveloperRows(transaction, messageNamesByAddress),
   )
+  const rows = maxRows === undefined ? allRows : allRows.slice(0, maxRows)
 
   if (rows.length === 0) {
     return <div className={`${styles.emptyState} ${className ?? ""}`}>{emptyState}</div>
@@ -184,7 +236,7 @@ function buildDeveloperRows(
       from: addressEndpoint(message.source || account, "Account"),
       to,
       direction: "OUT",
-      messageName: resolveMessageName(message, messageNamesByAddress),
+      messageName: resolveMessageLabel(message, messageNamesByAddress),
       valueLabel: formatMessageValue(message, to),
       isSuccess,
       statusLabel,
@@ -200,7 +252,7 @@ function buildDeveloperRows(
       from,
       to: addressEndpoint(transaction.in_msg.destination || account, "Account"),
       direction: "IN",
-      messageName: resolveMessageName(transaction.in_msg, messageNamesByAddress),
+      messageName: resolveMessageLabel(transaction.in_msg, messageNamesByAddress),
       valueLabel: formatMessageValue(transaction.in_msg, from),
       isSuccess,
       statusLabel,
@@ -336,6 +388,13 @@ function resolveMessageName(
     : undefined
 
   return destinationNames?.incoming.get(opcode) ?? sourceNames?.outgoing.get(opcode) ?? undefined
+}
+
+function resolveMessageLabel(
+  message: DeveloperMessage | undefined,
+  messageNamesByAddress?: DeveloperMessageNamesByAddress,
+): string | undefined {
+  return resolveMessageName(message, messageNamesByAddress) ?? formatMessageOpcode(message)
 }
 
 function formatAbsoluteTime(utime: number): string {

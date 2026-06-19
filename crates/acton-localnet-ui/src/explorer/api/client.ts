@@ -16,6 +16,7 @@ import type {
   StartupWallet,
   StreamingTransactionsEvent,
   Transaction,
+  V3BlocksResponse,
   V3RunGetMethodResponse,
   V3RunGetMethodStackEntry,
   V3TracesResponse,
@@ -41,6 +42,29 @@ interface FaucetResponse {
 
 interface SendInternalMessageResponse {
   readonly hash: string
+}
+
+interface GetBlocksOptions {
+  readonly workchain?: number
+  readonly shard?: string
+  readonly seqno?: number
+  readonly rootHash?: string
+  readonly fileHash?: string
+  readonly mcSeqno?: number
+  readonly startUtime?: number
+  readonly endUtime?: number
+  readonly startLt?: string | number
+  readonly endLt?: string | number
+  readonly limit?: number
+  readonly offset?: number
+  readonly sort?: "asc" | "desc"
+}
+
+interface GetBlockTransactionsOptions {
+  readonly workchain: number
+  readonly shard: string
+  readonly seqno: number
+  readonly limit?: number
 }
 
 type JettonWalletMetadata = Record<
@@ -294,6 +318,35 @@ export class TonClient {
     const url = this.buildUrl(this.v3BaseUrl, "/transactions")
     url.searchParams.append("limit", limit.toString())
     return this.request(url, "Failed to fetch recent transactions")
+  }
+
+  async getBlocks(options: GetBlocksOptions = {}): Promise<V3BlocksResponse> {
+    const url = this.buildUrl(this.v3BaseUrl, "/blocks")
+    appendOptionalSearchParam(url, "workchain", options.workchain)
+    appendOptionalSearchParam(url, "shard", options.shard)
+    appendOptionalSearchParam(url, "seqno", options.seqno)
+    appendOptionalSearchParam(url, "root_hash", options.rootHash)
+    appendOptionalSearchParam(url, "file_hash", options.fileHash)
+    appendOptionalSearchParam(url, "mc_seqno", options.mcSeqno)
+    appendOptionalSearchParam(url, "start_utime", options.startUtime)
+    appendOptionalSearchParam(url, "end_utime", options.endUtime)
+    appendOptionalSearchParam(url, "start_lt", options.startLt)
+    appendOptionalSearchParam(url, "end_lt", options.endLt)
+    appendOptionalSearchParam(url, "limit", options.limit)
+    appendOptionalSearchParam(url, "offset", options.offset)
+    appendOptionalSearchParam(url, "sort", options.sort)
+    return this.request(url, "Failed to fetch blocks")
+  }
+
+  async getBlockTransactions(
+    options: GetBlockTransactionsOptions,
+  ): Promise<V3TransactionsResponse> {
+    const url = this.buildUrl(this.v3BaseUrl, "/transactions")
+    url.searchParams.append("workchain", options.workchain.toString())
+    url.searchParams.append("shard", options.shard)
+    url.searchParams.append("seqno", options.seqno.toString())
+    url.searchParams.append("limit", (options.limit ?? 100).toString())
+    return this.request(url, "Failed to fetch block transactions")
   }
 
   async getNftItems(options?: {
@@ -787,6 +840,16 @@ export class TonClient {
     } catch {
       return undefined
     }
+  }
+}
+
+function appendOptionalSearchParam(
+  url: URL,
+  name: string,
+  value: string | number | undefined,
+): void {
+  if (value !== undefined) {
+    url.searchParams.append(name, value.toString())
   }
 }
 

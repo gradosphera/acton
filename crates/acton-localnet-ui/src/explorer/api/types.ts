@@ -133,6 +133,42 @@ export interface V3TransactionsResponse {
   readonly transactions: readonly V3TransactionListItem[]
 }
 
+export interface V3BlockId {
+  readonly workchain: number
+  readonly shard: string
+  readonly seqno: number
+}
+
+export interface V3Block extends V3BlockId {
+  readonly root_hash: string
+  readonly file_hash: string
+  readonly start_lt: string
+  readonly end_lt: string
+  readonly gen_utime: string | number
+  readonly tx_count: number
+  readonly prev_blocks?: readonly V3BlockId[]
+  readonly masterchain_block_ref?: V3BlockId | null
+  readonly master_ref_seqno?: number | null
+  readonly after_merge?: boolean
+  readonly after_split?: boolean
+  readonly before_split?: boolean
+  readonly flags?: number
+  readonly gen_catchain_seqno?: number
+  readonly global_id?: number
+  readonly key_block?: boolean
+  readonly min_ref_mc_seqno?: number
+  readonly prev_key_block_seqno?: number
+  readonly version?: number
+  readonly vert_seqno?: number
+  readonly vert_seqno_incr?: boolean
+  readonly want_merge?: boolean
+  readonly want_split?: boolean
+}
+
+export interface V3BlocksResponse {
+  readonly blocks: readonly V3Block[]
+}
+
 export type StreamingFinality = "pending" | "confirmed" | "finalized"
 
 export interface StreamingTransactionsEvent {

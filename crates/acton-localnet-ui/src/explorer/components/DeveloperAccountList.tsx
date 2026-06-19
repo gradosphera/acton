@@ -20,6 +20,47 @@ interface DeveloperAccountListProps {
   readonly onAddressClick?: (address: string) => void
 }
 
+export const DeveloperAccountListSkeleton: React.FC<{
+  readonly className?: string
+  readonly title?: string
+  readonly rows?: number
+}> = ({className, title, rows = 4}) => (
+  <div
+    className={`${styles.tableWrap} ${className ?? ""}`}
+    aria-label={title ? `Loading ${title}` : "Loading accounts"}
+  >
+    {title ? <div className={styles.tableTitle}>{title}</div> : null}
+    <table className={styles.table}>
+      <thead>
+        <tr>
+          <th>Account</th>
+          <th className={styles.statusHeader}>Status</th>
+          <th className={styles.typeHeader}>Type</th>
+          <th className={styles.balanceHeader}>Balance</th>
+        </tr>
+      </thead>
+      <tbody>
+        {Array.from({length: rows}, (_, index) => (
+          <tr key={`developer-account-skeleton-${index}`} className={styles.row}>
+            <td className={styles.accountCell}>
+              <span className={`${styles.skeletonLine} ${styles.skeletonAccount}`} />
+            </td>
+            <td className={styles.statusCell}>
+              <span className={`${styles.skeletonLine} ${styles.skeletonStatus}`} />
+            </td>
+            <td className={styles.typeCell}>
+              <span className={`${styles.skeletonLine} ${styles.skeletonType}`} />
+            </td>
+            <td className={styles.balanceCell}>
+              <span className={`${styles.skeletonLine} ${styles.skeletonBalance}`} />
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+)
+
 export const DeveloperAccountList: React.FC<DeveloperAccountListProps> = ({
   accounts,
   className,

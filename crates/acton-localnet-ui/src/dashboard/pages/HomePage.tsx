@@ -2,10 +2,9 @@ import {BookOpen, Check, Copy, Link2, SquareStack} from "lucide-react"
 import * as React from "react"
 import {Card, CardContent, CardDescription, CardHeader, CardTitle, useToast} from "@acton/shared-ui"
 import {useNavigate} from "react-router-dom"
-import type {ContractABI} from "@ton/tolk-abi-to-typescript"
 
 import type {TonClient} from "../../explorer/api/client"
-import {addressKey, buildMessageNamesByOpcodeHex} from "../../explorer/api/compilerAbi"
+import {addressKey} from "../../explorer/api/compilerAbi"
 import type {
   LocalnetNodeInfo,
   V3AccountState,
@@ -13,15 +12,17 @@ import type {
 } from "../../explorer/api/types"
 import {
   DeveloperAccountList,
+  DeveloperAccountListSkeleton,
   type DeveloperAccountListItem,
 } from "../../explorer/components/DeveloperAccountList"
 import {
   DeveloperTransactionList,
-  type DeveloperMessageNamesByAddress,
+  DeveloperTransactionListSkeleton,
 } from "../../explorer/components/DeveloperTransactionList"
 import {formatDuration} from "../../explorer/components/utils"
 import {useAddressBook} from "../../explorer/hooks/useAddressBook"
 import {collectRecentAccounts} from "../dashboardUtils"
+import {useDeveloperMessageNames} from "../useDeveloperMessageNames"
 
 import styles from "../DashboardPage.module.css"
 
@@ -50,9 +51,6 @@ export const HomePage: React.FC<HomePageProps> = ({client}) => {
     accountStatesByAddress: {},
     isLoading: true,
   })
-  const [compilerAbiByAddress, setCompilerAbiByAddress] = React.useState<
-    Map<string, ContractABI | undefined>
-  >(new Map())
   const endpoints = React.useMemo(() => client.getEndpoints(), [client])
   const endpointRows = React.useMemo(
     () =>
@@ -87,46 +85,10 @@ export const HomePage: React.FC<HomePageProps> = ({client}) => {
       })),
     [homeState.accountStatesByAddress, recentAccounts],
   )
-  const displayedAddresses = React.useMemo(() => {
-    const addresses = new Set<string>()
-    for (const transaction of homeState.transactions) {
-      addresses.add(transaction.account)
-      if (transaction.in_msg?.source) {
-        addresses.add(transaction.in_msg.source)
-      }
-      if (transaction.in_msg?.destination) {
-        addresses.add(transaction.in_msg.destination)
-      }
-      for (const message of transaction.out_msgs) {
-        if (message.source) {
-          addresses.add(message.source)
-        }
-        if (message.destination) {
-          addresses.add(message.destination)
-        }
-      }
-    }
-    for (const account of recentAccounts) {
-      addresses.add(account)
-    }
-    return [...addresses]
-  }, [homeState.transactions, recentAccounts])
-  const messageNamesByAddress = React.useMemo<DeveloperMessageNamesByAddress>(() => {
-    const next = new Map<
-      string,
-      {
-        readonly incoming: ReadonlyMap<string, string>
-        readonly outgoing: ReadonlyMap<string, string>
-      }
-    >()
-    for (const [address, abi] of compilerAbiByAddress) {
-      next.set(address, {
-        incoming: buildMessageNamesByOpcodeHex(abi, "incoming_messages"),
-        outgoing: buildMessageNamesByOpcodeHex(abi, "outgoing_messages"),
-      })
-    }
-    return next
-  }, [compilerAbiByAddress])
+  const {addresses: displayedAddresses, messageNamesByAddress} = useDeveloperMessageNames(
+    client,
+    homeState.transactions,
+  )
 
   React.useEffect(() => {
     let cancelled = false
@@ -229,64 +191,6 @@ export const HomePage: React.FC<HomePageProps> = ({client}) => {
   React.useEffect(() => {
     void prefetchNames(displayedAddresses)
   }, [displayedAddresses, prefetchNames])
-
-  React.useEffect(() => {
-    let isActive = true
-
-    const loadMessageNames = async () => {
-      if (displayedAddresses.length === 0) {
-        setCompilerAbiByAddress(new Map())
-        return
-      }
-
-      const states = await client.getAccountStates(displayedAddresses, false).catch(error => {
-        console.error("Failed to fetch transaction account states", error)
-        return undefined
-      })
-
-      if (!isActive) {
-        return
-      }
-
-      const addressToCodeHash = new Map<string, string>()
-      for (const account of states?.accounts ?? []) {
-        if (account.code_hash) {
-          addressToCodeHash.set(addressKey(account.address), account.code_hash)
-        }
-      }
-
-      const codeHashes = [...new Set(addressToCodeHash.values())]
-      const fetchedAbis =
-        codeHashes.length > 0
-          ? await client
-              .getCompilerAbis(codeHashes)
-              .catch((): Awaited<ReturnType<TonClient["getCompilerAbis"]>> => ({}))
-          : {}
-
-      if (!isActive) {
-        return
-      }
-
-      const abiByCodeHash = new Map<string, ContractABI | undefined>()
-      for (const codeHash of codeHashes) {
-        abiByCodeHash.set(codeHash, fetchedAbis[codeHash]?.compiler_abi)
-      }
-
-      const next = new Map<string, ContractABI | undefined>()
-      for (const address of displayedAddresses) {
-        const key = addressKey(address)
-        const codeHash = addressToCodeHash.get(key)
-        next.set(key, codeHash ? abiByCodeHash.get(codeHash) : undefined)
-      }
-      setCompilerAbiByAddress(next)
-    }
-
-    void loadMessageNames()
-
-    return () => {
-      isActive = false
-    }
-  }, [client, displayedAddresses])
 
   React.useEffect(() => {
     if (!copiedEndpoint) {
@@ -413,17 +317,10 @@ export const HomePage: React.FC<HomePageProps> = ({client}) => {
             {homeState.error}
           </div>
         ) : homeState.isLoading ? (
-          <div className={`${styles.homeTransactionsCard} ${styles.skeletonList}`}>
-            {[0, 1, 2, 3].map(index => (
-              <div key={index} className={styles.skeletonRow}>
-                <div className={styles.skeletonMain}>
-                  <span className={`${styles.skeletonLine} ${styles.skeletonLinePrimary}`} />
-                  <span className={`${styles.skeletonLine} ${styles.skeletonLineSecondary}`} />
-                </div>
-                <span className={`${styles.skeletonLine} ${styles.skeletonLineMeta}`} />
-              </div>
-            ))}
-          </div>
+          <DeveloperTransactionListSkeleton
+            className={styles.homeTransactionsCard}
+            title="Recent transactions"
+          />
         ) : homeState.transactions.length === 0 ? (
           <div className={`${styles.homeTransactionsCard} ${styles.emptyState}`}>
             No transactions yet.
@@ -447,17 +344,7 @@ export const HomePage: React.FC<HomePageProps> = ({client}) => {
           {homeState.error ? (
             <div className={styles.emptyState}>{homeState.error}</div>
           ) : homeState.isLoading ? (
-            <div className={styles.skeletonList} aria-label="Loading accounts">
-              {[0, 1, 2, 3].map(index => (
-                <div key={index} className={styles.skeletonRow}>
-                  <div className={styles.skeletonMain}>
-                    <span className={`${styles.skeletonLine} ${styles.skeletonLinePrimary}`} />
-                    <span className={`${styles.skeletonLine} ${styles.skeletonLineSecondary}`} />
-                  </div>
-                  <span className={`${styles.skeletonLine} ${styles.skeletonLineMeta}`} />
-                </div>
-              ))}
-            </div>
+            <DeveloperAccountListSkeleton title="Recent accounts" />
           ) : (
             <DeveloperAccountList
               title="Recent accounts"

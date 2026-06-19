@@ -12,6 +12,7 @@ import {TransactionPage} from "./explorer/pages/TransactionPage"
 import {NetworkInfoProvider} from "./explorer/hooks/NetworkInfoProvider"
 import {AddressBookProvider} from "./explorer/hooks/useAddressBook"
 import {DashboardPage} from "./dashboard/DashboardPage"
+import {BlockDetailsPage, BlocksPage} from "./dashboard/pages/BlocksPage"
 import {FaucetPage} from "./dashboard/pages/FaucetPage"
 import {HomePage} from "./dashboard/pages/HomePage"
 import {NftsPage} from "./dashboard/pages/NftsPage"
@@ -200,6 +201,26 @@ const AppContent: React.FC<AppContentProps> = ({
               element={
                 <DashboardPage {...dashboardProps}>
                   <FaucetPage client={client} />
+                </DashboardPage>
+              }
+            />
+            <Route
+              path="/blocks"
+              element={<Navigate to="/explorer/blocks" replace />}
+            />
+            <Route
+              path="/explorer/blocks"
+              element={
+                <DashboardPage {...dashboardProps}>
+                  <BlocksPage client={client} />
+                </DashboardPage>
+              }
+            />
+            <Route
+              path="/block/:workchain/:shard/:seqno"
+              element={
+                <DashboardPage {...dashboardProps}>
+                  <BlockDetailsPage client={client} />
                 </DashboardPage>
               }
             />
