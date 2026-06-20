@@ -1,6 +1,6 @@
 import {AlertCircle, History, Search, X} from "lucide-react"
 import {useNavigate} from "react-router-dom"
-import {useCallback, useEffect, useState} from "react"
+import {useCallback, useEffect, useRef, useState} from "react"
 import type {FC, MouseEvent as ReactMouseEvent} from "react"
 
 import {normalizeAddress, parseAddress} from "../components/utils"
@@ -9,17 +9,20 @@ import {
   readExplorerInput,
   writeExplorerInput,
 } from "../explorerResume"
+import {useExplorerRoutePaths} from "../hooks/useExplorerRoutePaths"
 import {useAddressFormat} from "../hooks/useNetworkInfo"
 
 import styles from "./ExplorerIndexPage.module.css"
 
 export const ExplorerIndexPage: FC = () => {
   const addressFormat = useAddressFormat()
+  const routes = useExplorerRoutePaths()
   const [input, setInput] = useState(() => readExplorerInput())
   const [history, setHistory] = useState<string[]>([])
   const [isFocused, setIsFocused] = useState(false)
   const [showHistoryDropdown, setShowHistoryDropdown] = useState(false)
   const [error, setError] = useState<string | undefined>()
+  const inputRef = useRef<HTMLInputElement>(null)
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -31,6 +34,10 @@ export const ExplorerIndexPage: FC = () => {
         console.error("Failed to parse history", error)
       }
     }
+  }, [])
+
+  useEffect(() => {
+    inputRef.current?.focus()
   }, [])
 
   const addToHistory = useCallback(
@@ -69,9 +76,9 @@ export const ExplorerIndexPage: FC = () => {
       writeExplorerInput(displayAddress)
       addToHistory(displayAddress)
       setShowHistoryDropdown(false)
-      void navigate(`/explorer/address/${displayAddress}`)
+      void navigate(routes.addressPath(displayAddress))
     },
-    [addToHistory, addressFormat, navigate],
+    [addToHistory, addressFormat, navigate, routes],
   )
 
   return (
@@ -89,6 +96,7 @@ export const ExplorerIndexPage: FC = () => {
               <Search size={20} />
             </div>
             <input
+              ref={inputRef}
               type="text"
               spellCheck="false"
               className={styles.input}

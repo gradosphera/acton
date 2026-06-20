@@ -613,6 +613,11 @@
 }
 
 @media (max-width: 620px) {
+  .container {
+    padding: 16px 16px 32px;
+    gap: 12px;
+  }
+
   .nftPanel {
     min-height: 0;
     padding: 16px;

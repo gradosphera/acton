@@ -2,17 +2,31 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
+  min-height: 24px;
   font-size: 14px;
+  line-height: 24px;
   color: var(--tonscan-text-secondary);
   margin-bottom: 4px;
 }
 
 .item {
+  min-width: 0;
+  max-width: 100%;
   color: var(--tonscan-accent);
   text-decoration: none;
   transition: color 0.2s;
   display: flex;
   align-items: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.item > * {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .item:hover {
@@ -20,6 +34,7 @@
 }
 
 .separator {
+  flex: 0 0 auto;
   color: var(--tonscan-text-secondary);
   opacity: 0.5;
 }

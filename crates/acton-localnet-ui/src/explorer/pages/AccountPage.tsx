@@ -30,6 +30,7 @@ import {
   replaceBrokenImageWithFallback,
 } from "../components/imageFallbacks"
 import {normalizeAddress, toRawAddress} from "../components/utils"
+import {useExplorerRoutePaths} from "../hooks/useExplorerRoutePaths"
 import {useNetworkInfo} from "../hooks/useNetworkInfo"
 
 import styles from "./AccountPage.module.css"
@@ -48,6 +49,7 @@ export const AccountPage: FC<AccountPageProps> = ({client}) => {
   const {address = ""} = useParams<{address: string}>()
   const navigate = useNavigate()
   const location = useLocation()
+  const routes = useExplorerRoutePaths()
   const {addressFormat} = useNetworkInfo()
   const [accountState, setAccountState] = useState<AddressInformation | undefined>()
   const [accountStateV3, setAccountStateV3] = useState<V3AccountState | undefined>()
@@ -271,7 +273,7 @@ export const AccountPage: FC<AccountPageProps> = ({client}) => {
   }
 
   const handleTransactionClick = (hash: string) => {
-    void navigate(`/explorer/tx/${encodeURIComponent(hash)}`)
+    void navigate(routes.transactionPath(hash))
   }
 
   useEffect(() => {
@@ -623,9 +625,9 @@ export const AccountPage: FC<AccountPageProps> = ({client}) => {
   const handleSearch = (addr: string) => {
     const finalAddr = addr ? normalizeAddress(addr, addressFormat) : ""
     if (finalAddr) {
-      void navigate(`/explorer/address/${finalAddr}`)
+      void navigate(routes.addressPath(finalAddr))
     } else {
-      void navigate("/explorer")
+      void navigate(routes.rootPath)
     }
   }
 

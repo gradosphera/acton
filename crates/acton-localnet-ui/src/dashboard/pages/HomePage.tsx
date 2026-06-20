@@ -22,8 +22,8 @@ import {
 } from "../../explorer/components/DeveloperTransactionList"
 import {formatDuration} from "../../explorer/components/utils"
 import {useAddressBook} from "../../explorer/hooks/useAddressBook"
+import {useTransactionMessageNames} from "../../explorer/hooks/useTransactionMessageNames"
 import {collectRecentAccounts} from "../dashboardUtils"
-import {useDeveloperMessageNames} from "../useDeveloperMessageNames"
 
 import styles from "../DashboardPage.module.css"
 
@@ -137,7 +137,7 @@ export const HomePage: FC<HomePageProps> = ({client}) => {
       })),
     [homeState.accountStatesByAddress, recentAccounts],
   )
-  const {addresses: displayedAddresses, messageNamesByAddress} = useDeveloperMessageNames(
+  const {addresses: displayedAddresses, messageNamesByAddress} = useTransactionMessageNames(
     client,
     homeState.transactions,
   )

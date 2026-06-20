@@ -3,6 +3,7 @@ import {Link} from "react-router-dom"
 import {Fragment} from "react"
 import type {FC} from "react"
 
+import {useExplorerRoutePaths} from "../hooks/useExplorerRoutePaths"
 import {AddressLabel} from "./AddressLabel"
 import styles from "./Breadcrumbs.module.css"
 import {formatAddress} from "./utils"
@@ -19,6 +20,7 @@ interface BreadcrumbsProps {
 }
 
 export const Breadcrumbs: FC<BreadcrumbsProps> = ({items}) => {
+  const routes = useExplorerRoutePaths()
   const formatItem = (item: BreadcrumbItem) => {
     if (item.isAddress) {
       return <AddressLabel address={item.label} />
@@ -31,7 +33,7 @@ export const Breadcrumbs: FC<BreadcrumbsProps> = ({items}) => {
 
   return (
     <nav className={styles.breadcrumbs}>
-      <Link to="/explorer" className={styles.item}>
+      <Link to={routes.rootPath} className={styles.item}>
         <span>Explore</span>
       </Link>
       {items.map((item, index) => {

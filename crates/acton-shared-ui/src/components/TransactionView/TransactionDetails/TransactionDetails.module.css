@@ -381,29 +381,35 @@
 }
 
 @media (max-width: 768px) {
+  .transactionDetailsContainer {
+    line-height: 1.35;
+  }
+
   .detailRow,
   .labeledSectionRow {
     flex-direction: column;
     align-items: flex-start;
+    padding: 10px 12px;
   }
 
   .detailLabel,
   .labeledSectionTitle {
     width: 100%;
     border-right: none;
-    padding-bottom: 4px;
-    padding-left: 0;
-    padding-right: 0;
+    padding: 0;
     text-align: left;
+    font-size: 0.75rem;
+    line-height: 1.25;
   }
 
   .detailValue,
+  .heightDetailValue,
   .labeledSectionContent {
     width: 100%;
     box-sizing: border-box;
-    padding-top: 4px;
-    padding-left: 0;
-    padding-right: 0;
+    padding: 5px 0 0;
+    font-size: 0.8125rem;
+    line-height: 1.35;
   }
 
   .multiColumnRow {
@@ -416,8 +422,9 @@
 
   .multiColumnItem {
     width: 100%;
+    min-height: 0;
     box-sizing: border-box;
-    padding: 8px 0;
+    padding: 6px 0;
     border-bottom: 1px solid var(--border-color);
   }
 
@@ -427,6 +434,17 @@
 
   .multiColumnItemTitle {
     white-space: normal;
+    font-size: 0.6875rem;
+    line-height: 1.25;
+  }
+
+  .multiColumnItemValue {
+    font-size: 0.8125rem;
+    line-height: 1.35;
+  }
+
+  .triggerRoute {
+    gap: 6px;
   }
 
   .storageSummaryRow {

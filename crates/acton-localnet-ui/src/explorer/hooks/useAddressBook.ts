@@ -54,7 +54,7 @@ interface PendingNameRequest {
 }
 
 export const AddressBookProvider: FC<{
-  client: TonClient
+  client?: TonClient
   children: ReactNode
 }> = ({client, children}) => {
   const cacheRef = useRef(new Map<string, AddressName>())
@@ -142,6 +142,15 @@ export const AddressBookProvider: FC<{
       return
     }
 
+    if (!client) {
+      const entries = requests.map(request => [request.address, undefined] as const)
+      updateNames(entries)
+      for (const request of requests) {
+        request.resolve(tonAssetsRef.current.get(normalizeKey(request.address)))
+      }
+      return
+    }
+
     void client
       .getAddressNames(requests.map(request => request.address))
       .then(namesByAddress => {
@@ -169,7 +178,9 @@ export const AddressBookProvider: FC<{
 
   const setAddressName = useCallback(
     async (address: string, name: string) => {
-      await client.setAddressName(address, name)
+      if (client) {
+        await client.setAddressName(address, name)
+      }
       updateName(address, name || undefined)
     },
     [client, updateName],

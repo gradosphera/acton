@@ -12,9 +12,10 @@ import {
   DeveloperTransactionListSkeleton,
 } from "../components/DeveloperTransactionList"
 import {useAddressBook} from "../hooks/useAddressBook"
+import {useExplorerRoutePaths} from "../hooks/useExplorerRoutePaths"
+import {useTransactionMessageNames} from "../hooks/useTransactionMessageNames"
 
 import styles from "./BlocksPage.module.css"
-import {useDeveloperMessageNames} from "../../dashboard/useDeveloperMessageNames"
 
 const BLOCKS_PAGE_LIMIT = 8
 const LAST_TRANSACTION_MESSAGES_LIMIT = 5
@@ -56,6 +57,7 @@ interface BlockDetailsState {
 
 export const BlocksPage: FC<BlocksPageProps> = ({client}) => {
   const navigate = useNavigate()
+  const routes = useExplorerRoutePaths()
   const {prefetchNames} = useAddressBook()
   const [state, setState] = useState<BlocksPageState>({
     transactions: [],
@@ -63,7 +65,7 @@ export const BlocksPage: FC<BlocksPageProps> = ({client}) => {
     workchainBlocks: [],
     isLoading: true,
   })
-  const {addresses, messageNamesByAddress} = useDeveloperMessageNames(client, state.transactions)
+  const {addresses, messageNamesByAddress} = useTransactionMessageNames(client, state.transactions)
 
   useEffect(() => {
     void prefetchNames(addresses)
@@ -126,7 +128,7 @@ export const BlocksPage: FC<BlocksPageProps> = ({client}) => {
   }, [client])
 
   return (
-    <>
+    <div className={styles.container}>
       <section className={styles.hero}>
         <div>
           <h1 className={styles.title}>Blocks</h1>
@@ -150,10 +152,10 @@ export const BlocksPage: FC<BlocksPageProps> = ({client}) => {
             maxRows={LAST_TRANSACTION_MESSAGES_LIMIT}
             messageNamesByAddress={messageNamesByAddress}
             onTransactionClick={hashHex => {
-              void navigate(`/explorer/tx/${encodeURIComponent(hashHex)}`)
+              void navigate(routes.transactionPath(hashHex))
             }}
             onAddressClick={address => {
-              void navigate(`/explorer/address/${encodeURIComponent(address)}`)
+              void navigate(routes.addressPath(address))
             }}
           />
         )}
@@ -175,13 +177,14 @@ export const BlocksPage: FC<BlocksPageProps> = ({client}) => {
           />
         </div>
       </section>
-    </>
+    </div>
   )
 }
 
 export const BlockDetailsPage: FC<BlocksPageProps> = ({client}) => {
   const params = useParams<{workchain: string; shard: string; seqno: string}>()
   const navigate = useNavigate()
+  const routes = useExplorerRoutePaths()
   const {prefetchNames} = useAddressBook()
   const workchain = Number(params.workchain)
   const shard = params.shard ?? ""
@@ -292,7 +295,7 @@ export const BlockDetailsPage: FC<BlocksPageProps> = ({client}) => {
   }, [prefetchNames, transactionAddresses])
 
   return (
-    <>
+    <div className={styles.container}>
       <section className={styles.hero}>
         <div>
           <h1 className={styles.title}>{title}</h1>
@@ -357,15 +360,13 @@ export const BlockDetailsPage: FC<BlocksPageProps> = ({client}) => {
 
             <BlockTransactionsTable
               transactions={state.transactions}
-              onOpenAccount={address =>
-                void navigate(`/explorer/address/${encodeURIComponent(address)}`)
-              }
-              onOpenTransaction={hash => void navigate(`/explorer/tx/${encodeURIComponent(hash)}`)}
+              onOpenAccount={address => void navigate(routes.addressPath(address))}
+              onOpenTransaction={hash => void navigate(routes.transactionPath(hash))}
             />
           </>
         )}
       </section>
-    </>
+    </div>
   )
 }
 

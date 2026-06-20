@@ -1,14 +1,15 @@
 import {useMemo} from "react"
 
-import type {TonClient} from "../explorer/api/client"
-import type {V3TransactionListItem} from "../explorer/api/types"
+import type {TonClient} from "../api/client"
+import type {V3TransactionListItem} from "../api/types"
+
 import {
   collectTransactionListAddresses,
   type MessageNamesByAddress,
   useMessageNamesByAddress,
-} from "../explorer/hooks/useMessageNamesByAddress"
+} from "./useMessageNamesByAddress"
 
-export function useDeveloperMessageNames(
+export function useTransactionMessageNames(
   client: TonClient,
   transactions: readonly V3TransactionListItem[],
 ): {

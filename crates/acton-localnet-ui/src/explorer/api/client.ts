@@ -27,6 +27,7 @@ interface TonClientOptions {
   readonly v2BaseUrl: string
   readonly v3BaseUrl: string
   readonly addressNameBaseUrl: string
+  readonly localnetControlEnabled?: boolean
   readonly localnetApiToken?: string
   readonly onUnauthorized?: () => void
   readonly toncenterApiKey?: string
@@ -223,6 +224,7 @@ export class TonClient {
   private readonly v2BaseUrl: string
   private readonly v3BaseUrl: string
   private readonly addressNameBaseUrl: string
+  private readonly localnetControlEnabled: boolean
   private readonly localnetApiToken: string | undefined
   private readonly onUnauthorized: (() => void) | undefined
   private readonly toncenterApiKey: string | undefined
@@ -232,6 +234,7 @@ export class TonClient {
     v2BaseUrl,
     v3BaseUrl,
     addressNameBaseUrl,
+    localnetControlEnabled = true,
     localnetApiToken,
     onUnauthorized,
     toncenterApiKey,
@@ -239,6 +242,7 @@ export class TonClient {
     this.v2BaseUrl = v2BaseUrl
     this.v3BaseUrl = v3BaseUrl
     this.addressNameBaseUrl = addressNameBaseUrl
+    this.localnetControlEnabled = localnetControlEnabled
     this.localnetApiToken = localnetApiToken?.trim() || undefined
     this.onUnauthorized = onUnauthorized
     this.toncenterApiKey = toncenterApiKey?.trim() || undefined
@@ -526,6 +530,10 @@ export class TonClient {
   }
 
   async getAddressNames(addresses: readonly string[]): Promise<Record<string, string | undefined>> {
+    if (!this.localnetControlEnabled) {
+      return {}
+    }
+
     const uniqueAddresses = [...new Set(addresses.filter(Boolean))]
     if (uniqueAddresses.length === 0) {
       return {}
@@ -548,6 +556,10 @@ export class TonClient {
   async getCompilerAbis(
     codeHashes: readonly string[],
   ): Promise<Record<string, ExtendedContractABI | null>> {
+    if (!this.localnetControlEnabled) {
+      return {}
+    }
+
     const uniqueCodeHashes = [...new Set(codeHashes.filter(Boolean))]
     if (uniqueCodeHashes.length === 0) {
       return {}
@@ -567,6 +579,19 @@ export class TonClient {
     readonly address?: string
     readonly codeHash?: string
   }): Promise<VerificationSourceResponse> {
+    if (!this.localnetControlEnabled) {
+      return {
+        address: options.address ?? null,
+        code_hash: options.codeHash ?? "",
+        verified: false,
+        onchain: {
+          master_address: "",
+          verification_record_address: "",
+        },
+        bundles: [],
+      }
+    }
+
     const url = this.buildUrl(this.addressNameBaseUrl, "/acton_getVerifiedSource")
     if (options.address) {
       url.searchParams.append("address", options.address)

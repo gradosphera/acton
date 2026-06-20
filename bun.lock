@@ -9,6 +9,35 @@
         "@playwright/test": "1.59.0",
       },
     },
+    "crates/acton-explorer-ui": {
+      "name": "acton-explorer-ui",
+      "version": "1.0.0",
+      "dependencies": {
+        "@acton/shared-ui": "workspace:*",
+        "@ton/core": "0.62.0",
+        "@ton/crypto": "^3.3.0",
+        "@ton/tolk-abi-to-typescript": "^0.5.0",
+        "buffer": "^6.0.3",
+        "lucide-react": "^0.474.0",
+        "qrcode.react": "^4.2.0",
+        "react-d3-tree": "^3.6.6",
+        "react-icons": "^5.5.0",
+        "react-router-dom": "^7.15.0",
+        "shiki": "^3.22.0",
+        "ton-assembly": "^0.6.1",
+        "vite-plugin-node-polyfills": "^0.28.0",
+      },
+      "devDependencies": {
+        "@types/node": "^25.0.3",
+        "@types/react": "^19.2.7",
+        "@types/react-dom": "^19.2.3",
+        "@vitejs/plugin-react": "^6.0.2",
+        "react": "^19.2.3",
+        "react-dom": "^19.2.3",
+        "typescript": "^5.9.3",
+        "vite": "^8.0.16",
+      },
+    },
     "crates/acton-localnet-ui": {
       "name": "acton-localnet-ui",
       "version": "1.0.0",
@@ -471,6 +500,8 @@
     "@vueuse/metadata": ["@vueuse/metadata@13.9.0", "", {}, "sha512-1AFRvuiGphfF7yWixZa0KwjYH8ulyjDCC0aFgrGRz8+P4kvDFSdXLVfTk5xAN9wEuD1J6z4/myMoYbnHoX07zg=="],
 
     "@vueuse/shared": ["@vueuse/shared@13.9.0", "", { "peerDependencies": { "vue": "^3.5.0" } }, "sha512-e89uuTLMh0U5cZ9iDpEI2senqPGfbPRTHM/0AaQkcxnpqjkZqDYP8rpfm7edOz8s+pOCOROEy1PIveSW8+fL5g=="],
+
+    "acton-explorer-ui": ["acton-explorer-ui@workspace:crates/acton-explorer-ui"],
 
     "acton-localnet-ui": ["acton-localnet-ui@workspace:crates/acton-localnet-ui"],
 

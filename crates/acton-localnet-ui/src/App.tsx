@@ -214,7 +214,7 @@ const AppContent: FC<AppContentProps> = ({
             <Route
               path="/explorer/blocks"
               element={
-                <DashboardPage {...dashboardProps}>
+                <DashboardPage {...dashboardProps} embedded>
                   <BlocksPage client={client} />
                 </DashboardPage>
               }
@@ -222,7 +222,7 @@ const AppContent: FC<AppContentProps> = ({
             <Route
               path="/block/:workchain/:shard/:seqno"
               element={
-                <DashboardPage {...dashboardProps}>
+                <DashboardPage {...dashboardProps} embedded>
                   <BlockDetailsPage client={client} />
                 </DashboardPage>
               }

@@ -32,6 +32,7 @@ import {
   normalizeAddress,
 } from "../components/utils"
 import {useAddressBook} from "../hooks/useAddressBook"
+import {useExplorerRoutePaths} from "../hooks/useExplorerRoutePaths"
 import {useAddressFormat} from "../hooks/useNetworkInfo"
 import {useDelayedLoadingVisibility} from "../../hooks/useDelayedLoadingVisibility"
 
@@ -77,6 +78,7 @@ export const TransactionPage: FC<TransactionPageProps> = ({client}) => {
   const {hash: routeHash = ""} = useParams<{hash: string}>()
   const hash = hashToHex(routeHash) ?? routeHash
   const navigate = useNavigate()
+  const routes = useExplorerRoutePaths()
   const [searchParams, setSearchParams] = useSearchParams()
   const [loading, setLoading] = useState(true)
   const [traces, setTraces] = useState<TransactionInfo[]>([])
@@ -102,7 +104,7 @@ export const TransactionPage: FC<TransactionPageProps> = ({client}) => {
 
   const handleContractClick = (address: string) => {
     const formattedAddr = normalizeAddress(address, addressFormat)
-    void navigate(`/explorer/address/${encodeURIComponent(formattedAddr)}`)
+    void navigate(routes.addressPath(formattedAddr))
   }
 
   const handleActiveTabChange = (tab: TabType) => {
@@ -272,7 +274,7 @@ export const TransactionPage: FC<TransactionPageProps> = ({client}) => {
               items={[
                 {
                   label: traceAddressDisplay,
-                  path: `/explorer/address/${traceAddressDisplay}`,
+                  path: routes.addressPath(traceAddressDisplay),
                   isAddress: true,
                 },
                 {label: hash, isHash: true},

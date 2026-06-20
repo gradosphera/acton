@@ -6,6 +6,7 @@
   "author": "TON Core",
   "type": "module",
   "workspaces": [
+    "crates/acton-explorer-ui",
     "crates/acton-localnet-ui",
     "crates/acton-shared-ui",
     "crates/acton-test-ui"
