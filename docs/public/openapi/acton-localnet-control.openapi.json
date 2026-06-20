@@ -200,9 +200,36 @@
         "operationId": "createRecoveryPoint",
         "summary": "Create a runtime recovery point",
         "description": "Creates an in-memory recovery point for the current localnet state. Recovery points are process-local and are not persisted across restart.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRecoveryPointRequest"
+              },
+              "example": {
+                "name": "before-upgrade",
+                "force": false
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "$ref": "#/components/responses/RecoveryPointResponse"
+          }
+        }
+      }
+    },
+    "/acton_listSnapshots": {
+      "post": {
+        "tags": ["Localnet Control"],
+        "operationId": "listRecoveryPoints",
+        "summary": "List runtime recovery points",
+        "description": "Lists named in-memory recovery points available in the current localnet process.",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/RecoveryPointListResponse"
           }
         }
       }
@@ -221,7 +248,62 @@
                 "$ref": "#/components/schemas/RevertRecoveryPointRequest"
               },
               "example": {
-                "id": 1
+                "name": "before-upgrade"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/RecoveryPointResponse"
+          }
+        }
+      }
+    },
+    "/acton_exportSnapshot": {
+      "post": {
+        "tags": ["Localnet Control"],
+        "operationId": "exportRecoveryPoint",
+        "summary": "Export a runtime recovery point",
+        "description": "Writes a named in-memory recovery point to a JSON snapshot file on the localnet host.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExportRecoveryPointRequest"
+              },
+              "example": {
+                "name": "before-upgrade",
+                "path": "snapshots/bug.json"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/RecoveryPointResponse"
+          }
+        }
+      }
+    },
+    "/acton_importSnapshot": {
+      "post": {
+        "tags": ["Localnet Control"],
+        "operationId": "importRecoveryPoint",
+        "summary": "Import a runtime recovery point",
+        "description": "Reads a JSON snapshot file on the localnet host into the current process as a named recovery point.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportRecoveryPointRequest"
+              },
+              "example": {
+                "name": "bug",
+                "path": "snapshots/bug.json",
+                "force": false
               }
             }
           }
@@ -739,6 +821,31 @@
           }
         }
       },
+      "RecoveryPointListResponse": {
+        "description": "Successful runtime recovery point list response.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/SuccessEnvelope"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "result": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/RecoveryPointResult"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      },
       "NetworkConditionsResponse": {
         "description": "Successful simulated network conditions response.",
         "content": {
@@ -1149,24 +1256,77 @@
           }
         }
       },
+      "CreateRecoveryPointRequest": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Recovery point name."
+          },
+          "force": {
+            "type": "boolean",
+            "default": false,
+            "description": "Overwrite an existing recovery point with the same name."
+          }
+        }
+      },
       "RevertRecoveryPointRequest": {
         "type": "object",
-        "required": ["id"],
+        "required": ["name"],
         "properties": {
-          "id": {
-            "type": "integer",
-            "minimum": 1,
-            "description": "Recovery point id returned by /acton_snapshot."
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Recovery point name returned by /acton_snapshot or /acton_importSnapshot."
+          }
+        }
+      },
+      "ExportRecoveryPointRequest": {
+        "type": "object",
+        "required": ["name", "path"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Recovery point name."
+          },
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Output path on the localnet host."
+          }
+        }
+      },
+      "ImportRecoveryPointRequest": {
+        "type": "object",
+        "required": ["name", "path"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Recovery point name to create."
+          },
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Input path on the localnet host."
+          },
+          "force": {
+            "type": "boolean",
+            "default": false,
+            "description": "Overwrite an existing recovery point with the same name."
           }
         }
       },
       "RecoveryPointResult": {
         "type": "object",
-        "required": ["id", "block_seqno"],
+        "required": ["name", "block_seqno"],
         "properties": {
-          "id": {
-            "type": "integer",
-            "minimum": 1
+          "name": {
+            "type": "string",
+            "description": "Recovery point name."
           },
           "block_seqno": {
             "type": "integer",

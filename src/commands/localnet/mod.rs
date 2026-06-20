@@ -1,3 +1,4 @@
+mod snapshot;
 mod status;
 
 use crate::context::Wallet;
@@ -31,6 +32,10 @@ const STARTUP_ACCOUNT_TOPUP_NANOGRAMS: u128 = 100_000_000_000; // 100 GRAM
 const STARTUP_DEPLOY_TRANSFER_NANOGRAMS: u128 = 50_000_000; // 0.05 GRAM
 const WALLET_MSG_TTL_SECONDS: u64 = 600;
 pub(crate) const LOCALNET_AUTH_TOKEN_ENV: &str = LOCALNET_API_KEY_ENV;
+pub use snapshot::{
+    localnet_snapshot_create_cmd, localnet_snapshot_export_cmd, localnet_snapshot_import_cmd,
+    localnet_snapshot_list_cmd, localnet_snapshot_revert_cmd,
+};
 pub use status::localnet_status_cmd;
 
 #[allow(clippy::too_many_arguments)]
@@ -50,7 +55,11 @@ pub async fn localnet_start_cmd(
     require_auth: bool,
 ) -> anyhow::Result<()> {
     if load_state.is_some() && db_path.is_some() {
-        anyhow::bail!("--load-state cannot be used together with --db-path for now");
+        anyhow::bail!(
+            "{} cannot be used together with {} for now",
+            "--load-state".yellow(),
+            "--db-path".yellow(),
+        );
     }
     if block_interval_ms == 0 {
         anyhow::bail!("localnet block interval must be greater than 0");
@@ -497,7 +506,7 @@ pub async fn localnet_set_next_block_timestamp_cmd(
     Ok(())
 }
 
-async fn post_localnet_control(
+pub(super) async fn post_localnet_control(
     port: u16,
     auth_token: Option<String>,
     path: &str,

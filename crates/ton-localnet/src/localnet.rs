@@ -1,7 +1,7 @@
 use crate::LocalnetError;
 use crate::executor::TvmEmulatorAdapter;
 use crate::node::{Node, NodeClockInfo, StateSource};
-use crate::node_snapshot::NodeStateSnapshot;
+use crate::node_snapshot::{NodeStateSnapshot, read_snapshot_from_path, write_snapshot_to_path};
 use crate::storage;
 use crate::storage::{AccountStatus, BlockMeta, MasterchainBlockMeta, MsgMeta, TransactionInfo};
 use crate::streaming::StreamingCommitEvent;
@@ -236,7 +236,7 @@ impl Default for LocalnetMiningMode {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct LocalnetRecoveryPointResult {
-    pub id: u64,
+    pub name: String,
     pub block_seqno: Seqno,
 }
 
@@ -497,10 +497,26 @@ pub(crate) enum Request {
         resp: oneshot::Sender<anyhow::Result<()>>,
     },
     CreateRecoveryPoint {
+        name: String,
+        force: bool,
         resp: oneshot::Sender<anyhow::Result<LocalnetRecoveryPointResult>>,
     },
+    ListRecoveryPoints {
+        resp: oneshot::Sender<anyhow::Result<Vec<LocalnetRecoveryPointResult>>>,
+    },
     RevertRecoveryPoint {
-        id: u64,
+        name: String,
+        resp: oneshot::Sender<anyhow::Result<LocalnetRecoveryPointResult>>,
+    },
+    ExportRecoveryPoint {
+        name: String,
+        path: String,
+        resp: oneshot::Sender<anyhow::Result<LocalnetRecoveryPointResult>>,
+    },
+    ImportRecoveryPoint {
+        name: String,
+        path: String,
+        force: bool,
         resp: oneshot::Sender<anyhow::Result<LocalnetRecoveryPointResult>>,
     },
     MineBlocks {
@@ -539,44 +555,119 @@ pub struct Localnet {
 
 #[derive(Default)]
 struct RecoveryPoints {
-    next_id: u64,
     points: Vec<RecoveryPoint>,
 }
 
 struct RecoveryPoint {
-    id: u64,
+    name: String,
     snapshot: NodeStateSnapshot,
 }
 
 impl RecoveryPoints {
-    fn create(&mut self, node: &Node) -> anyhow::Result<LocalnetRecoveryPointResult> {
+    fn create(
+        &mut self,
+        node: &Node,
+        name: String,
+        force: bool,
+    ) -> anyhow::Result<LocalnetRecoveryPointResult> {
+        let name = normalize_recovery_point_name(name)?;
+        self.remove_existing_name(&name, force)?;
         let snapshot = node.build_snapshot()?;
-        self.next_id = self
-            .next_id
-            .checked_add(1)
-            .context("Recovery point id overflow")?;
-        let id = self.next_id;
-        let block_seqno = snapshot.globals.head_seqno;
-        self.points.push(RecoveryPoint { id, snapshot });
-        Ok(LocalnetRecoveryPointResult { id, block_seqno })
+        self.push_snapshot(snapshot, name)
     }
 
-    fn revert(&mut self, node: &mut Node, id: u64) -> anyhow::Result<LocalnetRecoveryPointResult> {
-        let index = self
-            .points
-            .iter()
-            .position(|point| point.id == id)
-            .with_context(|| format!("Recovery point {id} not found"))?;
-        let snapshot = self.points[index].snapshot.clone();
+    fn import(
+        &mut self,
+        path: String,
+        name: String,
+        force: bool,
+    ) -> anyhow::Result<LocalnetRecoveryPointResult> {
+        let name = normalize_recovery_point_name(name)?;
+        self.remove_existing_name(&name, force)?;
+        let snapshot = read_snapshot_from_path(path)?;
+        self.push_snapshot(snapshot, name)
+    }
+
+    fn push_snapshot(
+        &mut self,
+        snapshot: NodeStateSnapshot,
+        name: String,
+    ) -> anyhow::Result<LocalnetRecoveryPointResult> {
         let block_seqno = snapshot.globals.head_seqno;
+        self.points.push(RecoveryPoint {
+            name: name.clone(),
+            snapshot,
+        });
+        Ok(LocalnetRecoveryPointResult { name, block_seqno })
+    }
+
+    fn list(&self) -> Vec<LocalnetRecoveryPointResult> {
+        self.points
+            .iter()
+            .map(|point| LocalnetRecoveryPointResult {
+                name: point.name.clone(),
+                block_seqno: point.snapshot.globals.head_seqno,
+            })
+            .collect()
+    }
+
+    fn revert(
+        &mut self,
+        node: &mut Node,
+        name: String,
+    ) -> anyhow::Result<LocalnetRecoveryPointResult> {
+        let index = self.find_index(&name)?;
+        let snapshot = self.points[index].snapshot.clone();
+        let result = self.result_at(index);
         node.apply_snapshot(snapshot)?;
         self.points.truncate(index);
-        Ok(LocalnetRecoveryPointResult { id, block_seqno })
+        Ok(result)
+    }
+
+    fn export(&self, name: String, path: String) -> anyhow::Result<LocalnetRecoveryPointResult> {
+        let index = self.find_index(&name)?;
+        write_snapshot_to_path(&self.points[index].snapshot, path)?;
+        Ok(self.result_at(index))
     }
 
     fn clear(&mut self) {
         self.points.clear();
     }
+
+    fn remove_existing_name(&mut self, name: &str, force: bool) -> anyhow::Result<()> {
+        let Some(index) = self.points.iter().position(|point| point.name == name) else {
+            return Ok(());
+        };
+        if !force {
+            anyhow::bail!("Recovery point name {name} already exists");
+        }
+        self.points.remove(index);
+        Ok(())
+    }
+
+    fn find_index(&self, name: &str) -> anyhow::Result<usize> {
+        let name = normalize_recovery_point_name(name.to_owned())?;
+        self.points
+            .iter()
+            .position(|point| point.name == name)
+            .with_context(|| format!("Recovery point name {name} not found"))
+    }
+
+    fn result_at(&self, index: usize) -> LocalnetRecoveryPointResult {
+        let point = &self.points[index];
+        LocalnetRecoveryPointResult {
+            name: point.name.clone(),
+            block_seqno: point.snapshot.globals.head_seqno,
+        }
+    }
+}
+
+fn normalize_recovery_point_name(name: String) -> anyhow::Result<String> {
+    let name = name.trim();
+    if name.is_empty() {
+        anyhow::bail!("Recovery point name cannot be empty");
+    }
+    Ok(name.to_owned())
 }
 
 pub const DEFAULT_BLOCK_INTERVAL_MS: u64 = 500;
@@ -1305,19 +1396,61 @@ impl Localnet {
         rx.await?
     }
 
-    pub async fn create_recovery_point(&self) -> anyhow::Result<LocalnetRecoveryPointResult> {
+    pub async fn create_recovery_point(
+        &self,
+        name: String,
+        force: bool,
+    ) -> anyhow::Result<LocalnetRecoveryPointResult> {
         let (resp, rx) = oneshot::channel();
-        self.tx.send(Request::CreateRecoveryPoint { resp }).await?;
+        self.tx
+            .send(Request::CreateRecoveryPoint { name, force, resp })
+            .await?;
+        rx.await?
+    }
+
+    pub async fn list_recovery_points(&self) -> anyhow::Result<Vec<LocalnetRecoveryPointResult>> {
+        let (resp, rx) = oneshot::channel();
+        self.tx.send(Request::ListRecoveryPoints { resp }).await?;
         rx.await?
     }
 
     pub async fn revert_recovery_point(
         &self,
-        id: u64,
+        name: String,
     ) -> anyhow::Result<LocalnetRecoveryPointResult> {
         let (resp, rx) = oneshot::channel();
         self.tx
-            .send(Request::RevertRecoveryPoint { id, resp })
+            .send(Request::RevertRecoveryPoint { name, resp })
+            .await?;
+        rx.await?
+    }
+
+    pub async fn export_recovery_point(
+        &self,
+        name: String,
+        path: String,
+    ) -> anyhow::Result<LocalnetRecoveryPointResult> {
+        let (resp, rx) = oneshot::channel();
+        self.tx
+            .send(Request::ExportRecoveryPoint { name, path, resp })
+            .await?;
+        rx.await?
+    }
+
+    pub async fn import_recovery_point(
+        &self,
+        name: String,
+        path: String,
+        force: bool,
+    ) -> anyhow::Result<LocalnetRecoveryPointResult> {
+        let (resp, rx) = oneshot::channel();
+        self.tx
+            .send(Request::ImportRecoveryPoint {
+                name,
+                path,
+                force,
+                resp,
+            })
             .await?;
         rx.await?
     }
@@ -1823,12 +1956,29 @@ fn process_loop_request(
             }
             let _ = resp.send(res);
         }
-        Request::CreateRecoveryPoint { resp } => {
-            let res = recovery_points.create(node);
+        Request::CreateRecoveryPoint { name, force, resp } => {
+            let res = recovery_points.create(node, name, force);
             let _ = resp.send(res);
         }
-        Request::RevertRecoveryPoint { id, resp } => {
-            let res = recovery_points.revert(node, id);
+        Request::ListRecoveryPoints { resp } => {
+            let res = Ok(recovery_points.list());
+            let _ = resp.send(res);
+        }
+        Request::RevertRecoveryPoint { name, resp } => {
+            let res = recovery_points.revert(node, name);
+            let _ = resp.send(res);
+        }
+        Request::ExportRecoveryPoint { name, path, resp } => {
+            let res = recovery_points.export(name, path);
+            let _ = resp.send(res);
+        }
+        Request::ImportRecoveryPoint {
+            name,
+            path,
+            force,
+            resp,
+        } => {
+            let res = recovery_points.import(path, name, force);
             let _ = resp.send(res);
         }
         Request::MineBlocks { count, resp } => {

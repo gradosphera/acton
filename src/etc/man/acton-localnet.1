@@ -214,6 +214,37 @@ Print machine\-readable JSON.
 Localnet API token for a server started with \fB\-\-require\-auth\fR\&. If omitted,
 Acton reads \fBACTON_LOCALNET_AUTH_TOKEN\fR\&.
 .RE
+.SS "acton localnet snapshot"
+Manage named runtime state snapshots for a running localnet.
+.SS "Synopsis"
+\fBacton localnet snapshot\fR [\fIoptions\fR] \fIcommand\fR
+.SS "Subcommands"
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fBcreate <name>\fR stores the current localnet state as an in\-memory snapshot
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fBlist\fR prints named in\-memory snapshots
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fBrevert <name>\fR restores a named in\-memory snapshot and invalidates that
+snapshot plus newer snapshots
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fBexport <name> \-\-out <path>\fR writes a named in\-memory snapshot to a JSON file
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fBimport <path>\fR loads a JSON file as a named in\-memory snapshot, using the
+file stem as the snapshot name unless \fB\-\-name\fR is passed
+.RE
+.sp
+Relative export and import paths resolve from the Acton project root. Snapshot
+create, list, revert, export, and import all call the running localnet control
+API, so pass \fB\-\-port\fR or \fB\-\-auth\-token\fR when the node does not use defaults.
 .SH "CONFIGURATION"
 You can store defaults in \fBActon.toml\fR:
 .sp
@@ -383,13 +414,29 @@ the current node state with a JSON state snapshot
 .RE
 .sp
 .RS 4
-\h'-04'\(bu\h'+03'\fBPOST /acton_snapshot\fR creates a runtime in\-memory recovery point and returns
-its id
+\h'-04'\(bu\h'+03'\fBPOST /acton_snapshot\fR with \fB{"name":"before\-upgrade"}\fR creates a named
+runtime in\-memory recovery point
 .RE
 .sp
 .RS 4
-\h'-04'\(bu\h'+03'\fBPOST /acton_revert\fR with \fB{"id":1}\fR restores a runtime recovery point and
-invalidates that point plus every newer point
+\h'-04'\(bu\h'+03'\fBPOST /acton_listSnapshots\fR lists named runtime recovery points
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fBPOST /acton_revert\fR with \fB{"name":"before\-upgrade"}\fR restores a runtime
+recovery point and invalidates that point plus every newer point
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fBPOST /acton_exportSnapshot\fR with
+\fB{"name":"before\-upgrade","path":"snapshots/bug.json"}\fR writes a runtime
+recovery point to a JSON state snapshot
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fBPOST /acton_importSnapshot\fR with
+\fB{"name":"bug","path":"snapshots/bug.json"}\fR imports a JSON state snapshot as
+a named runtime recovery point
 .RE
 .sp
 .RS 4
@@ -550,6 +597,20 @@ acton localnet start \-\-accounts deployer,user \-\-db\-path build/localnet.db
 .RS 4
 .nf
 acton localnet status \-\-json
+.fi
+.RE
+.RE
+.sp
+.RS 4
+\h'-04' 7.\h'+01'Save, list, restore, export, and import runtime snapshots:
+.sp
+.RS 4
+.nf
+acton localnet snapshot create before\-upgrade
+acton localnet snapshot list
+acton localnet snapshot revert before\-upgrade
+acton localnet snapshot export before\-upgrade \-\-out snapshots/bug.json
+acton localnet snapshot import snapshots/bug.json
 .fi
 .RE
 .RE

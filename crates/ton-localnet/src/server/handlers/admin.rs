@@ -2,11 +2,12 @@ use super::utils::handle_result;
 use crate::api::toncenter_v2 as v2;
 use crate::localnet::{Localnet, LocalnetAccountStateChange, LocalnetMiningMode};
 use crate::server::models::{
-    ChangeAccountStatePayload, ChangeAccountStateRequest, FaucetRequest, GetApiCallsRequest,
-    GetVerifiedSourceRequest, IncreaseTimeRequest, MineBlocksRequest, RegisterCompilerAbisRequest,
-    RevertRecoveryPointRequest, SendBocRequest, SetAddressNameRequest, SetMiningModeRequest,
-    SetNetworkConditionsRequest, SetNextBlockTimestampRequest, SetShardAccountRequest,
-    SetTimeRequest, StatePathRequest,
+    ChangeAccountStatePayload, ChangeAccountStateRequest, CreateRecoveryPointRequest,
+    ExportRecoveryPointRequest, FaucetRequest, GetApiCallsRequest, GetVerifiedSourceRequest,
+    ImportRecoveryPointRequest, IncreaseTimeRequest, MineBlocksRequest,
+    RegisterCompilerAbisRequest, RevertRecoveryPointRequest, SendBocRequest, SetAddressNameRequest,
+    SetMiningModeRequest, SetNetworkConditionsRequest, SetNextBlockTimestampRequest,
+    SetShardAccountRequest, SetTimeRequest, StatePathRequest,
 };
 use crate::server::{
     ApiCallLog, NetworkConditions, NetworkConditionsInfo, StartupWallet, StateSourceInfo,
@@ -130,8 +131,19 @@ pub async fn set_mining_mode(
     .await
 }
 
-pub async fn create_recovery_point(State(node): State<Arc<Localnet>>) -> Json<Value> {
-    handle_result(node.create_recovery_point(), |res| {
+pub async fn create_recovery_point(
+    State(node): State<Arc<Localnet>>,
+    Json(payload): Json<CreateRecoveryPointRequest>,
+) -> Json<Value> {
+    handle_result(
+        node.create_recovery_point(payload.name, payload.force),
+        |res| serde_json::to_value(res).unwrap_or(Value::Null),
+    )
+    .await
+}
+
+pub async fn list_recovery_points(State(node): State<Arc<Localnet>>) -> Json<Value> {
+    handle_result(node.list_recovery_points(), |res| {
         serde_json::to_value(res).unwrap_or(Value::Null)
     })
     .await
@@ -141,9 +153,31 @@ pub async fn revert_recovery_point(
     State(node): State<Arc<Localnet>>,
     Json(payload): Json<RevertRecoveryPointRequest>,
 ) -> Json<Value> {
-    handle_result(node.revert_recovery_point(payload.id), |res| {
+    handle_result(node.revert_recovery_point(payload.name), |res| {
         serde_json::to_value(res).unwrap_or(Value::Null)
     })
+    .await
+}
+
+pub async fn export_recovery_point(
+    State(node): State<Arc<Localnet>>,
+    Json(payload): Json<ExportRecoveryPointRequest>,
+) -> Json<Value> {
+    handle_result(
+        node.export_recovery_point(payload.name, payload.path),
+        |res| serde_json::to_value(res).unwrap_or(Value::Null),
+    )
+    .await
+}
+
+pub async fn import_recovery_point(
+    State(node): State<Arc<Localnet>>,
+    Json(payload): Json<ImportRecoveryPointRequest>,
+) -> Json<Value> {
+    handle_result(
+        node.import_recovery_point(payload.name, payload.path, payload.force),
+        |res| serde_json::to_value(res).unwrap_or(Value::Null),
+    )
     .await
 }
 

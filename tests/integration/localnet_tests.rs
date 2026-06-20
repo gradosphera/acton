@@ -805,20 +805,14 @@ fn localnet_runtime_recovery_points_revert_state_and_persistent_db() {
         .expect("mine response must expose last_block_seqno") as u32;
     let first_gen_utime = block_header_gen_utime(&node, first_seqno);
 
-    let older_snapshot = node.post_json("/acton_snapshot", &json!({}));
-    let older_snapshot_id = response_payload(&older_snapshot)["id"]
-        .as_u64()
-        .expect("snapshot response must expose id");
+    let older_snapshot = node.post_json("/acton_snapshot", &json!({ "name": "older" }));
 
     let next_block_timestamp = first_gen_utime + 300;
     let set_next = node.post_json(
         "/acton_setNextBlockTimestamp",
         &json!({ "timestamp": next_block_timestamp }),
     );
-    let snapshot = node.post_json("/acton_snapshot", &json!({}));
-    let snapshot_id = response_payload(&snapshot)["id"]
-        .as_u64()
-        .expect("snapshot response must expose id");
+    let snapshot = node.post_json("/acton_snapshot", &json!({ "name": "current" }));
 
     let target = "0:4444444444444444444444444444444444444444444444444444444444444444";
     let fund = node.post_json(
@@ -836,14 +830,12 @@ fn localnet_runtime_recovery_points_revert_state_and_persistent_db() {
     let target_after_mine =
         wait_for_address_balance_at_least(&node, target, 1_000_000_000, Duration::from_secs(3));
 
-    let newer_snapshot = node.post_json("/acton_snapshot", &json!({}));
-    let newer_snapshot_id = response_payload(&newer_snapshot)["id"]
-        .as_u64()
-        .expect("snapshot response must expose id");
+    let newer_snapshot = node.post_json("/acton_snapshot", &json!({ "name": "newer" }));
+    let list_before_revert = node.post_json("/acton_listSnapshots", &json!({}));
     let increase_later = node.post_json("/acton_increaseTime", &json!({ "seconds": 60 }));
     let status_after_later_change = node.get_json("/acton_nodeInfo");
 
-    let reverted = node.post_json("/acton_revert", &json!({ "id": snapshot_id }));
+    let reverted = node.post_json("/acton_revert", &json!({ "name": "current" }));
     let seqno_after_revert = latest_masterchain_seqno(&node);
     let target_after_revert =
         node.get_json(&format!("/api/v2/getAddressInformation?address={target}"));
@@ -857,13 +849,13 @@ fn localnet_runtime_recovery_points_revert_state_and_persistent_db() {
     let target_after_empty_mine =
         node.get_json(&format!("/api/v2/getAddressInformation?address={target}"));
 
-    let mut invalid_revert_same = node.post_json("/acton_revert", &json!({ "id": snapshot_id }));
+    let mut invalid_revert_same = node.post_json("/acton_revert", &json!({ "name": "current" }));
     normalize_extra_for_snapshot(&mut invalid_revert_same);
-    let mut invalid_revert_newer =
-        node.post_json("/acton_revert", &json!({ "id": newer_snapshot_id }));
+    let mut invalid_revert_newer = node.post_json("/acton_revert", &json!({ "name": "newer" }));
     normalize_extra_for_snapshot(&mut invalid_revert_newer);
 
-    let reverted_older = node.post_json("/acton_revert", &json!({ "id": older_snapshot_id }));
+    let list_after_revert = node.post_json("/acton_listSnapshots", &json!({}));
+    let reverted_older = node.post_json("/acton_revert", &json!({ "name": "older" }));
     let seqno_after_revert_older = latest_masterchain_seqno(&node);
     let status_after_revert_older = node.get_json("/acton_nodeInfo");
     let target_after_revert_older =
@@ -890,6 +882,7 @@ fn localnet_runtime_recovery_points_revert_state_and_persistent_db() {
             "older": summarize_admin_response(&older_snapshot),
             "current": summarize_admin_response(&snapshot),
             "newer": summarize_admin_response(&newer_snapshot),
+            "list": summarize_admin_response(&list_before_revert),
         },
         "mutate_after_snapshot": {
             "set_next_ok": set_next["ok"].as_bool(),
@@ -915,6 +908,7 @@ fn localnet_runtime_recovery_points_revert_state_and_persistent_db() {
         "recovery_point_invalidation": {
             "same": summarize_admin_response(&invalid_revert_same),
             "newer": summarize_admin_response(&invalid_revert_newer),
+            "list_after_current_revert": summarize_admin_response(&list_after_revert),
             "older_still_reverts": summarize_admin_response(&reverted_older),
             "seqno_after_revert_older": seqno_after_revert_older,
             "pending_timestamp_after_revert_older": status_after_revert_older["result"]["next_block_timestamp"].clone(),
@@ -1873,6 +1867,152 @@ fn localnet_admin_dump_and_load_state_roundtrip() {
         pretty_json_for_snapshot(&snapshot, project.path()),
         snapbox::file!(
             "snapshots/localnet/test_localnet_admin_dump_and_load_state_roundtrip.summary.json"
+        ),
+    );
+
+    node.stop();
+}
+
+#[test]
+fn localnet_cli_snapshot_commands_roundtrip_state() {
+    let project = ProjectBuilder::new("localnet-cli-snapshot-roundtrip").build();
+    let node = project.localnet().start();
+    let port = node.port().to_string();
+    let project_root = project.path().display().to_string();
+    let run_snapshot = |args: &[&str]| {
+        let mut command = project
+            .acton()
+            .arg("--project-root")
+            .arg(&project_root)
+            .arg("localnet")
+            .arg("snapshot");
+        for arg in args {
+            command = command.arg(arg);
+        }
+        command.run().success()
+    };
+    let address_before = "0:1111111111111111111111111111111111111111111111111111111111111111";
+    let address_after = "0:2222222222222222222222222222222222222222222222222222222222222222";
+
+    let fund_before = node.post_json(
+        "/acton_fundAccount",
+        &json!({
+            "address": address_before,
+            "amount": 1_000_000_000u128,
+        }),
+    );
+    let before_info = wait_for_address_balance_at_least(
+        &node,
+        address_before,
+        1_000_000_000,
+        Duration::from_secs(5),
+    );
+    let before_balance = parse_address_balance(&before_info);
+
+    let create = run_snapshot(&["create", "before-upgrade", "--port", port.as_str()]);
+    let list_before_export = run_snapshot(&["list", "--port", port.as_str()]);
+    let export = run_snapshot(&[
+        "export",
+        "before-upgrade",
+        "--out",
+        "snapshots/bug.json",
+        "--port",
+        port.as_str(),
+    ]);
+
+    let fund_after = node.post_json(
+        "/acton_fundAccount",
+        &json!({
+            "address": address_after,
+            "amount": 2_000_000_000u128,
+        }),
+    );
+    let after_info_before_revert = wait_for_address_balance_at_least(
+        &node,
+        address_after,
+        2_000_000_000,
+        Duration::from_secs(5),
+    );
+    let after_balance_before_revert = parse_address_balance(&after_info_before_revert);
+
+    let revert_before_upgrade =
+        run_snapshot(&["revert", "before-upgrade", "--port", port.as_str()]);
+    let before_info_after_named_revert = wait_for_ok_response(
+        &node,
+        &format!("/api/v2/getAddressInformation?address={address_before}"),
+        Duration::from_secs(5),
+    );
+    let after_info_after_named_revert = wait_for_ok_response(
+        &node,
+        &format!("/api/v2/getAddressInformation?address={address_after}"),
+        Duration::from_secs(5),
+    );
+
+    let import = run_snapshot(&["import", "snapshots/bug.json", "--port", port.as_str()]);
+    let list_after_import = run_snapshot(&["list", "--port", port.as_str()]);
+
+    let fund_after_import = node.post_json(
+        "/acton_fundAccount",
+        &json!({
+            "address": address_after,
+            "amount": 3_000_000_000u128,
+        }),
+    );
+    let after_info_before_imported_revert = wait_for_address_balance_at_least(
+        &node,
+        address_after,
+        3_000_000_000,
+        Duration::from_secs(5),
+    );
+    let revert_imported = run_snapshot(&["revert", "bug", "--port", port.as_str()]);
+    let before_info_after_imported_revert = wait_for_ok_response(
+        &node,
+        &format!("/api/v2/getAddressInformation?address={address_before}"),
+        Duration::from_secs(5),
+    );
+    let after_info_after_imported_revert = wait_for_ok_response(
+        &node,
+        &format!("/api/v2/getAddressInformation?address={address_after}"),
+        Duration::from_secs(5),
+    );
+
+    let exported_snapshot_path = project.path().join("snapshots/bug.json");
+    let exported_snapshot = fs::read(&exported_snapshot_path).unwrap_or_default();
+
+    let snapshot = json!({
+        "fund_before": summarize_admin_response(&fund_before),
+        "create": strip_ansi(&create.get_stdout()),
+        "list_before_export": strip_ansi(&list_before_export.get_stdout()),
+        "fund_after": summarize_admin_response(&fund_after),
+        "balances_before_revert": {
+            "before": before_balance.to_string(),
+            "after": after_balance_before_revert.to_string(),
+        },
+        "revert_before_upgrade": {
+            "stdout": strip_ansi(&revert_before_upgrade.get_stdout()),
+            "before_balance": parse_address_balance(&before_info_after_named_revert).to_string(),
+            "after_balance": parse_address_balance(&after_info_after_named_revert).to_string(),
+        },
+        "export_import": {
+            "export_stdout": strip_ansi(&export.get_stdout()),
+            "import_stdout": strip_ansi(&import.get_stdout()),
+            "list_after_import": strip_ansi(&list_after_import.get_stdout()),
+            "exported_snapshot_exists": exported_snapshot_path.is_file(),
+            "exported_snapshot_non_empty": !exported_snapshot.is_empty(),
+        },
+        "revert_imported": {
+            "fund_after_import": summarize_admin_response(&fund_after_import),
+            "after_balance_before_revert": parse_address_balance(&after_info_before_imported_revert).to_string(),
+            "stdout": strip_ansi(&revert_imported.get_stdout()),
+            "before_balance": parse_address_balance(&before_info_after_imported_revert).to_string(),
+            "after_balance": parse_address_balance(&after_info_after_imported_revert).to_string(),
+        }
+    });
+
+    assertion().eq(
+        pretty_json_for_snapshot(&snapshot, project.path()),
+        snapbox::file!(
+            "snapshots/localnet/test_localnet_cli_snapshot_commands_roundtrip_state.summary.json"
         ),
     );
 

@@ -250,6 +250,28 @@ Acton reads `ACTON_LOCALNET_AUTH_TOKEN`.
 
 {{/options}}
 
+### acton localnet snapshot
+
+Manage named runtime state snapshots for a running localnet.
+
+#### Synopsis
+
+`acton localnet snapshot` [_options_] _command_
+
+#### Subcommands
+
+- `create <name>` stores the current localnet state as an in-memory snapshot
+- `list` prints named in-memory snapshots
+- `revert <name>` restores a named in-memory snapshot and invalidates that
+  snapshot plus newer snapshots
+- `export <name> --out <path>` writes a named in-memory snapshot to a JSON file
+- `import <path>` loads a JSON file as a named in-memory snapshot, using the
+  file stem as the snapshot name unless `--name` is passed
+
+Relative export and import paths resolve from the Acton project root. Snapshot
+create, list, revert, export, and import all call the running localnet control
+API, so pass `--port` or `--auth-token` when the node does not use defaults.
+
 ## Configuration
 
 You can store defaults in `Acton.toml`:
@@ -360,10 +382,17 @@ tooling:
   JSON state snapshot without stopping the server
 - `POST /acton_loadState` with `{"path":"snapshots/localnet.json"}` replaces
   the current node state with a JSON state snapshot
-- `POST /acton_snapshot` creates a runtime in-memory recovery point and returns
-  its id
-- `POST /acton_revert` with `{"id":1}` restores a runtime recovery point and
-  invalidates that point plus every newer point
+- `POST /acton_snapshot` with `{"name":"before-upgrade"}` creates a named
+  runtime in-memory recovery point
+- `POST /acton_listSnapshots` lists named runtime recovery points
+- `POST /acton_revert` with `{"name":"before-upgrade"}` restores a runtime
+  recovery point and invalidates that point plus every newer point
+- `POST /acton_exportSnapshot` with
+  `{"name":"before-upgrade","path":"snapshots/bug.json"}` writes a runtime
+  recovery point to a JSON state snapshot
+- `POST /acton_importSnapshot` with
+  `{"name":"bug","path":"snapshots/bug.json"}` imports a JSON state snapshot as
+  a named runtime recovery point
 - `POST /acton_setShardAccount` with
   `{"address":"<ADDR>","shard_account":"<BASE64_BOC>"}` replaces the selected
   account state with a base64-encoded `ShardAccount` BOC
@@ -450,6 +479,16 @@ expose the localnet server publicly.
 
    ```bash
    acton localnet status --json
+   ```
+
+7. Save, list, restore, export, and import runtime snapshots:
+
+   ```bash
+   acton localnet snapshot create before-upgrade
+   acton localnet snapshot list
+   acton localnet snapshot revert before-upgrade
+   acton localnet snapshot export before-upgrade --out snapshots/bug.json
+   acton localnet snapshot import snapshots/bug.json
    ```
 
 ## See Also

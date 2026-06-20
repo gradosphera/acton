@@ -5,15 +5,33 @@
       "ok": true,
       "result": {
         "block_seqno": 1,
-        "id": 2
+        "name": "current"
       }
+    },
+    "list": {
+      "@extra": "[EXTRA]",
+      "ok": true,
+      "result": [
+        {
+          "block_seqno": 1,
+          "name": "older"
+        },
+        {
+          "block_seqno": 1,
+          "name": "current"
+        },
+        {
+          "block_seqno": 2,
+          "name": "newer"
+        }
+      ]
     },
     "newer": {
       "@extra": "[EXTRA]",
       "ok": true,
       "result": {
         "block_seqno": 2,
-        "id": 3
+        "name": "newer"
       }
     },
     "older": {
@@ -21,7 +39,7 @@
       "ok": true,
       "result": {
         "block_seqno": 1,
-        "id": 1
+        "name": "older"
       }
     }
   },
@@ -40,10 +58,20 @@
   },
   "recovery_point_invalidation": {
     "balance_after_revert_older": "0",
+    "list_after_current_revert": {
+      "@extra": "[EXTRA]",
+      "ok": true,
+      "result": [
+        {
+          "block_seqno": 1,
+          "name": "older"
+        }
+      ]
+    },
     "newer": {
       "@extra": "[EXTRA]",
       "code": 500,
-      "error": "Recovery point 3 not found",
+      "error": "Recovery point name newer not found",
       "ok": false
     },
     "older_still_reverts": {
@@ -51,14 +79,14 @@
       "ok": true,
       "result": {
         "block_seqno": 1,
-        "id": 1
+        "name": "older"
       }
     },
     "pending_timestamp_after_revert_older": null,
     "same": {
       "@extra": "[EXTRA]",
       "code": 500,
-      "error": "Recovery point 2 not found",
+      "error": "Recovery point name current not found",
       "ok": false
     },
     "seqno_after_revert_older": 1
@@ -73,7 +101,7 @@
       "ok": true,
       "result": {
         "block_seqno": 1,
-        "id": 2
+        "name": "current"
       }
     },
     "seqno_after_revert": 1,

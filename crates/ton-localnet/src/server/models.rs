@@ -252,8 +252,29 @@ pub struct SetMiningModeRequest {
 }
 
 #[derive(Deserialize)]
+pub struct CreateRecoveryPointRequest {
+    pub name: String,
+    #[serde(default)]
+    pub force: bool,
+}
+
+#[derive(Deserialize)]
 pub struct RevertRecoveryPointRequest {
-    pub id: u64,
+    pub name: String,
+}
+
+#[derive(Deserialize)]
+pub struct ExportRecoveryPointRequest {
+    pub name: String,
+    pub path: String,
+}
+
+#[derive(Deserialize)]
+pub struct ImportRecoveryPointRequest {
+    pub name: String,
+    pub path: String,
+    #[serde(default)]
+    pub force: bool,
 }
 
 #[derive(Deserialize)]

@@ -59,24 +59,12 @@ pub(crate) struct SnapshotGlobals {
 
 impl Node {
     pub fn dump_state_to_path<P: AsRef<Path>>(&self, path: P) -> anyhow::Result<()> {
-        let path = path.as_ref();
-        if let Some(parent) = path.parent()
-            && !parent.as_os_str().is_empty()
-        {
-            std::fs::create_dir_all(parent)?;
-        }
-
         let snapshot = self.build_snapshot()?;
-        let file = File::create(path)?;
-        let writer = BufWriter::new(file);
-        serde_json::to_writer(writer, &snapshot)?;
-        Ok(())
+        write_snapshot_to_path(&snapshot, path)
     }
 
     pub fn load_state_from_path<P: AsRef<Path>>(&mut self, path: P) -> anyhow::Result<()> {
-        let file = File::open(path)?;
-        let reader = BufReader::new(file);
-        let snapshot: NodeStateSnapshot = serde_json::from_reader(reader)?;
+        let snapshot = read_snapshot_from_path(path)?;
         self.apply_snapshot(snapshot)
     }
 
@@ -425,4 +413,30 @@ impl Node {
                 .insert(block.seqno, block.tx_hashes.clone());
         }
     }
+}
+
+pub(crate) fn read_snapshot_from_path<P: AsRef<Path>>(
+    path: P,
+) -> anyhow::Result<NodeStateSnapshot> {
+    let file = File::open(path)?;
+    let reader = BufReader::new(file);
+    let snapshot = serde_json::from_reader(reader)?;
+    Ok(snapshot)
+}
+
+pub(crate) fn write_snapshot_to_path<P: AsRef<Path>>(
+    snapshot: &NodeStateSnapshot,
+    path: P,
+) -> anyhow::Result<()> {
+    let path = path.as_ref();
+    if let Some(parent) = path.parent()
+        && !parent.as_os_str().is_empty()
+    {
+        std::fs::create_dir_all(parent)?;
+    }
+
+    let file = File::create(path)?;
+    let writer = BufWriter::new(file);
+    serde_json::to_writer(writer, snapshot)?;
+    Ok(())
 }
