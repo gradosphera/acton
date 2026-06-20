@@ -260,10 +260,17 @@ export class TonClient {
     return this.request(url, "Failed to fetch account states")
   }
 
-  async getAccountTransactions(address: string, limit = 20): Promise<V3TransactionsResponse> {
+  async getAccountTransactions(
+    address: string,
+    limit = 20,
+    offset = 0,
+  ): Promise<V3TransactionsResponse> {
     const url = this.buildUrl(this.v3BaseUrl, "/transactions")
     url.searchParams.append("account", address)
     url.searchParams.append("limit", limit.toString())
+    if (offset > 0) {
+      url.searchParams.append("offset", offset.toString())
+    }
     url.searchParams.append("sort", "desc")
     return this.request(url, "Failed to fetch account transactions")
   }
@@ -647,6 +654,11 @@ export class TonClient {
     }
   }
 
+  usesToncenterApiEndpoint(): boolean {
+    const apiV3 = this.buildUrl(this.v3BaseUrl, "")
+    return apiV3.hostname === "toncenter.com" || apiV3.hostname.endsWith(".toncenter.com")
+  }
+
   private buildUrl(base: string, path: string): URL {
     const fullBase = base.startsWith("http") ? base : `${globalThis.location.origin}${base}`
     return new URL(`${fullBase}${path}`)
@@ -889,7 +901,8 @@ export class TonClient {
   private isToncenterApiUrl(url: URL): boolean {
     return (
       this.isUrlWithinBase(url, this.buildUrl(this.v2BaseUrl, "")) ||
-      this.isUrlWithinBase(url, this.buildUrl(this.v3BaseUrl, ""))
+      this.isUrlWithinBase(url, this.buildUrl(this.v3BaseUrl, "")) ||
+      this.isUrlWithinBase(url, this.buildStreamingSseUrl())
     )
   }
 

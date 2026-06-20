@@ -14,6 +14,7 @@ import type {
   JettonWallet,
   NftItem,
   V3AccountState,
+  V3Transaction,
   V3TransactionListItem,
   VerificationSourceResponse,
 } from "../api/types"
@@ -26,11 +27,10 @@ import {
   TOKEN_IMAGE_SOURCE_KEYS,
   TOKEN_PLACEHOLDER_IMAGE,
   getImageSources,
-  getPrimaryImageSource,
   replaceBrokenImageWithFallback,
 } from "../components/imageFallbacks"
 import {normalizeAddress, toRawAddress} from "../components/utils"
-import {useAddressFormat} from "../hooks/useNetworkInfo"
+import {useNetworkInfo} from "../hooks/useNetworkInfo"
 
 import styles from "./AccountPage.module.css"
 
@@ -38,17 +38,23 @@ interface AccountPageProps {
   readonly client: TonClient
 }
 
-const ACCOUNT_TRANSACTION_HISTORY_LIMIT = 1000
+const INITIAL_TRANSACTION_LIMIT = 20
+const REMOTE_TRANSACTION_PAGE_SIZE = 20
+const LOCAL_TRANSACTION_PAGE_SIZE = 1000
+const NEW_TRANSACTION_APPEAR_MS = 1400
 type AccountTab = "history" | "contract" | "tokens" | "nfts" | "holders"
 
 export const AccountPage: FC<AccountPageProps> = ({client}) => {
   const {address = ""} = useParams<{address: string}>()
   const navigate = useNavigate()
   const location = useLocation()
-  const addressFormat = useAddressFormat()
+  const {addressFormat} = useNetworkInfo()
   const [accountState, setAccountState] = useState<AddressInformation | undefined>()
   const [accountStateV3, setAccountStateV3] = useState<V3AccountState | undefined>()
   const [transactions, setTransactions] = useState<V3TransactionListItem[]>([])
+  const [highlightedTransactionHashes, setHighlightedTransactionHashes] = useState<string[]>([])
+  const [transactionsHasMore, setTransactionsHasMore] = useState(false)
+  const [transactionsLoadingMore, setTransactionsLoadingMore] = useState(false)
   const [jettonMaster, setJettonMaster] = useState<JettonMaster | undefined>()
   const [jettonWalletAccount, setJettonWalletAccount] = useState<JettonWallet | undefined>()
   const [jettonWalletMaster, setJettonWalletMaster] = useState<JettonMasterMetadata | undefined>()
@@ -74,6 +80,7 @@ export const AccountPage: FC<AccountPageProps> = ({client}) => {
   const [jettonMetadataOpen, setJettonMetadataOpen] = useState(false)
   const [jettonMetadataCopied, setJettonMetadataCopied] = useState(false)
   const activeAccountKeyRef = useRef<string | undefined>(undefined)
+  const transactionHashesRef = useRef<Set<string>>(new Set())
 
   const formattedAddress = useMemo(
     () => normalizeAddress(address, addressFormat),
@@ -94,6 +101,14 @@ export const AccountPage: FC<AccountPageProps> = ({client}) => {
   const isJettonWalletAccount = hasAccountInterface(accountInterfaces, "jetton_wallet")
   const isNftItemAccount = hasAccountInterface(accountInterfaces, "nft_item")
   const isNftCollectionAccount = hasAccountInterface(accountInterfaces, "nft_collection")
+  const usesToncenterApi = client.usesToncenterApiEndpoint()
+  const useTransactionPagination = !usesToncenterApi
+  const initialTransactionLimit = usesToncenterApi
+    ? INITIAL_TRANSACTION_LIMIT
+    : LOCAL_TRANSACTION_PAGE_SIZE
+  const transactionPageSize = usesToncenterApi
+    ? REMOTE_TRANSACTION_PAGE_SIZE
+    : LOCAL_TRANSACTION_PAGE_SIZE
 
   useEffect(() => {
     let isActive = true
@@ -103,6 +118,10 @@ export const AccountPage: FC<AccountPageProps> = ({client}) => {
         setAccountState(undefined)
         setAccountStateV3(undefined)
         setTransactions([])
+        setHighlightedTransactionHashes([])
+        transactionHashesRef.current = new Set()
+        setTransactionsHasMore(false)
+        setTransactionsLoadingMore(false)
         setJettonMaster(undefined)
         setJettonWalletAccount(undefined)
         setJettonWalletMaster(undefined)
@@ -132,6 +151,10 @@ export const AccountPage: FC<AccountPageProps> = ({client}) => {
         setAccountState(undefined)
         setAccountStateV3(undefined)
         setTransactions([])
+        setHighlightedTransactionHashes([])
+        transactionHashesRef.current = new Set()
+        setTransactionsHasMore(false)
+        setTransactionsLoadingMore(false)
         setJettonMaster(undefined)
         setJettonWalletAccount(undefined)
         setJettonWalletMaster(undefined)
@@ -187,17 +210,19 @@ export const AccountPage: FC<AccountPageProps> = ({client}) => {
 
       const loadTransactions = async () => {
         try {
-          const txs = await client.getAccountTransactions(
-            formattedAddress,
-            ACCOUNT_TRANSACTION_HISTORY_LIMIT,
-          )
+          const txs = await client.getAccountTransactions(formattedAddress, initialTransactionLimit)
           if (!isActive) return
           setTransactions([...txs.transactions])
+          transactionHashesRef.current = transactionHashSet(txs.transactions)
+          setTransactionsHasMore(txs.transactions.length === initialTransactionLimit)
           setTransactionsError(undefined)
         } catch (error) {
           if (!isActive) return
           console.error("Failed to fetch account transactions", error)
           setTransactions([])
+          setHighlightedTransactionHashes([])
+          transactionHashesRef.current = new Set()
+          setTransactionsHasMore(false)
           setTransactionsError(
             error instanceof Error ? error.message : "Failed to load transactions",
           )
@@ -214,7 +239,40 @@ export const AccountPage: FC<AccountPageProps> = ({client}) => {
     return () => {
       isActive = false
     }
-  }, [accountAddressKey, client])
+  }, [accountAddressKey, client, initialTransactionLimit])
+
+  const loadMoreTransactions = async () => {
+    if (
+      !formattedAddress ||
+      transactionsLoadingMore ||
+      transactionsLoading ||
+      !transactionsHasMore
+    ) {
+      return
+    }
+
+    setTransactionsLoadingMore(true)
+    setTransactionsError(undefined)
+    try {
+      const txs = await client.getAccountTransactions(
+        formattedAddress,
+        transactionPageSize,
+        transactions.length,
+      )
+      transactionHashesRef.current = transactionHashSet([...transactions, ...txs.transactions])
+      setTransactions(current => appendUniqueTransactions(current, txs.transactions))
+      setTransactionsHasMore(txs.transactions.length === transactionPageSize)
+    } catch (error) {
+      console.error("Failed to load more account transactions", error)
+      setTransactionsError(error instanceof Error ? error.message : "Failed to load transactions")
+    } finally {
+      setTransactionsLoadingMore(false)
+    }
+  }
+
+  const handleTransactionClick = (hash: string) => {
+    void navigate(`/explorer/tx/${encodeURIComponent(hash)}`)
+  }
 
   useEffect(() => {
     let isActive = true
@@ -290,57 +348,30 @@ export const AccountPage: FC<AccountPageProps> = ({client}) => {
     }
 
     let isActive = true
-    let refreshInFlight = false
-    let refreshQueued = false
-    const seenTransactionHashes = new Set<string>()
-
-    const refreshAccount = async () => {
-      if (refreshInFlight) {
-        refreshQueued = true
-        return
-      }
-
-      refreshInFlight = true
-      try {
-        do {
-          refreshQueued = false
-          const [nextState, nextStateV3, nextTransactions] = await Promise.all([
-            client.getAddressInformation(formattedAddress),
-            client.getAccountStates([formattedAddress], false).catch(() => {}),
-            client.getAccountTransactions(formattedAddress, ACCOUNT_TRANSACTION_HISTORY_LIMIT),
-          ])
-          if (!isActive) return
-          setAccountState(nextState)
-          setAccountStateV3(nextStateV3 ? nextStateV3.accounts[0] : undefined)
-          setAccountTokenInfo(getAccountTokenInfo(nextStateV3))
-          setTransactions([...nextTransactions.transactions])
-          setTransactionsError(undefined)
-          setTransactionsLoading(false)
-        } while (refreshQueued && isActive)
-      } catch (error) {
-        if (isActive) {
-          console.error("Failed to refresh account data", error)
-        }
-      } finally {
-        refreshInFlight = false
-      }
-    }
-
     const unsubscribe = client.subscribeAccountTransactions(formattedAddress, {
       onTransactions: event => {
         if (event.finality === "pending") {
           return
         }
 
-        const hashes = event.transactions.map(tx => tx.hash).filter(Boolean)
-        const hasUnseenTransaction = hashes.some(hash => !seenTransactionHashes.has(hash))
-        for (const hash of hashes) {
-          seenTransactionHashes.add(hash)
+        const newHashes = collectNewTransactionHashes(
+          event.transactions,
+          transactionHashesRef.current,
+        )
+        if (newHashes.length > 0) {
+          const newHashSet = new Set(newHashes)
+          setHighlightedTransactionHashes(current => [...new Set([...current, ...newHashes])])
+          globalThis.setTimeout(() => {
+            setHighlightedTransactionHashes(current =>
+              current.filter(hash => !newHashSet.has(hash)),
+            )
+          }, NEW_TRANSACTION_APPEAR_MS)
         }
 
-        if (hasUnseenTransaction) {
-          void refreshAccount()
-        }
+        setTransactions(current => prependUniqueTransactions(event.transactions, current))
+        transactionHashesRef.current = new Set([...newHashes, ...transactionHashesRef.current])
+        setTransactionsLoading(false)
+        setTransactionsError(undefined)
       },
       onError: error => {
         if (isActive) {
@@ -689,13 +720,17 @@ export const AccountPage: FC<AccountPageProps> = ({client}) => {
     ]),
   ]
   const nftCollectionImage = nftCollectionImageSources[0] ?? TOKEN_PLACEHOLDER_IMAGE
-  const collectiblePreviews = nftItems.slice(0, 8).map(item => ({
-    image: getPrimaryImageSource(item.content, NFT_IMAGE_SOURCE_KEYS),
-    name:
-      contentString(item.content, "name") ||
-      contentString(item.content, "collection_name") ||
-      `NFT #${item.index}`,
-  }))
+  const collectiblePreviews = nftItems.slice(0, 8).map(item => {
+    const imageSources = getImageSources(item.content, NFT_IMAGE_SOURCE_KEYS)
+    return {
+      image: imageSources[0] ?? TOKEN_PLACEHOLDER_IMAGE,
+      imageSources,
+      name:
+        contentString(item.content, "name") ||
+        contentString(item.content, "collection_name") ||
+        `NFT #${item.index}`,
+    }
+  })
   const showAccountHeader = accountLoading || Boolean(accountState)
   const hasHeaderContextCard = Boolean(
     accountState && (tokenInfo || currentNftItem || (nftCollectionName && !currentNftItem)),
@@ -897,6 +932,7 @@ export const AccountPage: FC<AccountPageProps> = ({client}) => {
           )}
           <AccountDetails
             transactions={transactions}
+            highlightedTransactionHashes={highlightedTransactionHashes}
             accountState={accountState}
             compilerAbi={compilerAbi}
             compilerAbiLoading={compilerAbiLoading}
@@ -913,10 +949,15 @@ export const AccountPage: FC<AccountPageProps> = ({client}) => {
             holdersLoading={holdersLoading}
             transactionsLoading={transactionsLoading}
             transactionsError={transactionsError}
+            transactionsHasMore={transactionsHasMore}
+            transactionsLoadingMore={transactionsLoadingMore}
+            transactionsPaginated={useTransactionPagination}
             accountLoading={accountLoading}
             showHoldersTab={isJettonMasterAccount}
             client={client}
             onAddressClick={handleSearch}
+            onTransactionClick={handleTransactionClick}
+            onLoadMoreTransactions={loadMoreTransactions}
             activeTabHash={activeTab}
             onTabChange={handleTabChange}
           />
@@ -1316,4 +1357,69 @@ function isAccountTab(value: string): value is AccountTab {
 
 function hasAccountInterface(interfaces: readonly string[], expected: string): boolean {
   return interfaces.some(iface => iface.trim().toLowerCase() === expected)
+}
+
+function transactionHashSet(
+  transactions: readonly Pick<V3TransactionListItem, "hash">[],
+): Set<string> {
+  return new Set(transactions.map(transaction => transaction.hash).filter(Boolean))
+}
+
+function collectNewTransactionHashes(
+  transactions: readonly Pick<V3TransactionListItem, "hash">[],
+  knownHashes: ReadonlySet<string>,
+): string[] {
+  const nextHashes: string[] = []
+  const seen = new Set(knownHashes)
+
+  for (const transaction of transactions) {
+    if (!transaction.hash || seen.has(transaction.hash)) {
+      continue
+    }
+    seen.add(transaction.hash)
+    nextHashes.push(transaction.hash)
+  }
+
+  return nextHashes
+}
+
+function appendUniqueTransactions(
+  current: readonly V3TransactionListItem[],
+  next: readonly V3TransactionListItem[],
+): V3TransactionListItem[] {
+  const seen = new Set(current.map(transaction => transaction.hash).filter(Boolean))
+  const uniqueNext = next.filter(transaction => {
+    if (!transaction.hash || seen.has(transaction.hash)) {
+      return false
+    }
+    seen.add(transaction.hash)
+    return true
+  })
+  return [...current, ...uniqueNext]
+}
+
+function prependUniqueTransactions(
+  next: readonly V3Transaction[],
+  current: readonly V3TransactionListItem[],
+): V3TransactionListItem[] {
+  const seen = new Set<string>()
+  const uniqueNext: V3TransactionListItem[] = []
+
+  for (const transaction of next) {
+    if (!transaction.hash || seen.has(transaction.hash)) {
+      continue
+    }
+    seen.add(transaction.hash)
+    uniqueNext.push(transaction)
+  }
+
+  const currentWithoutDuplicates = current.filter(transaction => {
+    if (!transaction.hash || seen.has(transaction.hash)) {
+      return false
+    }
+    seen.add(transaction.hash)
+    return true
+  })
+
+  return [...uniqueNext, ...currentWithoutDuplicates]
 }

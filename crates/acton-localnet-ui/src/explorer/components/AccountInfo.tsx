@@ -43,6 +43,7 @@ interface AccountInfoProps {
 
 interface CollectiblePreview {
   readonly image?: string
+  readonly imageSources?: readonly string[]
   readonly name?: string
 }
 
@@ -470,7 +471,10 @@ export const AccountInfo: FC<AccountInfoProps> = ({
                                   alt={item.name || "NFT"}
                                   className={styles.collectibleThumb}
                                   onError={event =>
-                                    replaceBrokenImageWithFallback(event, [item.image ?? ""])
+                                    replaceBrokenImageWithFallback(
+                                      event,
+                                      item.imageSources ?? [item.image ?? ""],
+                                    )
                                   }
                                 />
                               ) : (

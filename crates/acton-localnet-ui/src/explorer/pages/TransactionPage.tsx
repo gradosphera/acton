@@ -305,22 +305,7 @@ export const TransactionPage: FC<TransactionPageProps> = ({client}) => {
               <div
                 className={`${styles.tabsContainer} ${activeTab === "transactions" ? styles.tabsContainerDetached : ""}`}
               >
-                <div className={styles.tabs}>
-                  <button
-                    type="button"
-                    className={`${styles.tab} ${activeTab === "value-flow" ? styles.tabActive : ""}`}
-                    onClick={() => handleActiveTabChange("value-flow")}
-                  >
-                    <CircleDotDashed size={16} /> Value Flow
-                  </button>
-                  <button
-                    type="button"
-                    className={`${styles.tab} ${activeTab === "transactions" ? styles.tabActive : ""}`}
-                    onClick={() => handleActiveTabChange("transactions")}
-                  >
-                    <GitBranch size={16} /> Transactions
-                  </button>
-                </div>
+                <TraceTabs activeTab={activeTab} onTabChange={handleActiveTabChange} />
 
                 <div className={styles.tabContent}>
                   {activeTab === "value-flow" && (
@@ -366,6 +351,37 @@ export const TransactionPage: FC<TransactionPageProps> = ({client}) => {
   )
 }
 
+interface TraceTabsProps {
+  readonly activeTab: TabType
+  readonly disabled?: boolean
+  readonly onTabChange?: (tab: TabType) => void
+}
+
+function TraceTabs({activeTab, disabled = false, onTabChange}: TraceTabsProps): JSX.Element {
+  return (
+    <div className={styles.tabs} aria-hidden={disabled ? "true" : undefined}>
+      <button
+        type="button"
+        className={`${styles.tab} ${activeTab === "value-flow" ? styles.tabActive : ""}`}
+        onClick={() => onTabChange?.("value-flow")}
+        disabled={disabled}
+        tabIndex={disabled ? -1 : undefined}
+      >
+        <CircleDotDashed size={16} /> Value Flow
+      </button>
+      <button
+        type="button"
+        className={`${styles.tab} ${activeTab === "transactions" ? styles.tabActive : ""}`}
+        onClick={() => onTabChange?.("transactions")}
+        disabled={disabled}
+        tabIndex={disabled ? -1 : undefined}
+      >
+        <GitBranch size={16} /> Transactions
+      </button>
+    </div>
+  )
+}
+
 interface TransactionTraceSkeletonProps {
   readonly activeTab: TabType
 }
@@ -390,21 +406,10 @@ function TransactionTraceSkeleton({activeTab}: TransactionTraceSkeletonProps): J
             </div>
           </div>
 
-          <div className={styles.tabsContainer}>
-            <div className={styles.tabs} aria-hidden="true">
-              <div
-                className={`${styles.tab} ${activeTab === "value-flow" ? styles.tabActive : ""} ${styles.skeletonTab}`}
-              >
-                <CircleDotDashed size={16} />
-                Value Flow
-              </div>
-              <div
-                className={`${styles.tab} ${activeTab === "transactions" ? styles.tabActive : ""} ${styles.skeletonTab}`}
-              >
-                <GitBranch size={16} />
-                Transactions
-              </div>
-            </div>
+          <div
+            className={`${styles.tabsContainer} ${activeTab === "transactions" ? styles.tabsContainerDetached : ""}`}
+          >
+            <TraceTabs activeTab={activeTab} disabled />
 
             <div className={styles.tabContent}>
               {activeTab === "transactions" ? <TraceDetailsSkeleton /> : <ValueFlowSkeleton />}
@@ -424,15 +429,25 @@ function ValueFlowSkeleton(): JSX.Element {
   return (
     <div className={styles.skeletonFlowCard} aria-hidden="true">
       <div className={styles.skeletonFlowHeader}>
-        <span className={`${styles.skeleton} ${styles.skeletonFlowHeaderLine}`} />
-        <span className={`${styles.skeleton} ${styles.skeletonFlowHeaderLine}`} />
-        <span className={`${styles.skeleton} ${styles.skeletonFlowHeaderLine}`} />
+        <span>Account</span>
+        <span>Balance Change</span>
+        <span>Network Fee</span>
       </div>
       {[0, 1].map(index => (
         <div key={`flow-skeleton-${index}`} className={styles.skeletonFlowRow}>
-          <span className={`${styles.skeleton} ${styles.skeletonFlowAddress}`} />
-          <span className={`${styles.skeleton} ${styles.skeletonFlowAmount}`} />
-          <span className={`${styles.skeleton} ${styles.skeletonFlowFee}`} />
+          <div className={styles.skeletonFlowAccount}>
+            <span className={`${styles.skeleton} ${styles.skeletonFlowAvatar}`} />
+            <span className={styles.skeletonFlowAccountText}>
+              <span className={`${styles.skeleton} ${styles.skeletonFlowAccountName}`} />
+              <span className={`${styles.skeleton} ${styles.skeletonFlowAccountAddress}`} />
+            </span>
+          </div>
+          <div className={styles.skeletonFlowMetric}>
+            <span className={`${styles.skeleton} ${styles.skeletonFlowAmount}`} />
+          </div>
+          <div className={styles.skeletonFlowMetric}>
+            <span className={`${styles.skeleton} ${styles.skeletonFlowFee}`} />
+          </div>
         </div>
       ))}
       <div className={styles.skeletonFlowFooter}>

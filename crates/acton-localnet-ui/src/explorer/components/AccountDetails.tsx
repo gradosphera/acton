@@ -24,7 +24,6 @@ import {
   MoreHorizontal,
   UsersRound,
 } from "lucide-react"
-import {useNavigate} from "react-router-dom"
 import type {ContractABI} from "@ton/tolk-abi-to-typescript"
 
 import type {
@@ -54,6 +53,7 @@ type Tabs = "history" | "contract" | "tokens" | "nfts" | "holders"
 
 interface AccountDetailsProps {
   readonly transactions: V3TransactionListItem[]
+  readonly highlightedTransactionHashes?: readonly string[]
   readonly accountState?: AddressInformation
   readonly compilerAbi?: ContractABI
   readonly compilerAbiLoading?: boolean
@@ -70,10 +70,15 @@ interface AccountDetailsProps {
   readonly holdersLoading?: boolean
   readonly transactionsLoading?: boolean
   readonly transactionsError?: string
+  readonly transactionsHasMore?: boolean
+  readonly transactionsLoadingMore?: boolean
+  readonly transactionsPaginated?: boolean
   readonly accountLoading?: boolean
   readonly showHoldersTab?: boolean
   readonly client: TonClient
   readonly onAddressClick?: (addr: string) => void
+  readonly onTransactionClick?: (hash: string) => void
+  readonly onLoadMoreTransactions?: () => void
   readonly activeTabHash?: string
   readonly onTabChange?: (tab: Tabs) => void
 }
@@ -129,6 +134,7 @@ const TIME_FORMAT_OPTIONS: readonly {
 
 export const AccountDetails: FC<AccountDetailsProps> = ({
   transactions,
+  highlightedTransactionHashes = [],
   accountState,
   compilerAbi,
   compilerAbiLoading = false,
@@ -145,14 +151,18 @@ export const AccountDetails: FC<AccountDetailsProps> = ({
   holdersLoading = false,
   transactionsLoading = false,
   transactionsError,
+  transactionsHasMore = false,
+  transactionsLoadingMore = false,
+  transactionsPaginated = false,
   accountLoading = false,
   showHoldersTab = false,
   client,
   onAddressClick,
+  onTransactionClick,
+  onLoadMoreTransactions,
   activeTabHash,
   onTabChange,
 }) => {
-  const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState<Tabs>("history")
   const filterPopoverRef = useRef<HTMLDivElement>(null)
   const filterButtonRef = useRef<HTMLButtonElement>(null)
@@ -222,6 +232,10 @@ export const AccountDetails: FC<AccountDetailsProps> = ({
       })),
     [transactions, browsedAddr, messageNamesByAddress],
   )
+  const highlightedTransactionHashSet = useMemo(
+    () => new Set(highlightedTransactionHashes),
+    [highlightedTransactionHashes],
+  )
   const actionFilterOptions = useMemo(() => {
     const options = new Map<string, {key: string; label: string; count: number}>()
     for (const row of transactionRows) {
@@ -250,14 +264,18 @@ export const AccountDetails: FC<AccountDetailsProps> = ({
   const totalPages = Math.max(1, Math.ceil(visibleTransactionRows.length / ITEMS_PER_PAGE))
   const safeCurrentPage = Math.min(currentPage, totalPages)
   const startIndex = (safeCurrentPage - 1) * ITEMS_PER_PAGE
-  const paginatedTransactionRows = visibleTransactionRows.slice(
-    startIndex,
-    startIndex + ITEMS_PER_PAGE,
-  )
+  const displayedTransactionRows = transactionsPaginated
+    ? visibleTransactionRows.slice(startIndex, startIndex + ITEMS_PER_PAGE)
+    : visibleTransactionRows
   const paginationItems = useMemo(
     () => getPaginationItems(safeCurrentPage, totalPages),
     [safeCurrentPage, totalPages],
   )
+  const showLoadMoreTransactions =
+    !transactionsLoading &&
+    !transactionsError &&
+    transactionsHasMore &&
+    onLoadMoreTransactions !== undefined
 
   useEffect(() => {
     try {
@@ -577,7 +595,7 @@ export const AccountDetails: FC<AccountDetailsProps> = ({
                     </div>
                   </TableCell>
                 </TableRow>
-              ) : paginatedTransactionRows.length === 0 ? (
+              ) : displayedTransactionRows.length === 0 ? (
                 <TableRow className={styles.emptyRow}>
                   <TableCell colSpan={4} className={styles.emptyCell}>
                     <div className={styles.tableState}>
@@ -588,7 +606,7 @@ export const AccountDetails: FC<AccountDetailsProps> = ({
                   </TableCell>
                 </TableRow>
               ) : (
-                paginatedTransactionRows.map(({tx, info}) => {
+                displayedTransactionRows.map(({tx, info}) => {
                   const transactionHash = tx.hash
                   const valueStr = formatNano(info.displayValue.toString())
                   const isEmptyValue = info.displayValue === 0n
@@ -605,15 +623,18 @@ export const AccountDetails: FC<AccountDetailsProps> = ({
                     hoveredAddress && info.address
                       ? isSameAddress(info.address, hoveredAddress)
                       : false
+                  const isHighlighted = highlightedTransactionHashSet.has(transactionHash)
 
                   return (
                     <TableRow
                       key={transactionHash ?? `${tx.account}:${tx.lt}:${tx.now}`}
-                      className={`${styles.row} ${styles.clickableRow}`}
+                      className={`${styles.row} ${styles.clickableRow} ${
+                        isHighlighted ? styles.newTransactionRow : ""
+                      }`}
                       onClick={() => {
                         const txHash = hashToHex(transactionHash)
                         if (!txHash) return
-                        void navigate(`/explorer/tx/${txHash}`)
+                        onTransactionClick?.(txHash)
                       }}
                     >
                       <TableCell className={`${styles.time} ${styles.timeColumn}`}>
@@ -697,6 +718,7 @@ export const AccountDetails: FC<AccountDetailsProps> = ({
             </div>
           ) : (
             !transactionsError &&
+            transactionsPaginated &&
             totalPages > 1 && (
               <div className={styles.pagination}>
                 <div className={styles.paginationControls}>
@@ -742,6 +764,20 @@ export const AccountDetails: FC<AccountDetailsProps> = ({
                 </div>
               </div>
             )
+          )}
+          {showLoadMoreTransactions && (
+            <div className={styles.pagination}>
+              <div className={styles.paginationControls}>
+                <button
+                  type="button"
+                  className={styles.paginationButton}
+                  onClick={onLoadMoreTransactions}
+                  disabled={transactionsLoadingMore}
+                >
+                  {transactionsLoadingMore ? "Loading..." : "Load more"}
+                </button>
+              </div>
+            </div>
           )}
         </CardContent>
       ) : activeTab === "tokens" ? (

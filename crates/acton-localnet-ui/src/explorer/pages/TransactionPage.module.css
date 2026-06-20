@@ -156,6 +156,11 @@
   background: var(--litenode-control-hover);
 }
 
+.tab:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
 .tabActive {
   color: var(--tonscan-text-primary);
   background: var(--litenode-surface-active);
@@ -453,8 +458,8 @@
 .skeletonBreadcrumbHash,
 .skeletonStatusText,
 .skeletonTime,
-.skeletonFlowHeaderLine,
-.skeletonFlowAddress,
+.skeletonFlowAccountName,
+.skeletonFlowAccountAddress,
 .skeletonFlowAmount,
 .skeletonFlowFee,
 .skeletonFlowTotal,
@@ -497,31 +502,50 @@
   height: 18px;
 }
 
-.skeletonTab {
-  pointer-events: none;
-  cursor: default;
-}
-
 .skeletonFlowCard {
-  background: var(--tonscan-card-bg, var(--bg-color));
-  border: 1px solid var(--tonscan-border, var(--border-color));
-  border-radius: var(--border-radius-lg);
-  overflow: hidden;
+  width: 100%;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  overflow: visible;
 }
 
 .skeletonFlowHeader,
 .skeletonFlowRow {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 120px 96px;
+  display: flex;
   align-items: center;
-  gap: 20px;
   padding: 12px 20px;
   box-sizing: border-box;
 }
 
 .skeletonFlowHeader {
-  background: var(--tonscan-row-hover, var(--bg-secondary-color));
+  min-height: 44px;
+  padding-block: 0;
+  background: transparent;
+  border-radius: 0;
   border-bottom: 1px solid var(--tonscan-border, var(--border-color));
+  color: var(--tonscan-text-secondary, var(--text-secondary));
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.skeletonFlowHeader > span,
+.skeletonFlowRow > * {
+  flex: 1;
+  min-width: 0;
+}
+
+.skeletonFlowHeader > span:nth-child(2),
+.skeletonFlowHeader > span:nth-child(3),
+.skeletonFlowMetric {
+  text-align: right;
+}
+
+.skeletonFlowMetric {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .skeletonFlowRow {
@@ -536,20 +560,51 @@
   border-top: 1px solid var(--tonscan-border, var(--border-color));
 }
 
-.skeletonFlowHeaderLine {
-  width: 70%;
-  height: 12px;
+.skeletonFlowAccount {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  min-width: 0;
 }
 
-.skeletonFlowAddress {
-  width: min(380px, 78%);
-  height: 16px;
+.skeletonFlowAvatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  background: var(--tonscan-text-secondary, var(--text-secondary));
+  opacity: 0.72;
+  animation: none;
+}
+
+.skeletonFlowAccountText {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  min-width: 0;
+  flex: 1;
+}
+
+.skeletonFlowAccountName {
+  width: min(230px, 42%);
+  height: 14px;
+}
+
+.skeletonFlowAccountAddress {
+  width: min(150px, 28%);
+  height: 12px;
 }
 
 .skeletonFlowAmount,
 .skeletonFlowFee {
-  width: 100%;
-  height: 16px;
+  width: 112px;
+  max-width: 56%;
+  height: 14px;
+  flex: 0 0 auto;
+}
+
+.skeletonFlowFee {
+  width: 96px;
 }
 
 .skeletonFlowTotal {
@@ -707,13 +762,15 @@
 
   .skeletonFlowHeader,
   .skeletonFlowRow {
-    grid-template-columns: minmax(0, 1fr);
+    align-items: flex-start;
+    flex-direction: column;
     gap: 10px;
   }
 
-  .skeletonFlowAmount,
-  .skeletonFlowFee {
+  .skeletonFlowMetric {
     width: 48%;
+    margin-left: calc(22px + var(--spacing-sm));
+    justify-content: flex-start;
   }
 
   .skeletonDetailRow {
