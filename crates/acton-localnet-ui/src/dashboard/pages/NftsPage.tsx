@@ -1,6 +1,7 @@
-import * as React from "react"
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from "@acton/shared-ui"
 import {useNavigate} from "react-router-dom"
+import {useEffect, useState} from "react"
+import type {FC, JSX} from "react"
 
 import type {TonClient} from "../../explorer/api/client"
 import type {NftItem} from "../../explorer/api/types"
@@ -20,15 +21,15 @@ interface NftsState {
   readonly error?: string
 }
 
-export const NftsPage: React.FC<NftsPageProps> = ({client}) => {
+export const NftsPage: FC<NftsPageProps> = ({client}) => {
   const navigate = useNavigate()
-  const [nftsState, setNftsState] = React.useState<NftsState>({
+  const [nftsState, setNftsState] = useState<NftsState>({
     items: [],
     isLoading: true,
   })
   const showLoadingSkeleton = useDelayedLoadingVisibility(nftsState.isLoading, 500)
 
-  React.useEffect(() => {
+  useEffect(() => {
     let cancelled = false
 
     void (async () => {
@@ -157,7 +158,7 @@ export const NftsPage: React.FC<NftsPageProps> = ({client}) => {
   )
 }
 
-function NftCardsSkeleton(): React.JSX.Element {
+function NftCardsSkeleton(): JSX.Element {
   return (
     <>
       {Array.from({length: 3}, (_, index) => (

@@ -1,7 +1,7 @@
-import type React from "react"
 import {PanelLeftOpen} from "lucide-react"
-import {useCallback, useEffect, useRef, useState} from "react"
 import type {ThemeMode} from "@acton/shared-ui"
+import {useCallback, useEffect, useRef, useState} from "react"
+import type {FC, ReactNode} from "react"
 
 import type {TonClient} from "../explorer/api/client"
 
@@ -17,11 +17,11 @@ interface DashboardPageProps {
   readonly onOpenAuthTokenOverlay: () => void
   readonly theme: ThemeMode
   readonly setTheme: (theme: ThemeMode) => void
-  readonly children?: React.ReactNode
+  readonly children?: ReactNode
   readonly embedded?: boolean
 }
 
-export const DashboardPage: React.FC<DashboardPageProps> = ({
+export const DashboardPage: FC<DashboardPageProps> = ({
   children,
   client,
   embedded = false,

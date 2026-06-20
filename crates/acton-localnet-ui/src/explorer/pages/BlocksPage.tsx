@@ -1,19 +1,20 @@
 import {Check, ChevronLeft, ChevronRight, ChevronsRight, Copy} from "lucide-react"
-import * as React from "react"
 import {Link, useNavigate, useParams} from "react-router-dom"
 import {Button} from "@acton/shared-ui"
+import {useEffect, useMemo, useState} from "react"
+import type {FC, ReactNode} from "react"
 
-import type {TonClient} from "../../explorer/api/client"
-import type {V3Block, V3TransactionListItem} from "../../explorer/api/types"
-import {AddressLabel} from "../../explorer/components/AddressLabel"
+import type {TonClient} from "../api/client"
+import type {V3Block, V3TransactionListItem} from "../api/types"
+import {AddressLabel} from "../components/AddressLabel"
 import {
   DeveloperTransactionList,
   DeveloperTransactionListSkeleton,
-} from "../../explorer/components/DeveloperTransactionList"
-import {useAddressBook} from "../../explorer/hooks/useAddressBook"
+} from "../components/DeveloperTransactionList"
+import {useAddressBook} from "../hooks/useAddressBook"
 
-import styles from "../DashboardPage.module.css"
-import {useDeveloperMessageNames} from "../useDeveloperMessageNames"
+import styles from "./BlocksPage.module.css"
+import {useDeveloperMessageNames} from "../../dashboard/useDeveloperMessageNames"
 
 const BLOCKS_PAGE_LIMIT = 8
 const LAST_TRANSACTION_MESSAGES_LIMIT = 5
@@ -53,10 +54,10 @@ interface BlockDetailsState {
   readonly error?: string
 }
 
-export const BlocksPage: React.FC<BlocksPageProps> = ({client}) => {
+export const BlocksPage: FC<BlocksPageProps> = ({client}) => {
   const navigate = useNavigate()
   const {prefetchNames} = useAddressBook()
-  const [state, setState] = React.useState<BlocksPageState>({
+  const [state, setState] = useState<BlocksPageState>({
     transactions: [],
     masterchainBlocks: [],
     workchainBlocks: [],
@@ -64,11 +65,11 @@ export const BlocksPage: React.FC<BlocksPageProps> = ({client}) => {
   })
   const {addresses, messageNamesByAddress} = useDeveloperMessageNames(client, state.transactions)
 
-  React.useEffect(() => {
+  useEffect(() => {
     void prefetchNames(addresses)
   }, [addresses, prefetchNames])
 
-  React.useEffect(() => {
+  useEffect(() => {
     let isActive = true
     let timeoutId: ReturnType<typeof setTimeout> | undefined
 
@@ -178,20 +179,20 @@ export const BlocksPage: React.FC<BlocksPageProps> = ({client}) => {
   )
 }
 
-export const BlockDetailsPage: React.FC<BlocksPageProps> = ({client}) => {
+export const BlockDetailsPage: FC<BlocksPageProps> = ({client}) => {
   const params = useParams<{workchain: string; shard: string; seqno: string}>()
   const navigate = useNavigate()
   const {prefetchNames} = useAddressBook()
   const workchain = Number(params.workchain)
   const shard = params.shard ?? ""
   const seqno = Number(params.seqno)
-  const [state, setState] = React.useState<BlockDetailsState>({
+  const [state, setState] = useState<BlockDetailsState>({
     shardchainBlocks: [],
     transactions: [],
     isLoading: true,
   })
 
-  React.useEffect(() => {
+  useEffect(() => {
     let isActive = true
 
     const loadBlockDetails = async () => {
@@ -281,12 +282,12 @@ export const BlockDetailsPage: React.FC<BlocksPageProps> = ({client}) => {
   const canOpenPrev = hasValidRoute && seqno > 1
   const prevPath = canOpenPrev ? blockPath({workchain, shard, seqno: seqno - 1}) : undefined
   const nextPath = hasValidRoute ? blockPath({workchain, shard, seqno: seqno + 1}) : undefined
-  const transactionAddresses = React.useMemo(
+  const transactionAddresses = useMemo(
     () => state.transactions.map(transaction => transaction.account),
     [state.transactions],
   )
 
-  React.useEffect(() => {
+  useEffect(() => {
     void prefetchNames(transactionAddresses)
   }, [prefetchNames, transactionAddresses])
 
@@ -368,7 +369,7 @@ export const BlockDetailsPage: React.FC<BlocksPageProps> = ({client}) => {
   )
 }
 
-const BlockTableSection: React.FC<{
+const BlockTableSection: FC<{
   readonly title: string
   readonly blocks: readonly V3Block[]
   readonly isLoading: boolean
@@ -429,7 +430,7 @@ const BlockTableSection: React.FC<{
   )
 }
 
-const BlockTransactionsTable: React.FC<{
+const BlockTransactionsTable: FC<{
   readonly transactions: readonly V3TransactionListItem[]
   readonly onOpenAccount: (address: string) => void
   readonly onOpenTransaction: (hash: string) => void
@@ -500,10 +501,7 @@ const BlockTransactionsTable: React.FC<{
   )
 }
 
-const BlockTableSkeleton: React.FC<{readonly title: string; readonly rows: number}> = ({
-  title,
-  rows,
-}) => (
+const BlockTableSkeleton: FC<{readonly title: string; readonly rows: number}> = ({title, rows}) => (
   <section className={styles.blocksTableFrame} aria-label={`Loading ${title}`}>
     <header className={styles.blocksTableTitle}>{title}</header>
     <div className={styles.blocksTableScroller}>
@@ -535,7 +533,7 @@ const BlockTableSkeleton: React.FC<{readonly title: string; readonly rows: numbe
   </section>
 )
 
-const BlockTransactionsTableSkeleton: React.FC<{readonly rows: number}> = ({rows}) => (
+const BlockTransactionsTableSkeleton: FC<{readonly rows: number}> = ({rows}) => (
   <section className={styles.blocksTableFrame} aria-label="Loading transactions">
     <header className={styles.blocksTableTitle}>Transactions</header>
     <div className={styles.blocksTableScroller}>
@@ -578,13 +576,10 @@ const BlockTransactionsTableSkeleton: React.FC<{readonly rows: number}> = ({rows
   </section>
 )
 
-const CopyTextButton: React.FC<{readonly value: string; readonly title: string}> = ({
-  value,
-  title,
-}) => {
-  const [isCopied, setIsCopied] = React.useState(false)
+const CopyTextButton: FC<{readonly value: string; readonly title: string}> = ({value, title}) => {
+  const [isCopied, setIsCopied] = useState(false)
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!isCopied) {
       return
     }
@@ -610,7 +605,7 @@ const CopyTextButton: React.FC<{readonly value: string; readonly title: string}>
   )
 }
 
-const BlockSummaryTable: React.FC<{readonly block: V3Block}> = ({block}) => {
+const BlockSummaryTable: FC<{readonly block: V3Block}> = ({block}) => {
   const prevRefs = formatPrevRefs(block)
 
   return (
@@ -640,13 +635,7 @@ interface SummaryItemProps {
   readonly mono?: boolean
 }
 
-const SummaryItem: React.FC<SummaryItemProps> = ({
-  label,
-  value,
-  title,
-  copyValue,
-  mono = false,
-}) => (
+const SummaryItem: FC<SummaryItemProps> = ({label, value, title, copyValue, mono = false}) => (
   <div className={styles.blockSummaryRow}>
     <span className={styles.blockSummaryLabel}>{label}</span>
     <span
@@ -665,7 +654,7 @@ const SummaryItem: React.FC<SummaryItemProps> = ({
   </div>
 )
 
-const BlockDetailsSkeleton: React.FC<{readonly showShardchainBlocks: boolean}> = ({
+const BlockDetailsSkeleton: FC<{readonly showShardchainBlocks: boolean}> = ({
   showShardchainBlocks,
 }) => (
   <>
@@ -682,9 +671,9 @@ const BlockDetailsSkeleton: React.FC<{readonly showShardchainBlocks: boolean}> =
   </>
 )
 
-const TableStateBlock: React.FC<{
+const TableStateBlock: FC<{
   readonly title?: string
-  readonly children: React.ReactNode
+  readonly children: ReactNode
 }> = ({title, children}) => (
   <section className={styles.blocksTableFrame}>
     {title ? <header className={styles.blocksTableTitle}>{title}</header> : null}

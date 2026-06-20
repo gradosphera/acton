@@ -1,5 +1,5 @@
-import type React from "react"
 import {useEffect, useMemo, useState} from "react"
+import type {FC, ReactNode} from "react"
 
 import type {TonClient} from "../api/client"
 import type {LocalnetNodeInfo} from "../api/types"
@@ -8,10 +8,10 @@ import {NetworkInfoContext, type NetworkInfoContextValue} from "./useNetworkInfo
 
 interface NetworkInfoProviderProps {
   readonly client: TonClient
-  readonly children: React.ReactNode
+  readonly children: ReactNode
 }
 
-export const NetworkInfoProvider: React.FC<NetworkInfoProviderProps> = ({client, children}) => {
+export const NetworkInfoProvider: FC<NetworkInfoProviderProps> = ({client, children}) => {
   const [nodeInfo, setNodeInfo] = useState<LocalnetNodeInfo | undefined>()
 
   useEffect(() => {

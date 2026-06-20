@@ -1,5 +1,6 @@
 import {Check, CircleAlert, RefreshCw} from "lucide-react"
-import * as React from "react"
+import {useCallback, useEffect, useMemo, useState} from "react"
+import type {FC} from "react"
 import {
   Button,
   Table,
@@ -29,14 +30,14 @@ const DEFAULT_STATUS_FILTER: StatusFilter = {
 const NANOSECONDS_PER_MICROSECOND = 1000
 const NANOSECONDS_PER_MILLISECOND = NANOSECONDS_PER_MICROSECOND * 1000
 
-export const ApiCallsPage: React.FC<ApiCallsPageProps> = ({client}) => {
-  const [calls, setCalls] = React.useState<readonly ApiCallRecord[]>([])
-  const [statusFilter, setStatusFilter] = React.useState<StatusFilter>(DEFAULT_STATUS_FILTER)
-  const [isLoading, setIsLoading] = React.useState(true)
-  const [isRefreshing, setIsRefreshing] = React.useState(false)
-  const [error, setError] = React.useState<string>()
+export const ApiCallsPage: FC<ApiCallsPageProps> = ({client}) => {
+  const [calls, setCalls] = useState<readonly ApiCallRecord[]>([])
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(DEFAULT_STATUS_FILTER)
+  const [isLoading, setIsLoading] = useState(true)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [error, setError] = useState<string>()
 
-  const loadCalls = React.useCallback(
+  const loadCalls = useCallback(
     async (refreshing = false) => {
       if (refreshing) {
         setIsRefreshing(true)
@@ -58,15 +59,15 @@ export const ApiCallsPage: React.FC<ApiCallsPageProps> = ({client}) => {
     [client],
   )
 
-  React.useEffect(() => {
+  useEffect(() => {
     void loadCalls()
   }, [loadCalls])
 
-  const filteredCalls = React.useMemo(
+  const filteredCalls = useMemo(
     () => calls.filter(call => statusFilter[call.status]),
     [calls, statusFilter],
   )
-  const successCount = React.useMemo(
+  const successCount = useMemo(
     () => calls.filter(call => call.status === "success").length,
     [calls],
   )

@@ -1,8 +1,9 @@
 import {ArrowUpRight, Check, ChevronDown, Coins, Wallet} from "lucide-react"
-import * as React from "react"
 import {Button, Input, useToast} from "@acton/shared-ui"
 import type {Address} from "@ton/core"
 import {useSearchParams} from "react-router-dom"
+import {useCallback, useEffect, useId, useMemo, useRef, useState} from "react"
+import type {FC, FormEvent, ReactNode} from "react"
 
 import type {JettonMaster, StartupWallet} from "../../explorer/api/types"
 import type {TonClient} from "../../explorer/api/client"
@@ -41,24 +42,24 @@ interface FaucetOption {
   readonly fallbackInitial?: string
 }
 
-export const FaucetPage: React.FC<FaucetPageProps> = ({client}) => {
+export const FaucetPage: FC<FaucetPageProps> = ({client}) => {
   const {showToast} = useToast()
   const addressFormat = useAddressFormat()
   const [searchParams, setSearchParams] = useSearchParams()
-  const [mode, setMode] = React.useState<FaucetMode>(() =>
+  const [mode, setMode] = useState<FaucetMode>(() =>
     parseFaucetMode(searchParams.get(FAUCET_MODE_QUERY_PARAM)),
   )
-  const [address, setAddress] = React.useState("")
-  const [jettonMinter, setJettonMinter] = React.useState("")
-  const [amount, setAmount] = React.useState("1")
-  const [startupWallets, setStartupWallets] = React.useState<StartupWallet[]>([])
-  const [jettonMasters, setJettonMasters] = React.useState<JettonMaster[]>([])
-  const [walletsLoading, setWalletsLoading] = React.useState(true)
-  const [jettonsLoading, setJettonsLoading] = React.useState(true)
-  const [walletsError, setWalletsError] = React.useState<string>()
-  const [jettonsError, setJettonsError] = React.useState<string>()
-  const [isSubmitting, setIsSubmitting] = React.useState(false)
-  const amountNano = React.useMemo(() => parseGramAmount(amount), [amount])
+  const [address, setAddress] = useState("")
+  const [jettonMinter, setJettonMinter] = useState("")
+  const [amount, setAmount] = useState("1")
+  const [startupWallets, setStartupWallets] = useState<StartupWallet[]>([])
+  const [jettonMasters, setJettonMasters] = useState<JettonMaster[]>([])
+  const [walletsLoading, setWalletsLoading] = useState(true)
+  const [jettonsLoading, setJettonsLoading] = useState(true)
+  const [walletsError, setWalletsError] = useState<string>()
+  const [jettonsError, setJettonsError] = useState<string>()
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const amountNano = useMemo(() => parseGramAmount(amount), [amount])
   const isJettonMode = mode === "jetton"
   const isSubmitDisabled =
     isSubmitting ||
@@ -66,11 +67,11 @@ export const FaucetPage: React.FC<FaucetPageProps> = ({client}) => {
     amount.trim().length === 0 ||
     (isJettonMode && jettonMinter.trim().length === 0)
 
-  React.useEffect(() => {
+  useEffect(() => {
     setMode(parseFaucetMode(searchParams.get(FAUCET_MODE_QUERY_PARAM)))
   }, [searchParams])
 
-  const selectMode = React.useCallback(
+  const selectMode = useCallback(
     (nextMode: FaucetMode) => {
       setMode(nextMode)
       setSearchParams(
@@ -85,7 +86,7 @@ export const FaucetPage: React.FC<FaucetPageProps> = ({client}) => {
     [setSearchParams],
   )
 
-  React.useEffect(() => {
+  useEffect(() => {
     let cancelled = false
 
     void (async () => {
@@ -114,7 +115,7 @@ export const FaucetPage: React.FC<FaucetPageProps> = ({client}) => {
     }
   }, [client])
 
-  React.useEffect(() => {
+  useEffect(() => {
     let cancelled = false
 
     void (async () => {
@@ -143,7 +144,7 @@ export const FaucetPage: React.FC<FaucetPageProps> = ({client}) => {
     }
   }, [client])
 
-  const walletOptions = React.useMemo<FaucetOption[]>(
+  const walletOptions = useMemo<FaucetOption[]>(
     () =>
       startupWallets.map(wallet => {
         const value = parseAddress(wallet.address)?.toString(addressFormat) ?? wallet.address
@@ -158,11 +159,11 @@ export const FaucetPage: React.FC<FaucetPageProps> = ({client}) => {
       }),
     [addressFormat, startupWallets],
   )
-  const selectedWalletOption = React.useMemo(
+  const selectedWalletOption = useMemo(
     () => walletOptions.find(option => isSameAddress(option.value, address)),
     [address, walletOptions],
   )
-  const jettonOptions = React.useMemo<FaucetOption[]>(
+  const jettonOptions = useMemo<FaucetOption[]>(
     () =>
       jettonMasters
         .filter(master => master.mintable)
@@ -185,12 +186,12 @@ export const FaucetPage: React.FC<FaucetPageProps> = ({client}) => {
         }),
     [addressFormat, jettonMasters],
   )
-  const selectedJettonOption = React.useMemo(
+  const selectedJettonOption = useMemo(
     () => jettonOptions.find(option => isSameAddress(option.value, jettonMinter)),
     [jettonMinter, jettonOptions],
   )
 
-  async function handleSubmit(event?: React.FormEvent): Promise<void> {
+  async function handleSubmit(event?: FormEvent): Promise<void> {
     event?.preventDefault()
     const trimmedAddress = address.trim()
     const parsedAddress = parseAddress(trimmedAddress)
@@ -317,7 +318,7 @@ export const FaucetPage: React.FC<FaucetPageProps> = ({client}) => {
     msgHash,
   }: {
     readonly title: string
-    readonly description: React.ReactNode
+    readonly description: ReactNode
     readonly msgHash: string
   }) {
     const txHash = await waitForTraceTransactionHash(msgHash)
@@ -533,7 +534,7 @@ interface FaucetDropdownInputProps {
   readonly onSelect: (option: FaucetOption) => void
 }
 
-const FaucetDropdownInput: React.FC<FaucetDropdownInputProps> = ({
+const FaucetDropdownInput: FC<FaucetDropdownInputProps> = ({
   id,
   menuLabel,
   emptyLabel,
@@ -547,11 +548,11 @@ const FaucetDropdownInput: React.FC<FaucetDropdownInputProps> = ({
   onChange,
   onSelect,
 }) => {
-  const [isOpen, setIsOpen] = React.useState(false)
-  const containerRef = React.useRef<HTMLDivElement>(null)
-  const listboxId = React.useId()
+  const [isOpen, setIsOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const listboxId = useId()
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!isOpen) {
       return
     }

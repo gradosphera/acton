@@ -1,4 +1,4 @@
-import type React from "react"
+import type {FC, ReactNode} from "react"
 
 import type {V3AccountState} from "../api/types"
 
@@ -16,11 +16,11 @@ interface DeveloperAccountListProps {
   readonly accounts: readonly DeveloperAccountListItem[]
   readonly className?: string
   readonly title?: string
-  readonly emptyState?: React.ReactNode
+  readonly emptyState?: ReactNode
   readonly onAddressClick?: (address: string) => void
 }
 
-export const DeveloperAccountListSkeleton: React.FC<{
+export const DeveloperAccountListSkeleton: FC<{
   readonly className?: string
   readonly title?: string
   readonly rows?: number
@@ -61,7 +61,7 @@ export const DeveloperAccountListSkeleton: React.FC<{
   </div>
 )
 
-export const DeveloperAccountList: React.FC<DeveloperAccountListProps> = ({
+export const DeveloperAccountList: FC<DeveloperAccountListProps> = ({
   accounts,
   className,
   title,
@@ -133,7 +133,7 @@ export const DeveloperAccountList: React.FC<DeveloperAccountListProps> = ({
   )
 }
 
-const AccountCell: React.FC<{
+const AccountCell: FC<{
   readonly account: DeveloperAccountListItem
   readonly onAddressClick?: (address: string) => void
 }> = ({account, onAddressClick}) => {

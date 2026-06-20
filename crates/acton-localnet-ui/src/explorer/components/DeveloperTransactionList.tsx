@@ -1,23 +1,17 @@
-import type React from "react"
+import type {FC, ReactNode} from "react"
 
 import {addressKey} from "../api/compilerAbi"
-import type {Message, Transaction, V3Message, V3TransactionListItem} from "../api/types"
+import type {V3Message, V3TransactionListItem} from "../api/types"
 
 import {AddressLabel} from "./AddressLabel"
 import {formatNano, formatTimeAgo, hashToHex} from "./utils"
+import type {MessageNamesByAddress} from "../hooks/useMessageNamesByAddress"
 
 import styles from "./DeveloperTransactionList.module.css"
 
-export type DeveloperTransaction = Transaction | V3TransactionListItem
+export type TransactionListItem = V3TransactionListItem
 
-type DeveloperMessage = Message | V3Message
-export type DeveloperMessageNamesByAddress = ReadonlyMap<
-  string,
-  {
-    readonly incoming: ReadonlyMap<string, string>
-    readonly outgoing: ReadonlyMap<string, string>
-  }
->
+type TransactionMessage = V3Message
 
 type DeveloperEndpoint =
   | {
@@ -29,7 +23,7 @@ type DeveloperEndpoint =
 
 interface DeveloperTransactionRow {
   readonly key: string
-  readonly transaction: DeveloperTransaction
+  readonly transaction: TransactionListItem
   readonly time: number
   readonly from: DeveloperEndpoint
   readonly to: DeveloperEndpoint
@@ -42,17 +36,17 @@ interface DeveloperTransactionRow {
 }
 
 interface DeveloperTransactionListProps {
-  readonly transactions: readonly DeveloperTransaction[]
+  readonly transactions: readonly TransactionListItem[]
   readonly className?: string
   readonly title?: string
-  readonly emptyState?: React.ReactNode
+  readonly emptyState?: ReactNode
   readonly maxRows?: number
-  readonly messageNamesByAddress?: DeveloperMessageNamesByAddress
-  readonly onTransactionClick?: (hashHex: string, transaction: DeveloperTransaction) => void
+  readonly messageNamesByAddress?: MessageNamesByAddress
+  readonly onTransactionClick?: (hashHex: string, transaction: TransactionListItem) => void
   readonly onAddressClick?: (address: string) => void
 }
 
-export const DeveloperTransactionListSkeleton: React.FC<{
+export const DeveloperTransactionListSkeleton: FC<{
   readonly className?: string
   readonly title?: string
   readonly rows?: number
@@ -101,7 +95,7 @@ export const DeveloperTransactionListSkeleton: React.FC<{
   </div>
 )
 
-export const DeveloperTransactionList: React.FC<DeveloperTransactionListProps> = ({
+export const DeveloperTransactionList: FC<DeveloperTransactionListProps> = ({
   transactions,
   className,
   title,
@@ -190,7 +184,7 @@ export const DeveloperTransactionList: React.FC<DeveloperTransactionListProps> =
   )
 }
 
-const EndpointCell: React.FC<{
+const EndpointCell: FC<{
   readonly endpoint: DeveloperEndpoint
   readonly onAddressClick?: (address: string) => void
 }> = ({endpoint, onAddressClick}) => {
@@ -225,8 +219,8 @@ const EndpointCell: React.FC<{
 }
 
 function buildDeveloperRows(
-  transaction: DeveloperTransaction,
-  messageNamesByAddress?: DeveloperMessageNamesByAddress,
+  transaction: TransactionListItem,
+  messageNamesByAddress?: MessageNamesByAddress,
 ): DeveloperTransactionRow[] {
   const rows: DeveloperTransactionRow[] = []
   const time = getTransactionTime(transaction)
@@ -234,7 +228,7 @@ function buildDeveloperRows(
   const isSuccess = isTransactionSuccess(transaction)
   const statusLabel = getTransactionStatusLabel(transaction)
   const transactionHash = getTransactionHash(transaction)
-  const transactionKey = transactionHash ?? `${account}:${getTransactionLt(transaction)}:${time}`
+  const transactionKey = transactionHash
 
   transaction.out_msgs.forEach((message, index) => {
     const to = addressEndpoint(message.destination, "External")
@@ -290,48 +284,28 @@ function buildDeveloperRows(
   return rows
 }
 
-function getTransactionTime(transaction: DeveloperTransaction): number {
-  return "now" in transaction ? transaction.now : transaction.utime
+function getTransactionTime(transaction: TransactionListItem): number {
+  return transaction.now
 }
 
-function getTransactionLt(transaction: DeveloperTransaction): string {
-  return "lt" in transaction ? transaction.lt : transaction.transaction_id.lt
+function getTransactionHash(transaction: TransactionListItem): string {
+  return transaction.hash
 }
 
-function getTransactionHash(transaction: DeveloperTransaction): string | undefined {
-  if ("description" in transaction) {
-    return transaction.hash
-  }
-
-  return transaction.hash || transaction.transaction_id.hash
+function isTransactionSuccess(transaction: TransactionListItem): boolean {
+  return (
+    !transaction.description.aborted &&
+    transaction.description.compute_ph.success &&
+    transaction.description.action.success
+  )
 }
 
-function isTransactionSuccess(transaction: DeveloperTransaction): boolean {
-  if ("description" in transaction) {
-    return (
-      !transaction.description.aborted &&
-      transaction.description.compute_ph.success &&
-      transaction.description.action.success
-    )
-  }
-
-  return transaction.success ?? true
-}
-
-function getTransactionStatusLabel(transaction: DeveloperTransaction): string {
+function getTransactionStatusLabel(transaction: TransactionListItem): string {
   if (isTransactionSuccess(transaction)) {
     return "Confirmed transaction"
   }
 
-  if ("description" in transaction) {
-    return `Failed transaction, exit ${transaction.description.compute_ph.exit_code}`
-  }
-
-  if (transaction.exit_code === undefined || transaction.exit_code === null) {
-    return "Failed transaction"
-  }
-
-  return `Failed transaction, exit ${transaction.exit_code}`
+  return `Failed transaction, exit ${transaction.description.compute_ph.exit_code}`
 }
 
 function addressEndpoint(address: string | undefined, fallback: string): DeveloperEndpoint {
@@ -354,12 +328,12 @@ function parseNanoValue(value: string | number | undefined): bigint {
   }
 }
 
-function formatDeveloperValue(value: bigint): string {
+function formatTransactionValue(value: bigint): string {
   return `${formatNano(value.toString())} GRAM`
 }
 
 function formatMessageValue(
-  message: DeveloperMessage,
+  message: TransactionMessage,
   externalEndpoint: DeveloperEndpoint,
 ): {label: string; kind: "value" | "empty"} {
   if (externalEndpoint.kind === "text" && externalEndpoint.label === "External") {
@@ -371,10 +345,10 @@ function formatMessageValue(
     return {label: "empty", kind: "empty"}
   }
 
-  return {label: formatDeveloperValue(value), kind: "value"}
+  return {label: formatTransactionValue(value), kind: "value"}
 }
 
-function formatMessageOpcode(message: DeveloperMessage | undefined): string | undefined {
+function formatMessageOpcode(message: TransactionMessage | undefined): string | undefined {
   if (!message || !("opcode" in message)) {
     return undefined
   }
@@ -406,8 +380,8 @@ function formatOpcode(opcode: string | number | null | undefined): string | unde
 }
 
 function resolveMessageName(
-  message: DeveloperMessage | undefined,
-  messageNamesByAddress?: DeveloperMessageNamesByAddress,
+  message: TransactionMessage | undefined,
+  messageNamesByAddress?: MessageNamesByAddress,
 ): string | undefined {
   if (!message || !messageNamesByAddress) {
     return undefined
@@ -429,8 +403,8 @@ function resolveMessageName(
 }
 
 function resolveMessageLabel(
-  message: DeveloperMessage | undefined,
-  messageNamesByAddress?: DeveloperMessageNamesByAddress,
+  message: TransactionMessage | undefined,
+  messageNamesByAddress?: MessageNamesByAddress,
 ): string | undefined {
   return resolveMessageName(message, messageNamesByAddress) ?? formatMessageOpcode(message)
 }

@@ -1,7 +1,8 @@
 import {BookOpen, Check, Copy} from "lucide-react"
-import * as React from "react"
 import {Card, CardContent, CardHeader, CardTitle, useToast} from "@acton/shared-ui"
 import {Link, useNavigate} from "react-router-dom"
+import {useCallback, useEffect, useMemo, useState} from "react"
+import type {FC} from "react"
 
 import type {TonClient} from "../../explorer/api/client"
 import {addressKey} from "../../explorer/api/compilerAbi"
@@ -48,19 +49,19 @@ interface NodeInfoRow {
   readonly isLoading?: boolean
 }
 
-export const HomePage: React.FC<HomePageProps> = ({client}) => {
+export const HomePage: FC<HomePageProps> = ({client}) => {
   const navigate = useNavigate()
   const {showToast} = useToast()
   const {prefetchNames} = useAddressBook()
-  const [nodeInfo, setNodeInfo] = React.useState<LocalnetNodeInfo | undefined>()
-  const [copiedEndpoint, setCopiedEndpoint] = React.useState<string>()
-  const [homeState, setHomeState] = React.useState<HomeState>({
+  const [nodeInfo, setNodeInfo] = useState<LocalnetNodeInfo | undefined>()
+  const [copiedEndpoint, setCopiedEndpoint] = useState<string>()
+  const [homeState, setHomeState] = useState<HomeState>({
     transactions: [],
     accountStatesByAddress: {},
     isLoading: true,
   })
-  const endpoints = React.useMemo(() => client.getEndpoints(), [client])
-  const endpointRows = React.useMemo(
+  const endpoints = useMemo(() => client.getEndpoints(), [client])
+  const endpointRows = useMemo(
     () =>
       [
         {
@@ -81,7 +82,7 @@ export const HomePage: React.FC<HomePageProps> = ({client}) => {
       ].filter(endpoint => endpoint.value.length > 0),
     [endpoints],
   )
-  const nodeInfoRows = React.useMemo<readonly NodeInfoRow[]>(() => {
+  const nodeInfoRows = useMemo<readonly NodeInfoRow[]>(() => {
     const isLoading = nodeInfo === undefined
 
     return [
@@ -124,11 +125,11 @@ export const HomePage: React.FC<HomePageProps> = ({client}) => {
       },
     ]
   }, [nodeInfo])
-  const recentAccounts = React.useMemo(
+  const recentAccounts = useMemo(
     () => collectRecentAccounts(homeState.transactions),
     [homeState.transactions],
   )
-  const recentAccountItems = React.useMemo<readonly DeveloperAccountListItem[]>(
+  const recentAccountItems = useMemo<readonly DeveloperAccountListItem[]>(
     () =>
       recentAccounts.map(address => ({
         address,
@@ -141,7 +142,7 @@ export const HomePage: React.FC<HomePageProps> = ({client}) => {
     homeState.transactions,
   )
 
-  React.useEffect(() => {
+  useEffect(() => {
     let cancelled = false
     let timeoutId: ReturnType<typeof setTimeout> | undefined
 
@@ -172,7 +173,7 @@ export const HomePage: React.FC<HomePageProps> = ({client}) => {
     }
   }, [client])
 
-  React.useEffect(() => {
+  useEffect(() => {
     let cancelled = false
     let timeoutId: ReturnType<typeof setTimeout> | undefined
 
@@ -239,11 +240,11 @@ export const HomePage: React.FC<HomePageProps> = ({client}) => {
     }
   }, [client])
 
-  React.useEffect(() => {
+  useEffect(() => {
     void prefetchNames(displayedAddresses)
   }, [displayedAddresses, prefetchNames])
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!copiedEndpoint) {
       return
     }
@@ -254,7 +255,7 @@ export const HomePage: React.FC<HomePageProps> = ({client}) => {
     }
   }, [copiedEndpoint])
 
-  const copyEndpoint = React.useCallback(
+  const copyEndpoint = useCallback(
     async (endpoint: string) => {
       try {
         await navigator.clipboard.writeText(endpoint)

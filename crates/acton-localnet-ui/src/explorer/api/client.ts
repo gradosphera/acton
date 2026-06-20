@@ -2,10 +2,10 @@ import {Cell} from "@ton/core"
 
 import type {ExtendedContractABI} from "./compilerAbi"
 import type {
+  AddressInformation,
   AccountStateTokenInfo,
   AccountStatesResponse,
   ApiResponse,
-  FullAccountState,
   ApiCallLogResponse,
   JettonMaster,
   JettonMasterMetadata,
@@ -15,7 +15,6 @@ import type {
   NftItem,
   StartupWallet,
   StreamingTransactionsEvent,
-  Transaction,
   V3BlocksResponse,
   V3RunGetMethodResponse,
   V3RunGetMethodStackEntry,
@@ -245,12 +244,10 @@ export class TonClient {
     this.toncenterApiKey = toncenterApiKey?.trim() || undefined
   }
 
-  async getAddressInformation(address: string, seqno?: number): Promise<FullAccountState> {
-    const url = this.buildUrl(this.v2BaseUrl, "/getAddressInformation")
+  async getAddressInformation(address: string): Promise<AddressInformation> {
+    const url = this.buildUrl(this.v3BaseUrl, "/addressInformation")
     url.searchParams.append("address", address)
-    if (seqno !== undefined) {
-      url.searchParams.append("seqno", seqno.toString())
-    }
+    url.searchParams.append("include_boc", "true")
     return this.request(url, "Failed to fetch address information")
   }
 
@@ -263,11 +260,12 @@ export class TonClient {
     return this.request(url, "Failed to fetch account states")
   }
 
-  async getTransactions(address: string, limit = 20): Promise<Transaction[]> {
-    const url = this.buildUrl(this.v2BaseUrl, "/getTransactions")
-    url.searchParams.append("address", address)
+  async getAccountTransactions(address: string, limit = 20): Promise<V3TransactionsResponse> {
+    const url = this.buildUrl(this.v3BaseUrl, "/transactions")
+    url.searchParams.append("account", address)
     url.searchParams.append("limit", limit.toString())
-    return this.request(url, "Failed to fetch transactions")
+    url.searchParams.append("sort", "desc")
+    return this.request(url, "Failed to fetch account transactions")
   }
 
   subscribeAccountTransactions(address: string, handlers: TransactionStreamHandlers): () => void {

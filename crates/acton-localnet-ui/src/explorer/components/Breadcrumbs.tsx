@@ -1,6 +1,7 @@
 import {ChevronRight} from "lucide-react"
-import React from "react"
 import {Link} from "react-router-dom"
+import {Fragment} from "react"
+import type {FC} from "react"
 
 import {AddressLabel} from "./AddressLabel"
 import styles from "./Breadcrumbs.module.css"
@@ -17,7 +18,7 @@ interface BreadcrumbsProps {
   readonly items: BreadcrumbItem[]
 }
 
-export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({items}) => {
+export const Breadcrumbs: FC<BreadcrumbsProps> = ({items}) => {
   const formatItem = (item: BreadcrumbItem) => {
     if (item.isAddress) {
       return <AddressLabel address={item.label} />
@@ -36,7 +37,7 @@ export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({items}) => {
       {items.map((item, index) => {
         const key = `${item.label}-${index}`
         return (
-          <React.Fragment key={key}>
+          <Fragment key={key}>
             <ChevronRight size={14} className={styles.separator} />
             {item.path ? (
               <Link to={item.path} className={styles.item}>
@@ -45,7 +46,7 @@ export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({items}) => {
             ) : (
               <span className={`${styles.item} ${styles.current}`}>{formatItem(item)}</span>
             )}
-          </React.Fragment>
+          </Fragment>
         )
       })}
     </nav>

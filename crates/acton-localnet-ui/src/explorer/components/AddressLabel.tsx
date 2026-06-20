@@ -1,4 +1,4 @@
-import type React from "react"
+import type {FC} from "react"
 
 import {useAddressName} from "../hooks/useAddressBook"
 import {useAddressFormat} from "../hooks/useNetworkInfo"
@@ -12,7 +12,7 @@ interface AddressLabelProps {
   readonly className?: string
 }
 
-export const AddressLabel: React.FC<AddressLabelProps> = ({
+export const AddressLabel: FC<AddressLabelProps> = ({
   address,
   shorten = true,
   fallback = "Unknown",

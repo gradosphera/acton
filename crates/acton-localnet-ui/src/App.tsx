@@ -1,18 +1,18 @@
-import * as React from "react"
-import {useCallback, useEffect, useMemo, useState} from "react"
 import {BrowserRouter, Navigate, Route, Routes} from "react-router-dom"
 import {Check, KeyRound, ShieldCheck, X} from "lucide-react"
 import {ToastProvider} from "@acton/shared-ui"
 import type {ThemeMode} from "@acton/shared-ui"
+import {Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState} from "react"
+import type {FC, ReactNode} from "react"
 
 import {TonClient} from "./explorer/api/client"
 import {AccountPage} from "./explorer/pages/AccountPage"
+import {BlockDetailsPage, BlocksPage} from "./explorer/pages/BlocksPage"
 import {ExplorerIndexPage} from "./explorer/pages/ExplorerIndexPage"
 import {TransactionPage} from "./explorer/pages/TransactionPage"
 import {NetworkInfoProvider} from "./explorer/hooks/NetworkInfoProvider"
 import {AddressBookProvider} from "./explorer/hooks/useAddressBook"
 import {DashboardPage} from "./dashboard/DashboardPage"
-import {BlockDetailsPage, BlocksPage} from "./dashboard/pages/BlocksPage"
 import {FaucetPage} from "./dashboard/pages/FaucetPage"
 import {HomePage} from "./dashboard/pages/HomePage"
 import {NftsPage} from "./dashboard/pages/NftsPage"
@@ -47,15 +47,15 @@ const readInitialLocalnetApiToken = (): string | undefined => {
   return ENV_LOCALNET_API_TOKEN || localStorage.getItem(LOCALNET_API_TOKEN_STORAGE_KEY) || undefined
 }
 
-const ApiReferencePage = React.lazy(async () => {
+const ApiReferencePage = lazy(async () => {
   const module = await import("./dashboard/pages/ApiReferencePage")
   return {default: module.ApiReferencePage}
 })
-const ApiCallsPage = React.lazy(async () => {
+const ApiCallsPage = lazy(async () => {
   const module = await import("./dashboard/pages/ApiCallsPage")
   return {default: module.ApiCallsPage}
 })
-export const App: React.FC = () => {
+export const App: FC = () => {
   const [theme, setTheme] = useState<ThemeMode>(readInitialTheme)
   const [localnetApiToken, setLocalnetApiTokenState] = useState<string | undefined>(
     readInitialLocalnetApiToken,
@@ -165,7 +165,7 @@ interface AppContentProps {
   readonly setTheme: (theme: ThemeMode) => void
 }
 
-const AppContent: React.FC<AppContentProps> = ({
+const AppContent: FC<AppContentProps> = ({
   client,
   isAuthOverlayOpen,
   isAuthOverlayRequired,
@@ -364,10 +364,8 @@ const AppContent: React.FC<AppContentProps> = ({
   )
 }
 
-const RouteSuspense: React.FC<{readonly children: React.ReactNode}> = ({children}) => (
-  <React.Suspense fallback={<div className={styles.routeLoading}>Loading…</div>}>
-    {children}
-  </React.Suspense>
+const RouteSuspense: FC<{readonly children: ReactNode}> = ({children}) => (
+  <Suspense fallback={<div className={styles.routeLoading}>Loading…</div>}>{children}</Suspense>
 )
 
 interface LocalnetAuthOverlayProps {
@@ -378,26 +376,26 @@ interface LocalnetAuthOverlayProps {
   readonly required: boolean
 }
 
-const LocalnetAuthOverlay: React.FC<LocalnetAuthOverlayProps> = ({
+const LocalnetAuthOverlay: FC<LocalnetAuthOverlayProps> = ({
   localnetApiToken,
   onClear,
   onClose,
   onSave,
   required,
 }) => {
-  const [draftToken, setDraftToken] = React.useState(localnetApiToken ?? "")
-  const inputRef = React.useRef<HTMLInputElement>(null)
+  const [draftToken, setDraftToken] = useState(localnetApiToken ?? "")
+  const inputRef = useRef<HTMLInputElement>(null)
   const canDismiss = !required
 
-  React.useEffect(() => {
+  useEffect(() => {
     setDraftToken(localnetApiToken ?? "")
   }, [localnetApiToken])
 
-  React.useEffect(() => {
+  useEffect(() => {
     inputRef.current?.focus()
   }, [])
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!canDismiss) {
       return
     }

@@ -1,4 +1,5 @@
-import React, {useEffect, useState} from "react"
+import {useEffect, useState} from "react"
+import type {FC} from "react"
 
 import type {TonClient} from "../api/client"
 import type {JettonMasterMetadata, JettonWallet} from "../api/types"
@@ -18,7 +19,7 @@ interface TokensProps {
   readonly onAddressClick?: (addr: string) => void
 }
 
-export const Tokens: React.FC<TokensProps> = ({wallets, client, onAddressClick}) => {
+export const Tokens: FC<TokensProps> = ({wallets, client, onAddressClick}) => {
   const [mastersByAddress, setMastersByAddress] = useState<Map<string, JettonMasterMetadata>>(
     () => new Map(),
   )
@@ -136,7 +137,7 @@ export const Tokens: React.FC<TokensProps> = ({wallets, client, onAddressClick})
   )
 }
 
-export const TokensSkeleton: React.FC = () => {
+export const TokensSkeleton: FC = () => {
   return (
     <div className={styles.container} aria-label="Loading tokens">
       <div className={styles.list}>

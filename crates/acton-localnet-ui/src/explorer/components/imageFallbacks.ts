@@ -1,4 +1,4 @@
-import type React from "react"
+import type {SyntheticEvent} from "react"
 
 export const TOKEN_PLACEHOLDER_IMAGE = "/token-placeholder.svg"
 
@@ -40,7 +40,7 @@ export function getPrimaryImageSource(
 }
 
 export function replaceBrokenImageWithFallback(
-  event: React.SyntheticEvent<HTMLImageElement>,
+  event: SyntheticEvent<HTMLImageElement>,
   sources: readonly string[],
 ) {
   const image = event.currentTarget

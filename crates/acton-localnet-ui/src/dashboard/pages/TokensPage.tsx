@@ -1,6 +1,7 @@
-import * as React from "react"
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from "@acton/shared-ui"
 import {useNavigate} from "react-router-dom"
+import {useEffect, useState} from "react"
+import type {FC, JSX} from "react"
 
 import type {TonClient} from "../../explorer/api/client"
 import type {JettonMaster} from "../../explorer/api/types"
@@ -20,15 +21,15 @@ interface TokensState {
   readonly error?: string
 }
 
-export const TokensPage: React.FC<TokensPageProps> = ({client}) => {
+export const TokensPage: FC<TokensPageProps> = ({client}) => {
   const navigate = useNavigate()
-  const [tokensState, setTokensState] = React.useState<TokensState>({
+  const [tokensState, setTokensState] = useState<TokensState>({
     items: [],
     isLoading: true,
   })
   const showLoadingSkeleton = useDelayedLoadingVisibility(tokensState.isLoading, 500)
 
-  React.useEffect(() => {
+  useEffect(() => {
     let cancelled = false
 
     void (async () => {
@@ -150,7 +151,7 @@ export const TokensPage: React.FC<TokensPageProps> = ({client}) => {
   )
 }
 
-function TokenCardsSkeleton(): React.JSX.Element {
+function TokenCardsSkeleton(): JSX.Element {
   return (
     <>
       {Array.from({length: 1}, (_, index) => (

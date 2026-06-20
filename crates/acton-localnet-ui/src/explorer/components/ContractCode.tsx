@@ -1,4 +1,6 @@
 import {Buffer} from "node:buffer"
+import {useEffect, useMemo, useState} from "react"
+import type {CSSProperties, FC, JSX, ReactNode} from "react"
 
 import {
   decodeStorageDataCell,
@@ -25,9 +27,6 @@ import {
   type Ty,
 } from "@ton/tolk-abi-to-typescript"
 import {Check, CheckCircle2, Copy, ExternalLink, FileCode2, Folder, Menu, Play} from "lucide-react"
-import type React from "react"
-import type {CSSProperties} from "react"
-import {useEffect, useMemo, useState} from "react"
 import {createHighlighterCore} from "shiki/core"
 import {createOnigurumaEngine} from "shiki/engine/oniguruma"
 import type {LanguageRegistration} from "shiki/types"
@@ -131,7 +130,7 @@ function writeContractHashTab(tab: ContractCodeTab): void {
   globalThis.window.history.replaceState(undefined, "", nextUrl)
 }
 
-export const ContractCode: React.FC<ContractCodeProps> = ({
+export const ContractCode: FC<ContractCodeProps> = ({
   codeBoc,
   ownerAddress,
   client,
@@ -298,7 +297,7 @@ export const ContractCode: React.FC<ContractCodeProps> = ({
   )
 }
 
-function AbiLoadingSkeleton(): React.JSX.Element {
+function AbiLoadingSkeleton(): JSX.Element {
   return (
     <div className={styles.abiResultSkeleton} aria-label="Loading compiler ABI">
       <span />
@@ -331,7 +330,7 @@ function StoragePanel({
   readonly addressFormat: AddressFormatOptions
   readonly onContractClick?: (address: string) => void
   readonly unavailableMessage: string
-}): React.JSX.Element {
+}): JSX.Element {
   const storageTabs: readonly {tab: StorageTab; label: string}[] = [
     {tab: "parsed", label: "parsed"},
     {tab: "base64", label: "base64"},
@@ -425,7 +424,7 @@ function SourcePanel({
     readonly decompiled: string
   }
   readonly verifiedSource?: VerificationSourceResponse
-}): React.JSX.Element {
+}): JSX.Element {
   const activeSourceTab = activeTab === "verified" && !verifiedSource ? "decompiled" : activeTab
   const sourceTabs: readonly {
     tab: SourceTab
@@ -518,7 +517,7 @@ function AbiPanel({
   readonly abiJson: string
   readonly ownerAddress: string
   readonly client: TonClient
-}): React.JSX.Element {
+}): JSX.Element {
   const abiTabs: readonly {tab: AbiTab; label: string}[] = [
     {tab: "view", label: "Rendered"},
     {tab: "raw", label: "Raw JSON"},
@@ -555,7 +554,7 @@ function AbiViewPanel({
   readonly abi: ContractABI
   readonly ownerAddress: string
   readonly client: TonClient
-}): React.JSX.Element {
+}): JSX.Element {
   const ctx = useMemo(() => new DynamicCtx(abi), [abi])
   const symbols = ctx.symbols
 
@@ -609,7 +608,7 @@ function AbiGetMethodsSection({
   readonly ctx: DynamicCtx
   readonly ownerAddress: string
   readonly client: TonClient
-}): React.JSX.Element {
+}): JSX.Element {
   return (
     <AbiSection title="Get methods" count={methods.length}>
       {methods.length > 0 ? (
@@ -641,7 +640,7 @@ function AbiGetMethodItem({
   readonly ctx: DynamicCtx
   readonly ownerAddress: string
   readonly client: TonClient
-}): React.JSX.Element {
+}): JSX.Element {
   const [argsJson, setArgsJson] = useState("[]")
   const [argValues, setArgValues] = useState<readonly string[]>(
     method.parameters.map(parameter => initialSimpleArgValue(ctx.symbols, parameter.ty_idx)),
@@ -816,7 +815,7 @@ function AbiGetMethodItem({
   )
 }
 
-function AbiGetMethodSkeleton(): React.JSX.Element {
+function AbiGetMethodSkeleton(): JSX.Element {
   return (
     <div className={styles.abiResultSkeleton} aria-label="Running get method">
       <span />
@@ -836,7 +835,7 @@ function AbiGetMethodResult({
   readonly decoded: unknown
   readonly method: ABIGetMethod
   readonly symbols: SymTable
-}): React.JSX.Element {
+}): JSX.Element {
   return (
     <div className={styles.abiResult}>
       <AbiDecodedResult decoded={decoded} method={method} symbols={symbols} />
@@ -876,7 +875,7 @@ function AbiDecodedResult({
   readonly decoded: unknown
   readonly method: ABIGetMethod
   readonly symbols: SymTable
-}): React.JSX.Element {
+}): JSX.Element {
   const displayValue = decodedDisplayValue(decoded)
   if (isPlainDecodedValue(displayValue)) {
     return (
@@ -899,7 +898,7 @@ function AbiMessagesSection({
 }: {
   readonly abi: ContractABI
   readonly symbols: SymTable
-}): React.JSX.Element {
+}): JSX.Element {
   const groups: readonly {
     readonly title: string
     readonly messages: readonly AbiMessage[]
@@ -961,7 +960,7 @@ function AbiMessageRow({
 }: {
   readonly message: AbiMessage
   readonly symbols: SymTable
-}): React.JSX.Element {
+}): JSX.Element {
   const declaration = getAbiTyDeclaration(symbols, message.body_ty_idx)
 
   return (
@@ -980,7 +979,7 @@ function AbiStorageSection({
 }: {
   readonly storage: ContractABI["storage"]
   readonly symbols: SymTable
-}): React.JSX.Element {
+}): JSX.Element {
   const rows = [
     {label: "storage", tyIdx: storage.storage_ty_idx},
     {
@@ -1019,7 +1018,7 @@ function AbiDeclarationsSection({
 }: {
   readonly declarations: readonly AbiDeclaration[]
   readonly symbols: SymTable
-}): React.JSX.Element {
+}): JSX.Element {
   return (
     <AbiSection title="Declarations" count={declarations.length}>
       {declarations.length > 0 ? (
@@ -1054,7 +1053,7 @@ function AbiThrownErrorsSection({
   errors,
 }: {
   readonly errors: readonly ContractABI["thrown_errors"][number][]
-}): React.JSX.Element {
+}): JSX.Element {
   return (
     <AbiSection title="Thrown errors" count={errors.length}>
       {errors.length > 0 ? (
@@ -1084,8 +1083,8 @@ function AbiSection({
 }: {
   readonly title: string
   readonly count: number
-  readonly children: React.ReactNode
-}): React.JSX.Element {
+  readonly children: ReactNode
+}): JSX.Element {
   return (
     <section className={styles.abiSection}>
       <header className={styles.abiSectionHeader}>
@@ -1097,11 +1096,7 @@ function AbiSection({
   )
 }
 
-function VerifiedSourcePanel({
-  source,
-}: {
-  readonly source: VerificationSourceResponse
-}): React.JSX.Element {
+function VerifiedSourcePanel({source}: {readonly source: VerificationSourceResponse}): JSX.Element {
   const bundles = useMemo(
     () => source.bundles.filter(bundle => bundle.files.length > 0),
     [source.bundles],
@@ -1154,7 +1149,7 @@ function VerifiedCodeViewer({
 }: {
   readonly bundle: SourceBundle
   readonly verificationUrl: string
-}): React.JSX.Element {
+}): JSX.Element {
   const entrypointPath = useMemo(
     () => findEntrypointFile(bundle.files, bundle.entrypoint)?.path,
     [bundle.entrypoint, bundle.files],
@@ -1289,7 +1284,7 @@ function FileTreeRows({
   readonly entrypoint?: string
   readonly depth?: number
   readonly onSelect: (path: string) => void
-}): React.JSX.Element {
+}): JSX.Element {
   return (
     <>
       {nodes.map(node => {
@@ -2439,7 +2434,7 @@ function formatTolkPrefix(prefix: {
   return `0b${prefix.prefix_num.toString(2).padStart(prefix.prefix_len, "0")}`
 }
 
-function renderDeclarationBody(declaration: AbiDeclaration, symbols: SymTable): React.JSX.Element {
+function renderDeclarationBody(declaration: AbiDeclaration, symbols: SymTable): JSX.Element {
   return (
     <div className={styles.abiDeclarationBody}>
       <TolkCode value={formatDeclarationTolk(declaration, symbols)} />
@@ -2470,7 +2465,7 @@ function TolkCode({
 }: {
   readonly value: string
   readonly wrap?: boolean
-}): React.JSX.Element {
+}): JSX.Element {
   return (
     <div className={styles.abiTolkCode}>
       <CodeContent value={value} language="tolk" wrap={wrap} />
@@ -2488,7 +2483,7 @@ function ContractTextPanel({
   readonly value: string
   readonly language?: HighlightLanguage
   readonly wrap?: boolean
-}): React.JSX.Element {
+}): JSX.Element {
   return (
     <section className={styles.dataPanel}>
       <CopyTextButton className={styles.copyButton} title={title} value={value} />
@@ -2505,7 +2500,7 @@ function CopyTextButton({
   readonly className: string
   readonly title: string
   readonly value: string
-}): React.JSX.Element {
+}): JSX.Element {
   const [isCopied, setIsCopied] = useState(false)
 
   useEffect(() => {
@@ -2541,7 +2536,7 @@ function CodeContent({
   readonly value: string
   readonly language?: HighlightLanguage
   readonly wrap: boolean
-}): React.JSX.Element {
+}): JSX.Element {
   if (language) {
     return <HighlightedCode value={value} language={language} wrap={wrap} />
   }
@@ -2561,7 +2556,7 @@ function HighlightedCode({
   readonly value: string
   readonly language: HighlightLanguage
   readonly wrap: boolean
-}): React.JSX.Element {
+}): JSX.Element {
   const [highlightedHtml, setHighlightedHtml] = useState<string | undefined>()
 
   useEffect(() => {

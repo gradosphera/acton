@@ -1,3 +1,4 @@
+import type {FC, FormEvent, JSX, ReactNode} from "react"
 import {
   ArrowUpRight,
   Check,
@@ -7,7 +8,6 @@ import {
   Unplug,
   Wallet as WalletIcon,
 } from "lucide-react"
-import * as React from "react"
 import {Button, Card, CardContent, CardDescription, CardHeader, CardTitle} from "@acton/shared-ui"
 import {formatUnits} from "@ton/walletkit"
 import {Link} from "react-router-dom"
@@ -20,7 +20,7 @@ import dashboardStyles from "../DashboardPage.module.css"
 
 import styles from "./WalletsPage.module.css"
 
-export const WalletsPage: React.FC = () => {
+export const WalletsPage: FC = () => {
   const addressFormat = useAddressFormat()
   const {
     runtimeWallets,
@@ -42,7 +42,7 @@ export const WalletsPage: React.FC = () => {
     handleCopyAddress,
   } = useWalletRuntime()
 
-  const handleConnectUrlSubmit = async (event: React.FormEvent) => {
+  const handleConnectUrlSubmit = async (event: FormEvent) => {
     event.preventDefault()
     if (tonConnectUrl.trim().length === 0) {
       return
@@ -288,7 +288,7 @@ export const WalletsPage: React.FC = () => {
   )
 }
 
-function WalletRowsSkeleton(): React.JSX.Element {
+function WalletRowsSkeleton(): JSX.Element {
   return (
     <div className={styles.walletList} aria-label="Loading wallets">
       {Array.from({length: 4}, (_, index) => (
@@ -325,10 +325,10 @@ function WalletRowsSkeleton(): React.JSX.Element {
 
 interface MetaRowProps {
   readonly label: string
-  readonly children: React.ReactNode
+  readonly children: ReactNode
 }
 
-const MetaRow: React.FC<MetaRowProps> = ({label, children}) => (
+const MetaRow: FC<MetaRowProps> = ({label, children}) => (
   <div className={styles.metaRow}>
     <span className={styles.metaLabel}>{label}</span>
     <span className={styles.metaValue}>{children}</span>

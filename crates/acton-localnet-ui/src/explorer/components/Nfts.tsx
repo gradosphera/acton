@@ -1,5 +1,6 @@
 import {Search} from "lucide-react"
-import React, {useMemo, useState} from "react"
+import {useMemo, useState} from "react"
+import type {FC} from "react"
 
 import type {NftItem} from "../api/types"
 
@@ -34,7 +35,7 @@ function getNftDisplayName(item: NftItem): string {
   return getContentString(item.content, "name") || `${collectionName || "NFT"} #${item.index}`
 }
 
-export const Nfts: React.FC<NftsProps> = ({items, onAddressClick}) => {
+export const Nfts: FC<NftsProps> = ({items, onAddressClick}) => {
   const [query, setQuery] = useState("")
   const normalizedQuery = query.trim().toLowerCase()
   const visibleItems = useMemo(() => {

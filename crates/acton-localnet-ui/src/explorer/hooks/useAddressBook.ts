@@ -1,5 +1,4 @@
 import {Address} from "@ton/core"
-import type React from "react"
 import {
   createContext,
   createElement,
@@ -10,6 +9,7 @@ import {
   useRef,
   useState,
 } from "react"
+import type {FC, ReactNode} from "react"
 
 import type {TonClient} from "../api/client"
 
@@ -53,9 +53,9 @@ interface PendingNameRequest {
   readonly resolve: (name: AddressName) => void
 }
 
-export const AddressBookProvider: React.FC<{
+export const AddressBookProvider: FC<{
   client: TonClient
-  children: React.ReactNode
+  children: ReactNode
 }> = ({client, children}) => {
   const cacheRef = useRef(new Map<string, AddressName>())
   const tonAssetsRef = useRef(new Map<string, string>())

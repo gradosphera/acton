@@ -1,6 +1,7 @@
 import {Check, Copy, KeyRound, Shield, X} from "lucide-react"
-import * as React from "react"
 import {Button, useToast} from "@acton/shared-ui"
+import {useCallback, useEffect, useMemo, useState} from "react"
+import type {FC, ReactNode} from "react"
 import {
   formatUnits,
   type ConnectionRequestEvent,
@@ -34,10 +35,10 @@ interface WalletRuntimeProviderProps {
   readonly client: TonClient
   readonly host: string
   readonly localnetApiToken?: string
-  readonly children: React.ReactNode
+  readonly children: ReactNode
 }
 
-export const WalletRuntimeProvider: React.FC<WalletRuntimeProviderProps> = ({
+export const WalletRuntimeProvider: FC<WalletRuntimeProviderProps> = ({
   client,
   host,
   localnetApiToken,
@@ -45,39 +46,39 @@ export const WalletRuntimeProvider: React.FC<WalletRuntimeProviderProps> = ({
 }) => {
   const {showToast} = useToast()
   const addressFormat = useAddressFormat()
-  const [startupWallets, setStartupWallets] = React.useState<StartupWallet[]>([])
-  const [walletKit, setWalletKit] = React.useState<ReturnType<typeof createWalletKit>>()
-  const [runtimeWallets, setRuntimeWallets] = React.useState<RuntimeWallet[]>([])
-  const [sessions, setSessions] = React.useState<TONConnectSession[]>([])
-  const [isLoadingWallets, setIsLoadingWallets] = React.useState(true)
-  const [isInitializing, setIsInitializing] = React.useState(true)
-  const [isSyncingWallets, setIsSyncingWallets] = React.useState(false)
-  const [isSubmitting, setIsSubmitting] = React.useState(false)
-  const [isRefreshingBalances, setIsRefreshingBalances] = React.useState(false)
-  const [walletBalances, setWalletBalances] = React.useState<Record<string, WalletBalanceState>>({})
-  const [copiedAddress, setCopiedAddress] = React.useState<string>()
-  const [tonConnectUrl, setTonConnectUrl] = React.useState("")
-  const [selectedConnectWalletId, setSelectedConnectWalletId] = React.useState<string>()
-  const [pendingConnectRequest, setPendingConnectRequest] = React.useState<ConnectionRequestEvent>()
+  const [startupWallets, setStartupWallets] = useState<StartupWallet[]>([])
+  const [walletKit, setWalletKit] = useState<ReturnType<typeof createWalletKit>>()
+  const [runtimeWallets, setRuntimeWallets] = useState<RuntimeWallet[]>([])
+  const [sessions, setSessions] = useState<TONConnectSession[]>([])
+  const [isLoadingWallets, setIsLoadingWallets] = useState(true)
+  const [isInitializing, setIsInitializing] = useState(true)
+  const [isSyncingWallets, setIsSyncingWallets] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isRefreshingBalances, setIsRefreshingBalances] = useState(false)
+  const [walletBalances, setWalletBalances] = useState<Record<string, WalletBalanceState>>({})
+  const [copiedAddress, setCopiedAddress] = useState<string>()
+  const [tonConnectUrl, setTonConnectUrl] = useState("")
+  const [selectedConnectWalletId, setSelectedConnectWalletId] = useState<string>()
+  const [pendingConnectRequest, setPendingConnectRequest] = useState<ConnectionRequestEvent>()
   const [pendingTransactionRequest, setPendingTransactionRequest] =
-    React.useState<SendTransactionRequestEvent>()
-  const [pendingSignDataRequest, setPendingSignDataRequest] = React.useState<SignDataRequestEvent>()
+    useState<SendTransactionRequestEvent>()
+  const [pendingSignDataRequest, setPendingSignDataRequest] = useState<SignDataRequestEvent>()
 
-  const supportedWallets = React.useMemo(
+  const supportedWallets = useMemo(
     () =>
       startupWallets.filter((wallet): wallet is StartupWalletRecord =>
         isSupportedWalletVersion(wallet.version),
       ),
     [startupWallets],
   )
-  const unsupportedWallets = React.useMemo(
+  const unsupportedWallets = useMemo(
     () => startupWallets.filter(wallet => !isSupportedWalletVersion(wallet.version)),
     [startupWallets],
   )
   const selectedConnectWallet =
     runtimeWallets.find(wallet => wallet.id === selectedConnectWalletId) ?? runtimeWallets[0]
 
-  const showErrorToast = React.useCallback(
+  const showErrorToast = useCallback(
     (title: string, error: unknown, fallback: string) => {
       showToast({
         variant: "error",
@@ -88,7 +89,7 @@ export const WalletRuntimeProvider: React.FC<WalletRuntimeProviderProps> = ({
     [showToast],
   )
 
-  const showStaleRequestToast = React.useCallback(
+  const showStaleRequestToast = useCallback(
     (title: string) => {
       showToast({
         variant: "error",
@@ -99,7 +100,7 @@ export const WalletRuntimeProvider: React.FC<WalletRuntimeProviderProps> = ({
     [showToast],
   )
 
-  const refreshSessions = React.useCallback(
+  const refreshSessions = useCallback(
     async (kit = walletKit) => {
       if (!kit) {
         return
@@ -110,7 +111,7 @@ export const WalletRuntimeProvider: React.FC<WalletRuntimeProviderProps> = ({
     [walletKit],
   )
 
-  const refreshWalletBalances = React.useCallback(
+  const refreshWalletBalances = useCallback(
     async (wallets: readonly RuntimeWallet[] = runtimeWallets) => {
       if (wallets.length === 0) {
         setWalletBalances({})
@@ -185,11 +186,11 @@ export const WalletRuntimeProvider: React.FC<WalletRuntimeProviderProps> = ({
     [runtimeWallets, showToast],
   )
 
-  React.useEffect(() => {
+  useEffect(() => {
     void refreshWalletBalances(runtimeWallets)
   }, [refreshWalletBalances, runtimeWallets])
 
-  React.useEffect(() => {
+  useEffect(() => {
     let cancelled = false
 
     void (async () => {
@@ -216,7 +217,7 @@ export const WalletRuntimeProvider: React.FC<WalletRuntimeProviderProps> = ({
     }
   }, [client, showErrorToast])
 
-  React.useEffect(() => {
+  useEffect(() => {
     let cancelled = false
     const nextWalletKit = createWalletKit(host, localnetApiToken)
 
@@ -272,7 +273,7 @@ export const WalletRuntimeProvider: React.FC<WalletRuntimeProviderProps> = ({
     }
   }, [host, localnetApiToken, showErrorToast, showToast])
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!walletKit) {
       return
     }
@@ -321,7 +322,7 @@ export const WalletRuntimeProvider: React.FC<WalletRuntimeProviderProps> = ({
     }
   }, [refreshSessions, showErrorToast, supportedWallets, walletKit])
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!pendingConnectRequest) {
       setSelectedConnectWalletId(undefined)
       return
@@ -334,7 +335,7 @@ export const WalletRuntimeProvider: React.FC<WalletRuntimeProviderProps> = ({
     )
   }, [pendingConnectRequest, runtimeWallets])
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!copiedAddress) {
       return
     }
@@ -343,7 +344,7 @@ export const WalletRuntimeProvider: React.FC<WalletRuntimeProviderProps> = ({
     return () => globalThis.clearTimeout(timeoutId)
   }, [copiedAddress])
 
-  const handleConnectUrl = React.useCallback(
+  const handleConnectUrl = useCallback(
     async (url: string) => {
       if (!walletKit) {
         showToast({
@@ -382,7 +383,7 @@ export const WalletRuntimeProvider: React.FC<WalletRuntimeProviderProps> = ({
 
   useTonConnectPasteHandler(handleConnectUrl)
 
-  const handleApproveConnect = React.useCallback(async () => {
+  const handleApproveConnect = useCallback(async () => {
     if (!walletKit || !pendingConnectRequest || !selectedConnectWallet) {
       return
     }
@@ -422,7 +423,7 @@ export const WalletRuntimeProvider: React.FC<WalletRuntimeProviderProps> = ({
     walletKit,
   ])
 
-  const handleRejectConnect = React.useCallback(async () => {
+  const handleRejectConnect = useCallback(async () => {
     if (!walletKit || !pendingConnectRequest) {
       return
     }
@@ -456,7 +457,7 @@ export const WalletRuntimeProvider: React.FC<WalletRuntimeProviderProps> = ({
     walletKit,
   ])
 
-  const handleApproveTransaction = React.useCallback(async () => {
+  const handleApproveTransaction = useCallback(async () => {
     if (!walletKit || !pendingTransactionRequest) {
       return
     }
@@ -492,7 +493,7 @@ export const WalletRuntimeProvider: React.FC<WalletRuntimeProviderProps> = ({
     walletKit,
   ])
 
-  const handleRejectTransaction = React.useCallback(async () => {
+  const handleRejectTransaction = useCallback(async () => {
     if (!walletKit || !pendingTransactionRequest) {
       return
     }
@@ -529,7 +530,7 @@ export const WalletRuntimeProvider: React.FC<WalletRuntimeProviderProps> = ({
     walletKit,
   ])
 
-  const handleApproveSignData = React.useCallback(async () => {
+  const handleApproveSignData = useCallback(async () => {
     if (!walletKit || !pendingSignDataRequest) {
       return
     }
@@ -563,7 +564,7 @@ export const WalletRuntimeProvider: React.FC<WalletRuntimeProviderProps> = ({
     walletKit,
   ])
 
-  const handleRejectSignData = React.useCallback(async () => {
+  const handleRejectSignData = useCallback(async () => {
     if (!walletKit || !pendingSignDataRequest) {
       return
     }
@@ -600,7 +601,7 @@ export const WalletRuntimeProvider: React.FC<WalletRuntimeProviderProps> = ({
     walletKit,
   ])
 
-  const handleDisconnectSession = React.useCallback(
+  const handleDisconnectSession = useCallback(
     async (sessionId: string) => {
       if (!walletKit) {
         return
@@ -624,7 +625,7 @@ export const WalletRuntimeProvider: React.FC<WalletRuntimeProviderProps> = ({
     [refreshSessions, showErrorToast, showToast, walletKit],
   )
 
-  const handleCopyAddress = React.useCallback(
+  const handleCopyAddress = useCallback(
     async (address: string) => {
       try {
         await navigator.clipboard.writeText(address)
@@ -641,7 +642,7 @@ export const WalletRuntimeProvider: React.FC<WalletRuntimeProviderProps> = ({
     Number(Boolean(pendingTransactionRequest)) +
     Number(Boolean(pendingSignDataRequest))
 
-  const value = React.useMemo<WalletRuntimeContextValue>(
+  const value = useMemo<WalletRuntimeContextValue>(
     () => ({
       host,
       runtimeWallets,
@@ -852,10 +853,10 @@ interface ModalShellProps {
   readonly title: string
   readonly subtitle: string
   readonly onDismiss: () => void
-  readonly children: React.ReactNode
+  readonly children: ReactNode
 }
 
-const ModalShell: React.FC<ModalShellProps> = ({title, subtitle, onDismiss, children}) => (
+const ModalShell: FC<ModalShellProps> = ({title, subtitle, onDismiss, children}) => (
   <div className={styles.modalBackdrop}>
     <div className={styles.modalCard}>
       <div className={styles.modalHeader}>
@@ -879,10 +880,10 @@ const ModalShell: React.FC<ModalShellProps> = ({title, subtitle, onDismiss, chil
 
 interface MetaRowProps {
   readonly label: string
-  readonly children: React.ReactNode
+  readonly children: ReactNode
 }
 
-const MetaRow: React.FC<MetaRowProps> = ({label, children}) => (
+const MetaRow: FC<MetaRowProps> = ({label, children}) => (
   <div className={styles.metaRow}>
     <span className={styles.metaLabel}>{label}</span>
     <span className={styles.metaValue}>{children}</span>
@@ -895,7 +896,7 @@ interface CopyableAddressProps {
   readonly onCopy: (address: string) => Promise<void>
 }
 
-const CopyableAddress: React.FC<CopyableAddressProps> = ({address, copiedAddress, onCopy}) => {
+const CopyableAddress: FC<CopyableAddressProps> = ({address, copiedAddress, onCopy}) => {
   const isCopied = copiedAddress === address
 
   return (

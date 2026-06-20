@@ -1,6 +1,7 @@
 import {Search} from "lucide-react"
-import * as React from "react"
 import {createPortal} from "react-dom"
+import {Suspense, lazy, useCallback, useEffect, useRef, useState} from "react"
+import type {CSSProperties, FC} from "react"
 
 import type {TonClient} from "../explorer/api/client"
 
@@ -11,26 +12,26 @@ interface DashboardSearchProps {
   readonly client: TonClient
 }
 
-type SearchOriginStyle = Readonly<React.CSSProperties> & {
+type SearchOriginStyle = Readonly<CSSProperties> & {
   readonly "--search-origin-left"?: string
   readonly "--search-origin-top"?: string
   readonly "--search-origin-width"?: string
   readonly "--search-origin-height"?: string
 }
 
-const DashboardSearchOverlay = React.lazy(async () => {
+const DashboardSearchOverlay = lazy(async () => {
   const module = await import("./DashboardSearchOverlay")
   return {default: module.DashboardSearchOverlay}
 })
 
-export const DashboardSearch: React.FC<DashboardSearchProps> = ({client}) => {
-  const [isSearchMounted, setIsSearchMounted] = React.useState(false)
-  const [isSearchOpen, setIsSearchOpen] = React.useState(false)
-  const [searchOriginStyle, setSearchOriginStyle] = React.useState<SearchOriginStyle>({})
-  const searchButtonRef = React.useRef<HTMLButtonElement>(null)
-  const searchAnimationRef = React.useRef<number | undefined>(undefined)
+export const DashboardSearch: FC<DashboardSearchProps> = ({client}) => {
+  const [isSearchMounted, setIsSearchMounted] = useState(false)
+  const [isSearchOpen, setIsSearchOpen] = useState(false)
+  const [searchOriginStyle, setSearchOriginStyle] = useState<SearchOriginStyle>({})
+  const searchButtonRef = useRef<HTMLButtonElement>(null)
+  const searchAnimationRef = useRef<number | undefined>(undefined)
 
-  const measureSearchOrigin = React.useCallback(() => {
+  const measureSearchOrigin = useCallback(() => {
     const searchButton = searchButtonRef.current
     const rect = searchButton?.getBoundingClientRect()
     if (!rect) {
@@ -45,7 +46,7 @@ export const DashboardSearch: React.FC<DashboardSearchProps> = ({client}) => {
     })
   }, [])
 
-  const openSearch = React.useCallback(() => {
+  const openSearch = useCallback(() => {
     measureSearchOrigin()
     setIsSearchMounted(true)
     if (searchAnimationRef.current !== undefined) {
@@ -56,11 +57,11 @@ export const DashboardSearch: React.FC<DashboardSearchProps> = ({client}) => {
     })
   }, [measureSearchOrigin])
 
-  const closeSearch = React.useCallback(() => {
+  const closeSearch = useCallback(() => {
     setIsSearchOpen(false)
   }, [])
 
-  const handleGlobalKeyDown = React.useCallback(
+  const handleGlobalKeyDown = useCallback(
     (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) {
         return
@@ -82,7 +83,7 @@ export const DashboardSearch: React.FC<DashboardSearchProps> = ({client}) => {
     [closeSearch, isSearchMounted, openSearch],
   )
 
-  React.useEffect(() => {
+  useEffect(() => {
     return () => {
       if (searchAnimationRef.current !== undefined) {
         cancelAnimationFrame(searchAnimationRef.current)
@@ -90,14 +91,14 @@ export const DashboardSearch: React.FC<DashboardSearchProps> = ({client}) => {
     }
   }, [])
 
-  React.useEffect(() => {
+  useEffect(() => {
     globalThis.addEventListener("keydown", handleGlobalKeyDown)
     return () => {
       globalThis.removeEventListener("keydown", handleGlobalKeyDown)
     }
   }, [handleGlobalKeyDown])
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!isSearchMounted) {
       return
     }
@@ -109,7 +110,7 @@ export const DashboardSearch: React.FC<DashboardSearchProps> = ({client}) => {
     }
   }, [isSearchMounted, measureSearchOrigin])
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!isSearchMounted || isSearchOpen) {
       return
     }
@@ -140,7 +141,7 @@ export const DashboardSearch: React.FC<DashboardSearchProps> = ({client}) => {
 
       {isSearchMounted
         ? createPortal(
-            <React.Suspense
+            <Suspense
               fallback={
                 <SearchOverlayFallback
                   isOpen={isSearchOpen}
@@ -155,7 +156,7 @@ export const DashboardSearch: React.FC<DashboardSearchProps> = ({client}) => {
                 onClose={closeSearch}
                 originStyle={searchOriginStyle}
               />
-            </React.Suspense>,
+            </Suspense>,
             document.body,
           )
         : undefined}
@@ -163,7 +164,7 @@ export const DashboardSearch: React.FC<DashboardSearchProps> = ({client}) => {
   )
 }
 
-const SearchOverlayFallback: React.FC<{
+const SearchOverlayFallback: FC<{
   readonly isOpen: boolean
   readonly onClose: () => void
   readonly style: SearchOriginStyle

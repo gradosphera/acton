@@ -1,3 +1,5 @@
+import {useCallback, useEffect, useMemo, useRef, useState} from "react"
+import type {CSSProperties, FC, KeyboardEvent as ReactKeyboardEvent} from "react"
 import {
   Boxes,
   ChartNoAxesColumn,
@@ -8,7 +10,6 @@ import {
   Wallet,
 } from "lucide-react"
 import type {LucideIcon} from "lucide-react"
-import * as React from "react"
 import {useNavigate} from "react-router-dom"
 
 import type {TonClient} from "../explorer/api/client"
@@ -25,7 +26,7 @@ interface DashboardSearchOverlayProps {
   readonly client: TonClient
   readonly isOpen: boolean
   readonly onClose: () => void
-  readonly originStyle: Readonly<React.CSSProperties>
+  readonly originStyle: Readonly<CSSProperties>
 }
 
 interface SearchAssetsState {
@@ -107,7 +108,7 @@ const quickSearchResults: readonly SearchResult[] = [
   },
 ]
 
-export const DashboardSearchOverlay: React.FC<DashboardSearchOverlayProps> = ({
+export const DashboardSearchOverlay: FC<DashboardSearchOverlayProps> = ({
   client,
   isOpen,
   onClose,
@@ -115,21 +116,21 @@ export const DashboardSearchOverlay: React.FC<DashboardSearchOverlayProps> = ({
 }) => {
   const navigate = useNavigate()
   const addressFormat = useAddressFormat()
-  const [searchQuery, setSearchQuery] = React.useState("")
-  const [searchAssetsState, setSearchAssetsState] = React.useState<SearchAssetsState>({
+  const [searchQuery, setSearchQuery] = useState("")
+  const [searchAssetsState, setSearchAssetsState] = useState<SearchAssetsState>({
     tokens: [],
     nfts: [],
     isLoading: false,
     isLoaded: false,
   })
-  const [apiSearchState, setApiSearchState] = React.useState<ApiSearchState>({
+  const [apiSearchState, setApiSearchState] = useState<ApiSearchState>({
     entries: [],
     isLoading: false,
     isLoaded: false,
   })
-  const searchInputRef = React.useRef<HTMLInputElement>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
 
-  const searchResults = React.useMemo<readonly SearchResult[]>(() => {
+  const searchResults = useMemo<readonly SearchResult[]>(() => {
     const trimmed = searchQuery.trim()
     if (trimmed.length === 0) {
       return quickSearchResults
@@ -237,7 +238,7 @@ export const DashboardSearchOverlay: React.FC<DashboardSearchOverlayProps> = ({
     searchQuery,
   ])
 
-  const selectSearchResult = React.useCallback(
+  const selectSearchResult = useCallback(
     (result: SearchResult) => {
       onClose()
       setSearchQuery("")
@@ -246,8 +247,8 @@ export const DashboardSearchOverlay: React.FC<DashboardSearchOverlayProps> = ({
     [navigate, onClose],
   )
 
-  const handleSearchKeyDown = React.useCallback(
-    (event: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleSearchKeyDown = useCallback(
+    (event: ReactKeyboardEvent<HTMLInputElement>) => {
       if (event.key === "Escape") {
         event.preventDefault()
         onClose()
@@ -261,13 +262,13 @@ export const DashboardSearchOverlay: React.FC<DashboardSearchOverlayProps> = ({
     [onClose, searchResults, selectSearchResult],
   )
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (isOpen) {
       searchInputRef.current?.focus()
     }
   }, [isOpen])
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (searchAssetsState.isLoaded) {
       return
     }
@@ -314,7 +315,7 @@ export const DashboardSearchOverlay: React.FC<DashboardSearchOverlayProps> = ({
     }
   }, [client, searchAssetsState.isLoaded])
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (apiSearchState.isLoaded) {
       return
     }

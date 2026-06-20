@@ -1,7 +1,7 @@
 import {AlertCircle, History, Search, X} from "lucide-react"
-import * as React from "react"
-import {useCallback, useEffect, useState} from "react"
 import {useNavigate} from "react-router-dom"
+import {useCallback, useEffect, useState} from "react"
+import type {FC, MouseEvent as ReactMouseEvent} from "react"
 
 import {normalizeAddress, parseAddress} from "../components/utils"
 import {
@@ -13,7 +13,7 @@ import {useAddressFormat} from "../hooks/useNetworkInfo"
 
 import styles from "./ExplorerIndexPage.module.css"
 
-export const ExplorerIndexPage: React.FC = () => {
+export const ExplorerIndexPage: FC = () => {
   const addressFormat = useAddressFormat()
   const [input, setInput] = useState(() => readExplorerInput())
   const [history, setHistory] = useState<string[]>([])
@@ -43,7 +43,7 @@ export const ExplorerIndexPage: React.FC = () => {
   )
 
   const removeFromHistory = useCallback(
-    (e: React.MouseEvent, address: string) => {
+    (e: ReactMouseEvent, address: string) => {
       e.stopPropagation()
       const newHistory = history.filter(a => a !== address)
       setHistory(newHistory)

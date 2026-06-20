@@ -1,3 +1,5 @@
+import {useEffect, useLayoutEffect, useMemo, useRef, useState} from "react"
+import type {CSSProperties, FC, JSX} from "react"
 import {
   type ContractData,
   TransactionDetails,
@@ -16,14 +18,13 @@ import {
   GitBranch,
   XCircle,
 } from "lucide-react"
-import type React from "react"
-import {useEffect, useLayoutEffect, useMemo, useRef, useState} from "react"
 import {useNavigate, useParams, useSearchParams} from "react-router-dom"
 
 import type {TonClient} from "../api/client"
+import {addressKey} from "../api/compilerAbi"
+import {resolveCompilerAbis} from "../api/compilerAbiResolver"
 import {buildTraceTransactionInfos} from "../api/traceTransactions"
 import type {V3Transaction} from "../api/types"
-import {addressKey} from "../api/compilerAbi"
 import {Breadcrumbs} from "../components/Breadcrumbs"
 import {
   formatAddress as formatDisplayAddress,
@@ -72,7 +73,7 @@ const buildTransactionsHexIndex = (
   return indexed
 }
 
-export const TransactionPage: React.FC<TransactionPageProps> = ({client}) => {
+export const TransactionPage: FC<TransactionPageProps> = ({client}) => {
   const {hash: routeHash = ""} = useParams<{hash: string}>()
   const hash = hashToHex(routeHash) ?? routeHash
   const navigate = useNavigate()
@@ -88,11 +89,16 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({client}) => {
   const [valueFlow, setValueFlow] = useState<ValueFlowItem[]>([])
   const {fetchName} = useAddressBook()
   const addressFormat = useAddressFormat()
+  const fetchNameRef = useRef(fetchName)
+  const addressFormatRef = useRef(addressFormat)
   const showLoadingSkeleton = useDelayedLoadingVisibility(loading, 500)
   const selectedTransactionLt = useMemo(() => {
     const requestedHash = hash.toLowerCase()
     return traces.find(tx => tx.transaction.hash().toString("hex") === requestedHash)?.lt
   }, [hash, traces])
+
+  fetchNameRef.current = fetchName
+  addressFormatRef.current = addressFormat
 
   const handleContractClick = (address: string) => {
     const formattedAddr = normalizeAddress(address, addressFormat)
@@ -124,6 +130,7 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({client}) => {
       setError(undefined)
       try {
         const data = await client.getTraces(hash)
+        if (!isActive) return
 
         if (data.traces && data.traces.length > 0) {
           const trace = data.traces[0]
@@ -143,44 +150,32 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({client}) => {
           }
 
           const requestedAddresses = [...addresses].sort()
-          const states =
-            requestedAddresses.length > 0
-              ? await client.getAccountStates(requestedAddresses, false).catch(() => {})
-              : undefined
-          const addressToCodeHash = new Map<string, string>()
-          for (const account of states?.accounts ?? []) {
-            if (account.code_hash) {
-              addressToCodeHash.set(addressKey(account.address), account.code_hash)
-            }
-          }
-
-          const codeHashesToFetch = new Set(addressToCodeHash.values())
+          const additionalCodeHashes = new Set<string>()
           for (const tx of Object.values(transactionsMap)) {
             if (tx.account_state_before?.code_hash) {
-              codeHashesToFetch.add(tx.account_state_before.code_hash)
+              additionalCodeHashes.add(tx.account_state_before.code_hash)
             }
             if (tx.account_state_after?.code_hash) {
-              codeHashesToFetch.add(tx.account_state_after.code_hash)
+              additionalCodeHashes.add(tx.account_state_after.code_hash)
             }
           }
           for (const tx of processed) {
             const stateInitCodeHash = tx.transaction.inMessage?.init?.code?.hash().toString("hex")
             if (stateInitCodeHash) {
-              codeHashesToFetch.add(stateInitCodeHash)
+              additionalCodeHashes.add(stateInitCodeHash)
             }
           }
 
-          const abiByCodeHash = new Map<string, ContractData["abi"]>()
-          const codeHashes = [...codeHashesToFetch]
-          const fetchedAbis =
-            codeHashes.length > 0
-              ? await client
-                  .getCompilerAbis(codeHashes)
-                  .catch((): Awaited<ReturnType<TonClient["getCompilerAbis"]>> => ({}))
-              : {}
-          for (const codeHash of codeHashes) {
-            abiByCodeHash.set(codeHash, fetchedAbis[codeHash]?.compiler_abi)
+          const resolvedAbis = await resolveCompilerAbis({
+            client,
+            addresses: requestedAddresses,
+            additionalCodeHashes: [...additionalCodeHashes],
+            shouldContinue: () => isActive,
+          })
+          if (!resolvedAbis) {
+            return
           }
+          const {addressToCodeHash, abiByCodeHash} = resolvedAbis
 
           for (const tx of processed) {
             const sourceTx = transactionsByLt.get(tx.lt)
@@ -207,11 +202,12 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({client}) => {
           await Promise.all(
             requestedAddresses.map(async addr => {
               const letter = String.fromCodePoint(nextLetterCode++)
-              const displayAddr = normalizeAddress(addr, addressFormat)
-              const customName = await fetchName(addr)
+              const displayAddr = normalizeAddress(addr, addressFormatRef.current)
+              const customName = await fetchNameRef.current(addr)
               const abi = abiByCodeHash.get(addressToCodeHash.get(addressKey(addr)) ?? "")
               contractsMap.set(addr, {
-                displayName: customName || formatDisplayAddress(displayAddr, true, addressFormat),
+                displayName:
+                  customName || formatDisplayAddress(displayAddr, true, addressFormatRef.current),
                 address: Address.parse(addr),
                 letter,
                 abi,
@@ -223,7 +219,7 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({client}) => {
           if (isActive) {
             setTraces(processed)
             setContracts(contractsMap)
-            setCompilerAbisByCodeHash(abiByCodeHash)
+            setCompilerAbisByCodeHash(new Map(abiByCodeHash))
             setValueFlow(nextValueFlow)
           }
         } else {
@@ -242,7 +238,7 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({client}) => {
     return () => {
       isActive = false
     }
-  }, [addressFormat, client, fetchName, hash])
+  }, [client, hash])
 
   if (loading) {
     return showLoadingSkeleton ? <TransactionTraceSkeleton activeTab={activeTab} /> : null
@@ -374,7 +370,7 @@ interface TransactionTraceSkeletonProps {
   readonly activeTab: TabType
 }
 
-function TransactionTraceSkeleton({activeTab}: TransactionTraceSkeletonProps): React.JSX.Element {
+function TransactionTraceSkeleton({activeTab}: TransactionTraceSkeletonProps): JSX.Element {
   return (
     <div className={styles.container} aria-label="Loading transaction trace">
       <div className={styles.content}>
@@ -424,7 +420,7 @@ function TransactionTraceSkeleton({activeTab}: TransactionTraceSkeletonProps): R
   )
 }
 
-function ValueFlowSkeleton(): React.JSX.Element {
+function ValueFlowSkeleton(): JSX.Element {
   return (
     <div className={styles.skeletonFlowCard} aria-hidden="true">
       <div className={styles.skeletonFlowHeader}>
@@ -446,7 +442,7 @@ function ValueFlowSkeleton(): React.JSX.Element {
   )
 }
 
-function TraceDetailsSkeleton(): React.JSX.Element {
+function TraceDetailsSkeleton(): JSX.Element {
   return (
     <div className={styles.detailsList} aria-hidden="true">
       {[0, 1].map(index => (
@@ -466,7 +462,7 @@ function TraceDetailsSkeleton(): React.JSX.Element {
   )
 }
 
-function TraceTreeSkeleton(): React.JSX.Element {
+function TraceTreeSkeleton(): JSX.Element {
   return (
     <div className={styles.skeletonTree} aria-hidden="true">
       <div className={`${styles.skeletonTreeNode} ${styles.skeletonTreeNodeRoot}`}>
@@ -486,7 +482,7 @@ function TraceTreeSkeleton(): React.JSX.Element {
   )
 }
 
-const TraceTransactionNode: React.FC<TraceTransactionNodeProps> = ({
+const TraceTransactionNode: FC<TraceTransactionNodeProps> = ({
   tx,
   contracts,
   compilerAbisByCodeHash,
@@ -572,7 +568,7 @@ const TraceTransactionNode: React.FC<TraceTransactionNodeProps> = ({
             style={
               {
                 "--trace-connector-height": `${connectorHeight}px`,
-              } as React.CSSProperties
+              } as CSSProperties
             }
             aria-hidden="true"
           >

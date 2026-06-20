@@ -1,7 +1,8 @@
 import {ApiReferenceReact, type AnyApiReferenceConfiguration} from "@scalar/api-reference-react"
 import "@scalar/api-reference-react/style.css"
-import * as React from "react"
 import {useLocation} from "react-router-dom"
+import {useCallback, useEffect, useMemo, useRef} from "react"
+import type {FC} from "react"
 
 import styles from "./ApiReferencePage.module.css"
 
@@ -41,7 +42,7 @@ const apiReferences: Record<
   },
 }
 
-export const ApiReferencePage: React.FC<ApiReferencePageProps> = ({
+export const ApiReferencePage: FC<ApiReferencePageProps> = ({
   apiBaseUrl,
   localnetApiToken,
   onUnauthorized,
@@ -50,13 +51,13 @@ export const ApiReferencePage: React.FC<ApiReferencePageProps> = ({
   version,
 }) => {
   const reference = apiReferences[version]
-  const localnetOrigin = React.useMemo(() => apiOrigin(apiBaseUrl), [apiBaseUrl])
+  const localnetOrigin = useMemo(() => apiOrigin(apiBaseUrl), [apiBaseUrl])
   const syncReferenceAnchor = useApiReferenceAnchorSync(reference.slug)
-  const apiReferenceFetch = React.useMemo(
+  const apiReferenceFetch = useMemo(
     () => createApiReferenceFetch(apiBaseUrl, localnetApiToken, toncenterApiKey, onUnauthorized),
     [apiBaseUrl, localnetApiToken, onUnauthorized, toncenterApiKey],
   )
-  const configuration = React.useMemo<AnyApiReferenceConfiguration>(
+  const configuration = useMemo<AnyApiReferenceConfiguration>(
     () => ({
       title: reference.title,
       slug: reference.slug,
@@ -257,11 +258,11 @@ interface ApiReferenceAnchorLocation {
 
 function useApiReferenceAnchorSync(referenceSlug: string): () => void {
   const {hash, pathname, search} = useLocation()
-  const targetRef = React.useRef<ApiReferenceAnchorTarget | undefined>(
+  const targetRef = useRef<ApiReferenceAnchorTarget | undefined>(
     apiReferenceAnchorTarget(referenceSlug, {hash, pathname, search}),
   )
 
-  const syncAnchor = React.useCallback(() => {
+  const syncAnchor = useCallback(() => {
     const target = targetRef.current
     if (!target) {
       return
@@ -285,7 +286,7 @@ function useApiReferenceAnchorSync(referenceSlug: string): () => void {
     globalThis.requestAnimationFrame(applyAnchor)
   }, [])
 
-  React.useEffect(() => {
+  useEffect(() => {
     targetRef.current = apiReferenceAnchorTarget(referenceSlug, {hash, pathname, search})
     syncAnchor()
   }, [hash, pathname, referenceSlug, search, syncAnchor])

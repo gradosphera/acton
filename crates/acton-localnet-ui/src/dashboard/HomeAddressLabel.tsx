@@ -1,4 +1,5 @@
-import * as React from "react"
+import {useMemo} from "react"
+import type {FC} from "react"
 
 import {formatAddress, normalizeAddress, parseAddress} from "../explorer/components/utils"
 import {useAddressName} from "../explorer/hooks/useAddressBook"
@@ -12,13 +13,13 @@ interface HomeAddressLabelProps {
   readonly className?: string
 }
 
-export const HomeAddressLabel: React.FC<HomeAddressLabelProps> = ({
+export const HomeAddressLabel: FC<HomeAddressLabelProps> = ({
   address,
   fallback = "Unknown",
   className,
 }) => {
   const addressFormat = useAddressFormat()
-  const normalizedAddress = React.useMemo(() => {
+  const normalizedAddress = useMemo(() => {
     if (!address) {
       return
     }

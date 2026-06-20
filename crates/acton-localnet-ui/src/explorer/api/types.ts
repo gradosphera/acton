@@ -13,11 +13,6 @@ export interface ApiError {
 
 export type ApiResponse<T> = ApiOk<T> | ApiError
 
-export interface AccountAddress {
-  readonly "@type": "accountAddress"
-  readonly account_address: string
-}
-
 export interface TransactionId {
   readonly "@type": "internal.transactionId"
   readonly lt: string
@@ -33,53 +28,14 @@ export interface BlockId {
   readonly file_hash: string
 }
 
-export interface Message {
-  readonly "@type": "ext.message" | "raw.message" | "msg.message"
-  readonly hash?: string
-  readonly opcode?: string | null
-  readonly source?: string
-  readonly destination?: string
-  readonly value?: string
-  readonly fwd_fee?: string
-  readonly ihr_fee?: string
-  readonly created_lt?: string
-  readonly body_hash?: string
-  readonly msg_data?: {
-    readonly "@type": "msg.dataRaw"
-    readonly body: string
-    readonly init_state: string
-  }
-  readonly extra_currencies?: readonly unknown[]
-}
-
-export interface Transaction {
-  readonly "@type": "ext.transaction"
-  readonly hash?: string | null
-  readonly address: AccountAddress
-  readonly account: string
-  readonly utime: number
-  readonly data: string
-  readonly success?: boolean | null
-  readonly exit_code?: number | null
-  readonly transaction_id: TransactionId
-  readonly fee: string
-  readonly storage_fee: string
-  readonly other_fee: string
-  readonly in_msg?: Message | null
-  readonly out_msgs: readonly Message[]
-}
-
-export interface FullAccountState {
-  readonly "@type": "raw.fullAccountState"
+export interface AddressInformation {
   readonly balance: string
-  readonly extra_currencies: readonly unknown[]
-  readonly last_transaction_id: TransactionId
-  readonly block_id: BlockId
   readonly code: string
   readonly data: string
   readonly frozen_hash: string
-  readonly sync_utime: number
-  readonly state: "active" | "uninitialized" | "frozen" | "nonexist"
+  readonly last_transaction_hash: string
+  readonly last_transaction_lt: string
+  readonly status: "active" | "uninitialized" | "frozen" | "nonexist"
 }
 
 export interface AccountStateTokenInfo {

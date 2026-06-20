@@ -1,11 +1,11 @@
 import type {ContractABI} from "@ton/tolk-abi-to-typescript"
 import {Check, Copy, Edit2, Info, QrCode, X} from "lucide-react"
-import type React from "react"
-import {useCallback, useEffect, useId, useLayoutEffect, useRef, useState} from "react"
 import {createPortal} from "react-dom"
 import {QRCodeSVG} from "qrcode.react"
+import {useCallback, useEffect, useId, useLayoutEffect, useRef, useState} from "react"
+import type {CSSProperties, FC, JSX, ReactNode} from "react"
 
-import type {FullAccountState, JettonMasterMetadata, JettonWallet} from "../api/types"
+import type {AddressInformation, JettonMasterMetadata, JettonWallet} from "../api/types"
 import type {TonClient} from "../api/client"
 import type {ContractAbiLink, ExtendedContractABI} from "../api/compilerAbi"
 import {useAddressBook, useAddressName} from "../hooks/useAddressBook"
@@ -24,7 +24,7 @@ const TOKEN_PREVIEW_LIMIT = 5
 
 interface AccountInfoProps {
   readonly address: string
-  readonly state?: FullAccountState
+  readonly state?: AddressInformation
   readonly extendedContractAbi?: ExtendedContractABI
   readonly contractInterfaces?: readonly string[]
   readonly jettonWallets: JettonWallet[]
@@ -46,7 +46,7 @@ interface CollectiblePreview {
   readonly name?: string
 }
 
-export const AccountInfo: React.FC<AccountInfoProps> = ({
+export const AccountInfo: FC<AccountInfoProps> = ({
   address,
   state,
   extendedContractAbi,
@@ -188,7 +188,7 @@ export const AccountInfo: React.FC<AccountInfoProps> = ({
   const contractDescriptionUrl = contractDescription && getExternalUrl(contractDescription)
   const contractLinks = getContractAbiLinks(extendedContractAbi)
   const hasContractDescriptionPopover = Boolean(contractDescription || contractLinks.length > 0)
-  const statusInfo = getStatusInfo(state?.state)
+  const statusInfo = getStatusInfo(state?.status)
   const shortAddress = formatAddress(displayAddress, true, addressFormat)
   const addressRowText = hasContextCard ? shortAddress : displayAddress
   const statusAddress = formatRawAddress(displayAddress)
@@ -651,17 +651,14 @@ interface ContractDescriptionPosition {
 
 interface ContractDescriptionTooltipProps {
   readonly id: string
-  readonly children: React.ReactNode
+  readonly children: ReactNode
 }
 
 const CONTRACT_DESCRIPTION_MARGIN = 12
 const CONTRACT_DESCRIPTION_GAP = 12
 const CONTRACT_DESCRIPTION_ARROW_MIN = 16
 
-function ContractDescriptionTooltip({
-  id,
-  children,
-}: ContractDescriptionTooltipProps): React.JSX.Element {
+function ContractDescriptionTooltip({id, children}: ContractDescriptionTooltipProps): JSX.Element {
   const triggerRef = useRef<HTMLButtonElement | null>(null)
   const popoverRef = useRef<HTMLSpanElement | null>(null)
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
@@ -765,7 +762,7 @@ function ContractDescriptionTooltip({
     top: position?.top ?? CONTRACT_DESCRIPTION_MARGIN,
     "--contract-description-arrow-x": `${position?.arrowX ?? CONTRACT_DESCRIPTION_ARROW_MIN}px`,
     "--contract-description-arrow-y": `${position?.arrowY ?? CONTRACT_DESCRIPTION_ARROW_MIN}px`,
-  } as React.CSSProperties
+  } as CSSProperties
 
   return (
     <span className={styles.contractDescription}>
@@ -992,7 +989,7 @@ function formatContractLinkKind(kind: string): string {
   return kind.replaceAll("_", " ")
 }
 
-function getStatusInfo(state?: FullAccountState["state"]): {
+function getStatusInfo(state?: AddressInformation["status"]): {
   readonly label: string
   readonly className: "statusActive" | "statusFrozen" | "statusUninit" | "statusNonexist"
 } {

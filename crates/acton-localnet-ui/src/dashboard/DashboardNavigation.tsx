@@ -1,3 +1,5 @@
+import {Fragment, useCallback, useEffect, useMemo, useState} from "react"
+import type {FC} from "react"
 import {
   Activity,
   ArrowUpRight,
@@ -21,7 +23,6 @@ import {
   X,
 } from "lucide-react"
 import type {LucideIcon} from "lucide-react"
-import * as React from "react"
 import {useLocation, useNavigate} from "react-router-dom"
 import {ThemeSwitch} from "@acton/shared-ui"
 import type {ThemeMode} from "@acton/shared-ui"
@@ -82,7 +83,7 @@ const footerItems: SidebarItem[] = [
   {label: "GitHub", icon: Github, href: "https://github.com/ton-blockchain/acton"},
 ]
 
-export const DashboardNavigation: React.FC<DashboardNavigationProps> = ({
+export const DashboardNavigation: FC<DashboardNavigationProps> = ({
   client,
   localnetApiToken,
   onOpenAuthTokenOverlay,
@@ -95,12 +96,12 @@ export const DashboardNavigation: React.FC<DashboardNavigationProps> = ({
   const location = useLocation()
   const navigate = useNavigate()
   const {forkNetwork} = useNetworkInfo()
-  const [explorerPath, setExplorerPath] = React.useState(() => readExplorerLastPath())
-  const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false)
-  const forkBadgeLabel = React.useMemo(() => formatForkNetworkLabel(forkNetwork), [forkNetwork])
-  const closeMobileMenu = React.useCallback(() => setMobileMenuOpen(false), [])
+  const [explorerPath, setExplorerPath] = useState(() => readExplorerLastPath())
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const forkBadgeLabel = useMemo(() => formatForkNetworkLabel(forkNetwork), [forkNetwork])
+  const closeMobileMenu = useCallback(() => setMobileMenuOpen(false), [])
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!location.pathname.startsWith("/explorer") || location.pathname === "/explorer/blocks") {
       return
     }
@@ -110,11 +111,11 @@ export const DashboardNavigation: React.FC<DashboardNavigationProps> = ({
     setExplorerPath(nextPath)
   }, [location.hash, location.pathname, location.search])
 
-  React.useEffect(() => {
+  useEffect(() => {
     closeMobileMenu()
   }, [closeMobileMenu, location.hash, location.pathname, location.search])
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!mobileMenuOpen) {
       return
     }
@@ -188,7 +189,7 @@ export const DashboardNavigation: React.FC<DashboardNavigationProps> = ({
         <div className={styles.navScroll}>
           <nav className={styles.nav}>
             {navigationSections.map((section, index) => (
-              <React.Fragment key={section.id}>
+              <Fragment key={section.id}>
                 {index > 0 && <div className={styles.navDivider} />}
                 <div className={styles.navSection}>
                   {section.items.map(item => {
@@ -224,7 +225,7 @@ export const DashboardNavigation: React.FC<DashboardNavigationProps> = ({
                     )
                   })}
                 </div>
-              </React.Fragment>
+              </Fragment>
             ))}
 
             <div className={styles.navDivider} />

@@ -1,20 +1,20 @@
-import type React from "react"
 import {Check, Copy, X} from "lucide-react"
-import {useEffect, useMemo, useRef, useState} from "react"
 import {useLocation, useNavigate, useParams} from "react-router-dom"
+import {useEffect, useMemo, useRef, useState} from "react"
+import type {FC, ReactNode} from "react"
 
 import type {TonClient} from "../api/client"
 import type {ExtendedContractABI} from "../api/compilerAbi"
 import type {
+  AddressInformation,
   AccountStatesResponse,
   AccountStateTokenInfo,
-  FullAccountState,
   JettonMaster,
   JettonMasterMetadata,
   JettonWallet,
   NftItem,
-  Transaction,
   V3AccountState,
+  V3TransactionListItem,
   VerificationSourceResponse,
 } from "../api/types"
 import {AccountInfo} from "../components/AccountInfo"
@@ -41,14 +41,14 @@ interface AccountPageProps {
 const ACCOUNT_TRANSACTION_HISTORY_LIMIT = 1000
 type AccountTab = "history" | "contract" | "tokens" | "nfts" | "holders"
 
-export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
+export const AccountPage: FC<AccountPageProps> = ({client}) => {
   const {address = ""} = useParams<{address: string}>()
   const navigate = useNavigate()
   const location = useLocation()
   const addressFormat = useAddressFormat()
-  const [accountState, setAccountState] = useState<FullAccountState | undefined>()
+  const [accountState, setAccountState] = useState<AddressInformation | undefined>()
   const [accountStateV3, setAccountStateV3] = useState<V3AccountState | undefined>()
-  const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [transactions, setTransactions] = useState<V3TransactionListItem[]>([])
   const [jettonMaster, setJettonMaster] = useState<JettonMaster | undefined>()
   const [jettonWalletAccount, setJettonWalletAccount] = useState<JettonWallet | undefined>()
   const [jettonWalletMaster, setJettonWalletMaster] = useState<JettonMasterMetadata | undefined>()
@@ -187,12 +187,12 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
 
       const loadTransactions = async () => {
         try {
-          const txs = await client.getTransactions(
+          const txs = await client.getAccountTransactions(
             formattedAddress,
             ACCOUNT_TRANSACTION_HISTORY_LIMIT,
           )
           if (!isActive) return
-          setTransactions(txs)
+          setTransactions([...txs.transactions])
           setTransactionsError(undefined)
         } catch (error) {
           if (!isActive) return
@@ -307,13 +307,13 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
           const [nextState, nextStateV3, nextTransactions] = await Promise.all([
             client.getAddressInformation(formattedAddress),
             client.getAccountStates([formattedAddress], false).catch(() => {}),
-            client.getTransactions(formattedAddress, ACCOUNT_TRANSACTION_HISTORY_LIMIT),
+            client.getAccountTransactions(formattedAddress, ACCOUNT_TRANSACTION_HISTORY_LIMIT),
           ])
           if (!isActive) return
           setAccountState(nextState)
           setAccountStateV3(nextStateV3 ? nextStateV3.accounts[0] : undefined)
           setAccountTokenInfo(getAccountTokenInfo(nextStateV3))
-          setTransactions(nextTransactions)
+          setTransactions([...nextTransactions.transactions])
           setTransactionsError(undefined)
           setTransactionsLoading(false)
         } while (refreshQueued && isActive)
@@ -412,7 +412,7 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
     let isActive = true
 
     const loadJettonWallet = async () => {
-      if (!formattedAddress) {
+      if (!formattedAddress || !isJettonWalletAccount) {
         setJettonWalletAccount(undefined)
         setJettonWalletMaster(undefined)
         setJettonWalletLoading(false)
@@ -448,7 +448,7 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
     return () => {
       isActive = false
     }
-  }, [accountAddressKey, client])
+  }, [accountAddressKey, client, isJettonWalletAccount])
 
   useEffect(() => {
     let isActive = true
@@ -1142,7 +1142,7 @@ interface CopyAddressButtonProps {
   readonly title?: string
 }
 
-const CopyAddressButton: React.FC<CopyAddressButtonProps> = ({
+const CopyAddressButton: FC<CopyAddressButtonProps> = ({
   address,
   className,
   title = "Copy address",
@@ -1178,19 +1178,19 @@ const CopyAddressButton: React.FC<CopyAddressButtonProps> = ({
 }
 
 interface AccountDetailRowsProps {
-  readonly children: React.ReactNode
+  readonly children: ReactNode
 }
 
-const AccountDetailRows: React.FC<AccountDetailRowsProps> = ({children}) => (
+const AccountDetailRows: FC<AccountDetailRowsProps> = ({children}) => (
   <div className={styles.accountDetailRows}>{children}</div>
 )
 
 interface AccountTextDetailRowProps {
   readonly label: string
-  readonly value: React.ReactNode
+  readonly value: ReactNode
 }
 
-const AccountTextDetailRow: React.FC<AccountTextDetailRowProps> = ({label, value}) => (
+const AccountTextDetailRow: FC<AccountTextDetailRowProps> = ({label, value}) => (
   <div className={styles.accountDetailRow}>
     <span className={styles.accountDetailLabel}>{label}</span>
     <span className={styles.accountDetailValue}>{value}</span>
@@ -1204,7 +1204,7 @@ interface AccountAddressDetailRowProps {
   readonly onAddressClick: (address: string) => void
 }
 
-const AccountAddressDetailRow: React.FC<AccountAddressDetailRowProps> = ({
+const AccountAddressDetailRow: FC<AccountAddressDetailRowProps> = ({
   label,
   address,
   fallback,
@@ -1238,8 +1238,8 @@ const AccountAddressDetailRow: React.FC<AccountAddressDetailRowProps> = ({
 const JSON_TOKEN_RE =
   /("(?:\\.|[^"\\])*")(\s*:)?|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|true|false|null)/g
 
-function renderJson(json: string): React.ReactNode[] {
-  const parts: React.ReactNode[] = []
+function renderJson(json: string): ReactNode[] {
+  const parts: ReactNode[] = []
   let lastIndex = 0
   let key = 0
 

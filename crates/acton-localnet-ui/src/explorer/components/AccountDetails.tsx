@@ -1,3 +1,5 @@
+import {Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState} from "react"
+import type {CSSProperties, FC, JSX} from "react"
 import {
   Card,
   CardContent,
@@ -22,22 +24,25 @@ import {
   MoreHorizontal,
   UsersRound,
 } from "lucide-react"
-import type React from "react"
-import {lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState} from "react"
 import {useNavigate} from "react-router-dom"
 import type {ContractABI} from "@ton/tolk-abi-to-typescript"
 
 import type {
-  FullAccountState,
+  AddressInformation,
   JettonMaster,
   JettonWallet,
   NftItem,
-  Message,
-  Transaction,
+  V3Message,
+  V3TransactionListItem,
   VerificationSourceResponse,
 } from "../api/types"
-import {TonClient} from "../api/client"
-import {addressKey, buildMessageNamesByOpcodeHex} from "../api/compilerAbi"
+import type {TonClient} from "../api/client"
+import {addressKey} from "../api/compilerAbi"
+import {
+  collectTransactionListAddresses,
+  useMessageNamesByAddress,
+  type MessageNamesByAddress,
+} from "../hooks/useMessageNamesByAddress"
 
 import {AddressLabel} from "./AddressLabel"
 import {Nfts} from "./Nfts"
@@ -46,14 +51,10 @@ import styles from "./AccountDetails.module.css"
 import {formatNano, formatTimeAgo, hashToHex, isSameAddress, parseAddress} from "./utils"
 
 type Tabs = "history" | "contract" | "tokens" | "nfts" | "holders"
-const ContractCode = lazy(async () => {
-  const module = await import("./ContractCode")
-  return {default: module.ContractCode}
-})
 
 interface AccountDetailsProps {
-  readonly transactions: Transaction[]
-  readonly accountState?: FullAccountState
+  readonly transactions: V3TransactionListItem[]
+  readonly accountState?: AddressInformation
   readonly compilerAbi?: ContractABI
   readonly compilerAbiLoading?: boolean
   readonly compilerAbiError?: string
@@ -94,21 +95,16 @@ interface HistoryTransactionInfo {
   readonly isIncoming: boolean
   readonly address: string
   readonly displayAddressFallback: string
-  readonly displayMessage?: Message
+  readonly displayMessage?: V3Message
   readonly actionKey: string
   readonly actionLabel: string
   readonly displayValue: bigint
 }
 
 interface HistoryTransactionRow {
-  readonly tx: Transaction
+  readonly tx: V3TransactionListItem
   readonly info: HistoryTransactionInfo
 }
-
-type MessageNamesByAddress = Map<
-  string,
-  {incoming: Map<string, string>; outgoing: Map<string, string>}
->
 
 interface FilterPopoverPosition {
   readonly top: number
@@ -131,7 +127,7 @@ const TIME_FORMAT_OPTIONS: readonly {
   {value: "absolute", label: "Absolute", preview: "25 May, 09:41"},
 ]
 
-export const AccountDetails: React.FC<AccountDetailsProps> = ({
+export const AccountDetails: FC<AccountDetailsProps> = ({
   transactions,
   accountState,
   compilerAbi,
@@ -160,9 +156,6 @@ export const AccountDetails: React.FC<AccountDetailsProps> = ({
   const [activeTab, setActiveTab] = useState<Tabs>("history")
   const filterPopoverRef = useRef<HTMLDivElement>(null)
   const filterButtonRef = useRef<HTMLButtonElement>(null)
-  const [compilerAbiByAddress, setCompilerAbiByAddress] = useState<
-    Map<string, ContractABI | undefined>
-  >(new Map())
   const [isFiltersOpen, setIsFiltersOpen] = useState(false)
   const [filterPopoverPosition, setFilterPopoverPosition] = useState<
     FilterPopoverPosition | undefined
@@ -193,92 +186,6 @@ export const AccountDetails: React.FC<AccountDetailsProps> = ({
     onTabChange?.("history")
   }, [activeTab, onTabChange, showNftsTab])
 
-  useEffect(() => {
-    let isActive = true
-
-    const loadRelatedCompilerAbis = async () => {
-      if (activeTab !== "history") {
-        return
-      }
-
-      const addresses = new Set<string>()
-      addresses.add(ownerAddress)
-
-      for (const tx of transactions) {
-        if (tx.in_msg?.source) addresses.add(tx.in_msg.source)
-        if (tx.in_msg?.destination) addresses.add(tx.in_msg.destination)
-        for (const msg of tx.out_msgs) {
-          if (msg.source) addresses.add(msg.source)
-          if (msg.destination) addresses.add(msg.destination)
-        }
-      }
-
-      const requestedAddresses = [...addresses].filter(Boolean)
-      if (requestedAddresses.length === 0) {
-        setCompilerAbiByAddress(new Map())
-        return
-      }
-
-      const next = new Map<string, ContractABI | undefined>()
-      const ownerKey = addressKey(ownerAddress)
-      const stateRequestAddresses = requestedAddresses.filter(
-        address => addressKey(address) !== ownerKey,
-      )
-
-      const states =
-        stateRequestAddresses.length > 0
-          ? await client.getAccountStates(stateRequestAddresses, false).catch(() => {})
-          : undefined
-      const addressToCodeHash = new Map<string, string>()
-      if (compilerAbi) {
-        next.set(ownerKey, compilerAbi)
-      }
-      for (const account of states?.accounts ?? []) {
-        if (account.code_hash) {
-          addressToCodeHash.set(addressKey(account.address), account.code_hash)
-        }
-      }
-
-      const codeHashesToFetch = new Set<string>()
-      for (const codeHash of addressToCodeHash.values()) {
-        codeHashesToFetch.add(codeHash)
-      }
-
-      const codeHashes = [...codeHashesToFetch]
-      const fetchedAbis =
-        codeHashes.length > 0
-          ? await client
-              .getCompilerAbis(codeHashes)
-              .catch((): Awaited<ReturnType<TonClient["getCompilerAbis"]>> => ({}))
-          : {}
-      const abiByCodeHash = new Map<string, ContractABI | undefined>()
-      for (const codeHash of codeHashes) {
-        abiByCodeHash.set(codeHash, fetchedAbis[codeHash]?.compiler_abi)
-      }
-
-      for (const address of requestedAddresses) {
-        const key = addressKey(address)
-        if (key === ownerKey) {
-          next.set(key, compilerAbi)
-          continue
-        }
-        const codeHash = addressToCodeHash.get(key)
-        next.set(
-          key,
-          codeHash ? (abiByCodeHash.get(codeHash) ?? undefined) : (next.get(key) ?? undefined),
-        )
-      }
-
-      if (!isActive) return
-      setCompilerAbiByAddress(next)
-    }
-
-    void loadRelatedCompilerAbis()
-    return () => {
-      isActive = false
-    }
-  }, [transactions, ownerAddress, compilerAbi, activeTab, client])
-
   const handleTabClick = (tab: Tabs) => {
     setActiveTab(tab)
     onTabChange?.(tab)
@@ -299,16 +206,14 @@ export const AccountDetails: React.FC<AccountDetailsProps> = ({
   }, [activeTab, transactions.length])
 
   const browsedAddr = useMemo(() => parseAddress(ownerAddress), [ownerAddress])
-  const messageNamesByAddress = useMemo(() => {
-    const next = new Map<string, {incoming: Map<string, string>; outgoing: Map<string, string>}>()
-    for (const [address, abi] of compilerAbiByAddress) {
-      next.set(address, {
-        incoming: buildMessageNamesByOpcodeHex(abi, "incoming_messages"),
-        outgoing: buildMessageNamesByOpcodeHex(abi, "outgoing_messages"),
-      })
-    }
-    return next
-  }, [compilerAbiByAddress])
+  const transactionAddresses = useMemo(
+    () => collectTransactionListAddresses(transactions),
+    [transactions],
+  )
+  const messageNamesByAddress = useMessageNamesByAddress({
+    client,
+    addresses: transactionAddresses,
+  })
   const transactionRows = useMemo<readonly HistoryTransactionRow[]>(
     () =>
       transactions.map(tx => ({
@@ -455,7 +360,7 @@ export const AccountDetails: React.FC<AccountDetailsProps> = ({
     ? ({
         top: `${filterPopoverPosition.top}px`,
         left: `${filterPopoverPosition.left}px`,
-      } as React.CSSProperties)
+      } as CSSProperties)
     : undefined
 
   return (
@@ -684,7 +589,7 @@ export const AccountDetails: React.FC<AccountDetailsProps> = ({
                 </TableRow>
               ) : (
                 paginatedTransactionRows.map(({tx, info}) => {
-                  const transactionHash = getTransactionHash(tx)
+                  const transactionHash = tx.hash
                   const valueStr = formatNano(info.displayValue.toString())
                   const isEmptyValue = info.displayValue === 0n
                   const valuePrefix = isEmptyValue ? "" : info.isIncoming ? "+ " : "- "
@@ -692,7 +597,7 @@ export const AccountDetails: React.FC<AccountDetailsProps> = ({
                     ? "empty"
                     : `${valuePrefix}${Number.parseFloat(valueStr).toLocaleString()} GRAM`
                   const formattedTime = formatTransactionTime(
-                    tx.utime,
+                    tx.now,
                     nowSeconds,
                     transactionFilters.timeFormat,
                   )
@@ -703,7 +608,7 @@ export const AccountDetails: React.FC<AccountDetailsProps> = ({
 
                   return (
                     <TableRow
-                      key={transactionHash ?? `${tx.account}:${tx.transaction_id.lt}:${tx.utime}`}
+                      key={transactionHash ?? `${tx.account}:${tx.lt}:${tx.now}`}
                       className={`${styles.row} ${styles.clickableRow}`}
                       onClick={() => {
                         const txHash = hashToHex(transactionHash)
@@ -948,7 +853,7 @@ export const AccountDetails: React.FC<AccountDetailsProps> = ({
   )
 }
 
-function HoldersSkeleton(): React.JSX.Element {
+function HoldersSkeleton(): JSX.Element {
   return (
     <Table aria-label="Loading holders">
       <TableHeader className={styles.historyHeaderGroup}>
@@ -979,7 +884,7 @@ function HoldersSkeleton(): React.JSX.Element {
   )
 }
 
-function ContractCodeSkeleton(): React.JSX.Element {
+function ContractCodeSkeleton(): JSX.Element {
   return (
     <div className={styles.contractSkeleton} aria-label="Loading contract code">
       <div className={`${styles.skeleton} ${styles.contractSkeletonTabs}`} />
@@ -1054,7 +959,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function getHistoryTransactionInfo(
-  tx: Transaction,
+  tx: V3TransactionListItem,
   browsedAddr: ReturnType<typeof parseAddress>,
   messageNamesByAddress: MessageNamesByAddress,
 ): HistoryTransactionInfo {
@@ -1092,8 +997,8 @@ function getHistoryTransactionInfo(
     : outMsgs.find(message => message.destination) ||
       outMsgs.find(message => message.opcode) ||
       outMsgs[0]
-  const opcode = displayMessage?.opcode?.trim()
-  const normalizedOpcode = opcode ? normalizeOpcode(opcode) : undefined
+  const opcode = normalizeOpcode(displayMessage?.opcode)
+  const normalizedOpcode = opcode
   const actionLabel =
     resolveMessageName(displayMessage, messageNamesByAddress) ||
     opcode ||
@@ -1113,21 +1018,20 @@ function getHistoryTransactionInfo(
   }
 }
 
-function compareTransactionsByTime(left: Transaction, right: Transaction): number {
-  if (left.utime !== right.utime) {
-    return left.utime - right.utime
+function compareTransactionsByTime(
+  left: V3TransactionListItem,
+  right: V3TransactionListItem,
+): number {
+  if (left.now !== right.now) {
+    return left.now - right.now
   }
 
-  const ltComparison = compareBigIntStrings(left.transaction_id.lt, right.transaction_id.lt)
+  const ltComparison = compareBigIntStrings(left.lt, right.lt)
   if (ltComparison !== 0) {
     return ltComparison
   }
 
-  return (getTransactionHash(left) ?? "").localeCompare(getTransactionHash(right) ?? "")
-}
-
-function getTransactionHash(transaction: Transaction): string | undefined {
-  return transaction.hash || transaction.transaction_id.hash
+  return left.hash.localeCompare(right.hash)
 }
 
 function compareBigIntStrings(left: string, right: string): number {
@@ -1185,10 +1089,10 @@ function formatAbsoluteTime(utime: number): string {
 }
 
 function resolveMessageName(
-  message: Message | undefined,
+  message: V3Message | undefined,
   messageNamesByAddress: MessageNamesByAddress,
 ): string | undefined {
-  if (!message?.opcode) {
+  if (!message) {
     return undefined
   }
 
@@ -1207,17 +1111,23 @@ function resolveMessageName(
   return destinationNames?.incoming.get(opcode) ?? sourceNames?.outgoing.get(opcode) ?? undefined
 }
 
-function normalizeOpcode(opcode: string): string | undefined {
-  const normalized = opcode.trim()
-  if (!normalized) {
+function normalizeOpcode(opcode: string | number | null | undefined): string | undefined {
+  if (opcode === null || opcode === undefined) {
+    return undefined
+  }
+
+  const normalized = typeof opcode === "string" ? opcode.trim() : opcode
+  if (normalized === "") {
     return undefined
   }
 
   try {
     const value =
-      normalized.startsWith("0x") || normalized.startsWith("0X")
-        ? Number.parseInt(normalized.slice(2), 16)
-        : Number.parseInt(normalized, 10)
+      typeof normalized === "number"
+        ? normalized
+        : normalized.startsWith("0x") || normalized.startsWith("0X")
+          ? Number.parseInt(normalized.slice(2), 16)
+          : Number.parseInt(normalized, 10)
 
     if (!Number.isInteger(value) || value < 0 || value > 0xff_ff_ff_ff) {
       return undefined
@@ -1228,3 +1138,8 @@ function normalizeOpcode(opcode: string): string | undefined {
     return undefined
   }
 }
+
+const ContractCode = lazy(async () => {
+  const module = await import("./ContractCode")
+  return {default: module.ContractCode}
+})
