@@ -22,7 +22,7 @@ highlighting for Acton and TON-related languages.
 This workspace uses Bun.
 
 ```bash
-bun install
+bun ci
 bun run dev
 ```
 

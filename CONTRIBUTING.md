@@ -431,7 +431,7 @@ Documentation site (Next.js in `docs/`, package manager: Bun):
 
 ```bash
 cd docs
-bun install
+bun ci
 bun run dev
 ```
 
