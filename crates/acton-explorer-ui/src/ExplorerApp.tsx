@@ -11,6 +11,7 @@ import {ExplorerRoutesProvider} from "../../acton-localnet-ui/src/explorer/hooks
 import {StaticNetworkInfoProvider} from "../../acton-localnet-ui/src/explorer/hooks/StaticNetworkInfoProvider"
 import {BlockDetailsPage, BlocksPage} from "../../acton-localnet-ui/src/explorer/pages/BlocksPage"
 import {AccountPage} from "../../acton-localnet-ui/src/explorer/pages/AccountPage"
+import {ExplorerSearch} from "../../acton-localnet-ui/src/explorer/components/ExplorerSearch"
 import {ExplorerIndexPage} from "../../acton-localnet-ui/src/explorer/pages/ExplorerIndexPage"
 import {TransactionPage} from "../../acton-localnet-ui/src/explorer/pages/TransactionPage"
 import type {ThemeMode} from "@acton/shared-ui"
@@ -81,6 +82,7 @@ export const ExplorerApp: FC = () => {
                         </Link>
                       </nav>
                     </div>
+                    <ExplorerSearch className={styles.headerSearch} variant="header" />
                     <div className={styles.headerActions}>
                       <ThemeSwitch
                         theme={theme}

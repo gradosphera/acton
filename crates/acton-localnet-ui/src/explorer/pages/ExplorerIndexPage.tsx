@@ -1,86 +1,10 @@
-import {AlertCircle, History, Search, X} from "lucide-react"
-import {useNavigate} from "react-router-dom"
-import {useCallback, useEffect, useRef, useState} from "react"
-import type {FC, MouseEvent as ReactMouseEvent} from "react"
+import type {FC} from "react"
 
-import {normalizeAddress, parseAddress} from "../components/utils"
-import {
-  EXPLORER_HISTORY_STORAGE_KEY,
-  readExplorerInput,
-  writeExplorerInput,
-} from "../explorerResume"
-import {useExplorerRoutePaths} from "../hooks/useExplorerRoutePaths"
-import {useAddressFormat} from "../hooks/useNetworkInfo"
+import {ExplorerSearch} from "../components/ExplorerSearch"
 
 import styles from "./ExplorerIndexPage.module.css"
 
 export const ExplorerIndexPage: FC = () => {
-  const addressFormat = useAddressFormat()
-  const routes = useExplorerRoutePaths()
-  const [input, setInput] = useState(() => readExplorerInput())
-  const [history, setHistory] = useState<string[]>([])
-  const [isFocused, setIsFocused] = useState(false)
-  const [showHistoryDropdown, setShowHistoryDropdown] = useState(false)
-  const [error, setError] = useState<string | undefined>()
-  const inputRef = useRef<HTMLInputElement>(null)
-  const navigate = useNavigate()
-
-  useEffect(() => {
-    const savedHistory = localStorage.getItem(EXPLORER_HISTORY_STORAGE_KEY)
-    if (savedHistory) {
-      try {
-        setHistory(JSON.parse(savedHistory) as string[])
-      } catch (error) {
-        console.error("Failed to parse history", error)
-      }
-    }
-  }, [])
-
-  useEffect(() => {
-    inputRef.current?.focus()
-  }, [])
-
-  const addToHistory = useCallback(
-    (address: string) => {
-      const newHistory = [address, ...history.filter(a => a !== address)].slice(0, 5)
-      setHistory(newHistory)
-      localStorage.setItem(EXPLORER_HISTORY_STORAGE_KEY, JSON.stringify(newHistory))
-    },
-    [history],
-  )
-
-  const removeFromHistory = useCallback(
-    (e: ReactMouseEvent, address: string) => {
-      e.stopPropagation()
-      const newHistory = history.filter(a => a !== address)
-      setHistory(newHistory)
-      localStorage.setItem(EXPLORER_HISTORY_STORAGE_KEY, JSON.stringify(newHistory))
-      setShowHistoryDropdown(newHistory.length > 0)
-    },
-    [history],
-  )
-
-  const handleSearch = useCallback(
-    (address: string) => {
-      const trimmed = address.trim()
-      if (!trimmed) return
-
-      const parsedAddress = parseAddress(trimmed)
-      if (!parsedAddress) {
-        setError("Invalid address, only standard internal address is allowed")
-        return
-      }
-
-      const displayAddress = normalizeAddress(trimmed, addressFormat)
-      setError(undefined)
-      writeExplorerInput(displayAddress)
-      addToHistory(displayAddress)
-      setShowHistoryDropdown(false)
-      void navigate(routes.addressPath(displayAddress))
-    },
-    [addToHistory, addressFormat, navigate, routes],
-  )
-
   return (
     <div className={styles.inputPage}>
       <div className={styles.centeredInputContainer}>
@@ -88,80 +12,7 @@ export const ExplorerIndexPage: FC = () => {
           <h1 className={styles.logoTitle}>Explore any address</h1>
         </header>
 
-        <section className={styles.inputCard}>
-          <div
-            className={`${styles.inputWrapper} ${isFocused ? styles.focused : ""} ${error ? styles.inputError : ""}`}
-          >
-            <div className={styles.searchIcon} aria-hidden="true">
-              <Search size={20} />
-            </div>
-            <input
-              ref={inputRef}
-              type="text"
-              spellCheck="false"
-              className={styles.input}
-              placeholder="Search by address or hash"
-              value={input}
-              onChange={e => {
-                const nextInput = e.target.value
-                setInput(nextInput)
-                writeExplorerInput(nextInput)
-                if (error) setError(undefined)
-              }}
-              onKeyDown={e => e.key === "Enter" && handleSearch(input)}
-              onFocus={() => {
-                setIsFocused(true)
-                if (!error && history.length > 0) {
-                  setShowHistoryDropdown(true)
-                }
-              }}
-              onBlur={() => {
-                setIsFocused(false)
-                setTimeout(() => setShowHistoryDropdown(false), 100)
-              }}
-              onClick={() => {
-                if (isFocused) {
-                  setShowHistoryDropdown(true)
-                }
-              }}
-            />
-          </div>
-
-          {showHistoryDropdown && history.length > 0 && !error && (
-            <div className={styles.historyDropdown}>
-              {history.map(addr => (
-                <div key={addr} className={styles.historyItem}>
-                  <button
-                    type="button"
-                    className={styles.historyItemButton}
-                    onClick={() => handleSearch(addr)}
-                  >
-                    <History size={16} className={styles.historyItemIcon} aria-hidden="true" />
-                    <span className={styles.historyAddr}>
-                      {normalizeAddress(addr, addressFormat)}
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    className={styles.historyItemDeleteButton}
-                    onMouseDown={e => e.preventDefault()}
-                    onClick={e => removeFromHistory(e, addr)}
-                    title="Remove from history"
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {error && (
-            <div className={styles.errorMessage}>
-              <AlertCircle size={14} className={styles.errorIcon} />
-              <span>{error}</span>
-            </div>
-          )}
-        </section>
+        <ExplorerSearch autoFocus />
       </div>
     </div>
   )

@@ -20,7 +20,7 @@
 .headerInner {
   width: 100%;
   max-width: 1136px;
-  height: 51px;
+  min-height: 51px;
   margin-inline: auto;
   display: flex;
   align-items: center;
@@ -35,12 +35,19 @@
   min-width: 0;
 }
 
+.headerSearch {
+  flex: 0 1 430px;
+  max-width: 430px;
+  min-width: 180px;
+  margin-left: auto;
+}
+
 .brand {
   display: inline-block;
   min-width: 0;
   color: var(--tonscan-text-primary);
   font-size: var(--font-size-md);
-  font-weight: 750;
+  font-weight: 950;
   line-height: 1;
   text-decoration: none;
   letter-spacing: 0;
@@ -96,7 +103,7 @@
 }
 
 .headerActions {
-  margin-left: auto;
+  margin-left: 0;
   display: inline-flex;
   align-items: center;
   align-self: center;
@@ -128,6 +135,25 @@
 @media (max-width: 640px) {
   .header {
     padding: 0 16px;
+  }
+
+  .headerInner {
+    flex-wrap: wrap;
+    align-content: center;
+    gap: 8px 12px;
+    padding: 8px 0;
+  }
+
+  .headerPrimary {
+    flex: 1 1 auto;
+  }
+
+  .headerSearch {
+    order: 3;
+    flex: 1 0 100%;
+    max-width: none;
+    min-width: 0;
+    margin-left: 0;
   }
 
   .nav {

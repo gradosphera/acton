@@ -20,10 +20,16 @@ interface TonAssetsAccount {
   readonly name: string
 }
 
+export interface TonAssetsNameMatch {
+  readonly address: string
+  readonly name: string
+}
+
 interface AddressBookContextValue {
   readonly getCachedName: (address: string) => AddressName | undefined
   readonly fetchName: (address: string) => Promise<AddressName>
   readonly prefetchNames: (addresses: readonly string[]) => Promise<void>
+  readonly searchTonAssetsNames: (query: string, limit?: number) => readonly TonAssetsNameMatch[]
   readonly updateName: (address: string, name: AddressName) => void
   readonly setAddressName: (address: string, name: string) => Promise<void>
   readonly version: number
@@ -59,6 +65,7 @@ export const AddressBookProvider: FC<{
 }> = ({client, children}) => {
   const cacheRef = useRef(new Map<string, AddressName>())
   const tonAssetsRef = useRef(new Map<string, string>())
+  const tonAssetsAccountsRef = useRef<readonly TonAssetsNameMatch[]>([])
   const pendingRef = useRef(new Map<string, Promise<AddressName>>())
   const pendingBatchRef = useRef(new Map<string, PendingNameRequest>())
   const batchScheduledRef = useRef(false)
@@ -94,9 +101,11 @@ export const AddressBookProvider: FC<{
       try {
         const cached = readTonAssetsAccountsCache()
         if (cached) {
-          const next = buildTonAssetsAccountsMap(cached.accounts)
+          const nextAccounts = buildTonAssetsAccounts(cached.accounts)
+          const next = buildTonAssetsAccountsMap(nextAccounts)
           if (next.size > 0) {
             tonAssetsRef.current = next
+            tonAssetsAccountsRef.current = nextAccounts
             setVersion(prev => prev + 1)
           }
           if (Date.now() - cached.savedAt < TON_ASSETS_ACCOUNTS_CACHE_TTL_MS) {
@@ -115,10 +124,12 @@ export const AddressBookProvider: FC<{
         }
 
         const validAccounts = accounts.filter(isTonAssetsAccount)
-        const next = buildTonAssetsAccountsMap(validAccounts)
+        const nextAccounts = buildTonAssetsAccounts(validAccounts)
+        const next = buildTonAssetsAccountsMap(nextAccounts)
 
         if (isActive && next.size > 0) {
           tonAssetsRef.current = next
+          tonAssetsAccountsRef.current = nextAccounts
           writeTonAssetsAccountsCache(validAccounts)
           setVersion(prev => prev + 1)
         }
@@ -219,16 +230,51 @@ export const AddressBookProvider: FC<{
     [fetchName],
   )
 
+  const searchTonAssetsNames = useCallback((query: string, limit = 6) => {
+    const normalizedQuery = normalizeNameQuery(query)
+    if (normalizedQuery.length < 2 || limit <= 0) {
+      return []
+    }
+
+    return tonAssetsAccountsRef.current
+      .map(account => {
+        const normalizedName = normalizeNameQuery(account.name)
+        if (!normalizedName.includes(normalizedQuery)) {
+          return undefined
+        }
+
+        return {
+          account,
+          score: getNameMatchScore(normalizedName, normalizedQuery),
+        }
+      })
+      .filter((entry): entry is {readonly account: TonAssetsNameMatch; readonly score: number} =>
+        Boolean(entry),
+      )
+      .sort((a, b) => a.score - b.score || a.account.name.localeCompare(b.account.name))
+      .slice(0, limit)
+      .map(entry => entry.account)
+  }, [])
+
   const value = useMemo(
     () => ({
       getCachedName,
       fetchName,
       prefetchNames,
+      searchTonAssetsNames,
       updateName,
       setAddressName,
       version,
     }),
-    [fetchName, getCachedName, prefetchNames, setAddressName, updateName, version],
+    [
+      fetchName,
+      getCachedName,
+      prefetchNames,
+      searchTonAssetsNames,
+      setAddressName,
+      updateName,
+      version,
+    ],
   )
 
   return createElement(AddressBookContext.Provider, {value}, children)
@@ -268,12 +314,35 @@ export const useAddressName = (address: string) => {
   return name
 }
 
-function buildTonAssetsAccountsMap(accounts: readonly TonAssetsAccount[]): Map<string, string> {
+function buildTonAssetsAccounts(
+  accounts: readonly TonAssetsAccount[],
+): readonly TonAssetsNameMatch[] {
+  return accounts.map(account => ({
+    address: normalizeKey(account.address),
+    name: account.name,
+  }))
+}
+
+function buildTonAssetsAccountsMap(accounts: readonly TonAssetsNameMatch[]): Map<string, string> {
   const next = new Map<string, string>()
   for (const account of accounts) {
-    next.set(normalizeKey(account.address), account.name)
+    next.set(account.address, account.name)
   }
   return next
+}
+
+function normalizeNameQuery(value: string): string {
+  return value.trim().toLocaleLowerCase()
+}
+
+function getNameMatchScore(normalizedName: string, normalizedQuery: string): number {
+  if (normalizedName === normalizedQuery) {
+    return 0
+  }
+  if (normalizedName.startsWith(normalizedQuery)) {
+    return 1
+  }
+  return 2
 }
 
 function readTonAssetsAccountsCache(): TonAssetsAccountsCache | undefined {
