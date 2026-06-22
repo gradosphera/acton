@@ -19,6 +19,11 @@
   border-bottom: 0 !important;
 }
 
+.historyContent tbody > tr > td {
+  padding-top: 12px !important;
+  padding-bottom: 12px !important;
+}
+
 .tokensContent {
   padding: 0;
 }
@@ -26,7 +31,15 @@
 .addressWrapper {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 2px;
+  min-width: 0;
+}
+
+.addressRelation {
+  color: var(--litenode-text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: 400;
+  white-space: nowrap;
 }
 
 .flexSpacer {
@@ -330,6 +343,14 @@
   border-bottom: none !important;
 }
 
+.row.actionChainContinues {
+  border-bottom-color: transparent !important;
+}
+
+.historyContent tbody > tr.actionChainContinuation {
+  border-top-color: transparent !important;
+}
+
 .row:hover {
   background-color: var(--tonscan-row-hover) !important;
 }
@@ -359,8 +380,8 @@
 }
 
 .skeletonRow > td {
-  padding-top: calc(var(--spacing-md) + 0.25px) !important;
-  padding-bottom: calc(var(--spacing-md) + 0.25px) !important;
+  padding-top: 12px !important;
+  padding-bottom: 12px !important;
 }
 
 .emptyRow:hover {
@@ -431,6 +452,13 @@
 .historySkeletonAddress {
   width: min(100%, 126px);
   height: 20px;
+  border-radius: 6px;
+  transform: scaleY(0.9);
+}
+
+.historySkeletonTechnical {
+  width: 84px;
+  height: 18px;
   border-radius: 6px;
   transform: scaleY(0.9);
 }
@@ -515,12 +543,17 @@
   max-width: 15rem;
 }
 
+.technicalColumn {
+  width: 9rem;
+  max-width: 12rem;
+}
+
 .action {
   display: flex;
   align-items: center;
-  gap: var(--spacing-sm);
+  gap: 7px;
   color: var(--tonscan-text-primary);
-  font-weight: 500;
+  font-weight: 400;
   min-width: 0;
   max-width: 100%;
 }
@@ -528,6 +561,7 @@
 .actionIcon {
   width: 16px;
   height: 16px;
+  color: currentColor;
   flex-shrink: 0;
 }
 
@@ -538,8 +572,24 @@
   white-space: nowrap;
 }
 
+.addressChipGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.addressChip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-width: 0;
+  vertical-align: middle;
+}
+
 .address {
-  color: var(--tonscan-text-primary);
+  color: var(--tonscan-link);
   font-family: inherit;
   font-size: var(--font-size-sm);
   font-weight: 500;
@@ -555,6 +605,14 @@
   border: none;
 }
 
+.addressChip .address {
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .address:hover {
   color: var(--tonscan-link);
   text-decoration: none;
@@ -566,11 +624,74 @@
   background-color: var(--litenode-link-chip-bg-active);
 }
 
+.addressChipHighlighted .address {
+  background-color: var(--litenode-link-chip-bg-active);
+}
+
+.addressCopyButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--tonscan-text-secondary);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    color var(--transition-duration-fast),
+    opacity var(--transition-duration-fast);
+}
+
+.addressCopyButton svg {
+  width: 13px;
+  height: 13px;
+  stroke-width: 2.2;
+}
+
+.addressChipGroup:hover .addressCopyButton,
+.addressChipGroup:focus-within .addressCopyButton,
+.addressCopyButtonCopied {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.addressCopyButton:hover {
+  color: #fff;
+}
+
+.addressCopyButton:focus-visible {
+  outline: none;
+  color: #fff;
+}
+
+.addressFallback {
+  color: var(--tonscan-text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+}
+
 .opcode {
   font-family: inherit;
   font-size: inherit;
   font-weight: inherit;
   color: inherit;
+}
+
+.technicalLabel {
+  display: block;
+  max-width: 12rem;
+  overflow: hidden;
+  color: var(--litenode-text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: 400;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .valueContainer {
@@ -601,19 +722,9 @@ th.valueContainer {
   font-weight: var(--font-weight-medium);
 }
 
-.historyValue {
-  font-size: var(--font-size-sm);
-  line-height: 1.35;
-}
-
-.tokenValue {
+.valueNeutral {
   color: var(--tonscan-text-secondary);
-  font-size: var(--font-size-xs);
-}
-
-.statusIcon {
-  width: 14px;
-  height: 14px;
+  font-weight: var(--font-weight-medium);
 }
 
 .statusSuccess {
@@ -622,6 +733,48 @@ th.valueContainer {
 
 .statusFailed {
   color: var(--tonscan-error);
+}
+
+.historyValueStack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  min-width: 0;
+}
+
+.historyValue {
+  font-size: var(--font-size-sm);
+  line-height: 1.35;
+}
+
+.swapValue {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+  min-width: 0;
+  max-width: 100%;
+  white-space: nowrap;
+}
+
+.swapValueSegment {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.swapValueArrow {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  color: var(--tonscan-text-secondary);
+  stroke-width: 2;
+}
+
+.tokenValue {
+  color: var(--tonscan-text-secondary);
+  font-size: var(--font-size-xs);
 }
 
 .pagination {
@@ -746,7 +899,7 @@ th.valueContainer {
 
   .historyContent table,
   .tokensContent table {
-    min-width: 620px;
+    min-width: 760px;
   }
 
   .pagination {

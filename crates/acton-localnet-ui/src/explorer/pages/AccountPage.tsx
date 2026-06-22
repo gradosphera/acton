@@ -14,6 +14,8 @@ import type {
   JettonWallet,
   NftItem,
   V3AccountState,
+  V3Action,
+  V3Metadata,
   V3Transaction,
   V3TransactionListItem,
   VerificationSourceResponse,
@@ -42,6 +44,7 @@ interface AccountPageProps {
 const INITIAL_TRANSACTION_LIMIT = 20
 const REMOTE_TRANSACTION_PAGE_SIZE = 20
 const LOCAL_TRANSACTION_PAGE_SIZE = 1000
+const ACTION_PAGE_SIZE = 20
 const NEW_TRANSACTION_APPEAR_MS = 1400
 type AccountTab = "history" | "contract" | "tokens" | "nfts" | "holders"
 
@@ -54,9 +57,14 @@ export const AccountPage: FC<AccountPageProps> = ({client}) => {
   const [accountState, setAccountState] = useState<AddressInformation | undefined>()
   const [accountStateV3, setAccountStateV3] = useState<V3AccountState | undefined>()
   const [transactions, setTransactions] = useState<V3TransactionListItem[]>([])
+  const [actions, setActions] = useState<V3Action[]>([])
+  const [actionMetadata, setActionMetadata] = useState<V3Metadata>({})
   const [highlightedTransactionHashes, setHighlightedTransactionHashes] = useState<string[]>([])
   const [transactionsHasMore, setTransactionsHasMore] = useState(false)
   const [transactionsLoadingMore, setTransactionsLoadingMore] = useState(false)
+  const [actionsOffset, setActionsOffset] = useState(0)
+  const [actionsHasMore, setActionsHasMore] = useState(false)
+  const [actionsLoadingMore, setActionsLoadingMore] = useState(false)
   const [jettonMaster, setJettonMaster] = useState<JettonMaster | undefined>()
   const [jettonWalletAccount, setJettonWalletAccount] = useState<JettonWallet | undefined>()
   const [jettonWalletMaster, setJettonWalletMaster] = useState<JettonMasterMetadata | undefined>()
@@ -72,6 +80,8 @@ export const AccountPage: FC<AccountPageProps> = ({client}) => {
   const [holdersLoading, setHoldersLoading] = useState(false)
   const [transactionsLoading, setTransactionsLoading] = useState(true)
   const [transactionsError, setTransactionsError] = useState<string | undefined>()
+  const [actionsLoading, setActionsLoading] = useState(false)
+  const [actionsError, setActionsError] = useState<string | undefined>()
   const [accountLoading, setAccountLoading] = useState(true)
   const [accountError, setAccountError] = useState<string | undefined>()
   const [extendedContractAbi, setExtendedContractAbi] = useState<ExtendedContractABI | undefined>()
@@ -120,10 +130,15 @@ export const AccountPage: FC<AccountPageProps> = ({client}) => {
         setAccountState(undefined)
         setAccountStateV3(undefined)
         setTransactions([])
+        setActions([])
+        setActionMetadata({})
         setHighlightedTransactionHashes([])
         transactionHashesRef.current = new Set()
         setTransactionsHasMore(false)
         setTransactionsLoadingMore(false)
+        setActionsOffset(0)
+        setActionsHasMore(false)
+        setActionsLoadingMore(false)
         setJettonMaster(undefined)
         setJettonWalletAccount(undefined)
         setJettonWalletMaster(undefined)
@@ -139,6 +154,8 @@ export const AccountPage: FC<AccountPageProps> = ({client}) => {
         setHoldersLoading(false)
         setTransactionsLoading(false)
         setTransactionsError(undefined)
+        setActionsLoading(false)
+        setActionsError(undefined)
         setAccountLoading(false)
         setAccountError(undefined)
         return
@@ -150,13 +167,19 @@ export const AccountPage: FC<AccountPageProps> = ({client}) => {
       if (isAddressChange) {
         setAccountLoading(true)
         setTransactionsLoading(true)
+        setActionsLoading(usesToncenterApi)
         setAccountState(undefined)
         setAccountStateV3(undefined)
         setTransactions([])
+        setActions([])
+        setActionMetadata({})
         setHighlightedTransactionHashes([])
         transactionHashesRef.current = new Set()
         setTransactionsHasMore(false)
         setTransactionsLoadingMore(false)
+        setActionsOffset(0)
+        setActionsHasMore(false)
+        setActionsLoadingMore(false)
         setJettonMaster(undefined)
         setJettonWalletAccount(undefined)
         setJettonWalletMaster(undefined)
@@ -173,6 +196,7 @@ export const AccountPage: FC<AccountPageProps> = ({client}) => {
       }
       setAccountError(undefined)
       setTransactionsError(undefined)
+      setActionsError(undefined)
 
       const loadAccountState = async () => {
         try {
@@ -191,6 +215,8 @@ export const AccountPage: FC<AccountPageProps> = ({client}) => {
           setAccountState(undefined)
           setAccountStateV3(undefined)
           setTransactions([])
+          setActions([])
+          setActionMetadata({})
           setJettonMaster(undefined)
           setJettonWalletAccount(undefined)
           setJettonWalletMaster(undefined)
@@ -205,6 +231,7 @@ export const AccountPage: FC<AccountPageProps> = ({client}) => {
           setNftItemsLoading(false)
           setHoldersLoading(false)
           setTransactionsLoading(false)
+          setActionsLoading(false)
         } finally {
           if (isActive) setAccountLoading(false)
         }
@@ -233,15 +260,49 @@ export const AccountPage: FC<AccountPageProps> = ({client}) => {
         }
       }
 
+      const loadActions = async () => {
+        if (!usesToncenterApi) {
+          setActions([])
+          setActionMetadata({})
+          setActionsOffset(0)
+          setActionsHasMore(false)
+          setActionsLoadingMore(false)
+          setActionsLoading(false)
+          setActionsError(undefined)
+          return
+        }
+
+        try {
+          const response = await client.getAccountActions(formattedAddress, ACTION_PAGE_SIZE)
+          if (!isActive) return
+          setActions([...response.actions])
+          setActionMetadata(response.metadata)
+          setActionsOffset(response.actions.length)
+          setActionsHasMore(response.actions.length === ACTION_PAGE_SIZE)
+          setActionsError(undefined)
+        } catch (error) {
+          if (!isActive) return
+          console.error("Failed to fetch account actions", error)
+          setActions([])
+          setActionMetadata({})
+          setActionsOffset(0)
+          setActionsHasMore(false)
+          setActionsError(error instanceof Error ? error.message : "Failed to load actions")
+        } finally {
+          if (isActive) setActionsLoading(false)
+        }
+      }
+
       void loadAccountState()
       void loadTransactions()
+      void loadActions()
     }
 
     load()
     return () => {
       isActive = false
     }
-  }, [accountAddressKey, client, initialTransactionLimit])
+  }, [accountAddressKey, client, initialTransactionLimit, usesToncenterApi])
 
   const loadMoreTransactions = async () => {
     if (
@@ -269,6 +330,34 @@ export const AccountPage: FC<AccountPageProps> = ({client}) => {
       setTransactionsError(error instanceof Error ? error.message : "Failed to load transactions")
     } finally {
       setTransactionsLoadingMore(false)
+    }
+  }
+
+  const loadMoreActions = async () => {
+    if (
+      !formattedAddress ||
+      !usesToncenterApi ||
+      actionsLoadingMore ||
+      actionsLoading ||
+      !actionsHasMore
+    ) {
+      return
+    }
+
+    const offset = actionsOffset
+    setActionsLoadingMore(true)
+    setActionsError(undefined)
+    try {
+      const response = await client.getAccountActions(formattedAddress, ACTION_PAGE_SIZE, offset)
+      setActions(current => [...current, ...response.actions])
+      setActionMetadata(current => ({...current, ...response.metadata}))
+      setActionsOffset(current => current + response.actions.length)
+      setActionsHasMore(response.actions.length === ACTION_PAGE_SIZE)
+    } catch (error) {
+      console.error("Failed to load more account actions", error)
+      setActionsError(error instanceof Error ? error.message : "Failed to load actions")
+    } finally {
+      setActionsLoadingMore(false)
     }
   }
 
@@ -934,6 +1023,8 @@ export const AccountPage: FC<AccountPageProps> = ({client}) => {
           )}
           <AccountDetails
             transactions={transactions}
+            actions={actions}
+            actionMetadata={actionMetadata}
             highlightedTransactionHashes={highlightedTransactionHashes}
             accountState={accountState}
             compilerAbi={compilerAbi}
@@ -954,12 +1045,18 @@ export const AccountPage: FC<AccountPageProps> = ({client}) => {
             transactionsHasMore={transactionsHasMore}
             transactionsLoadingMore={transactionsLoadingMore}
             transactionsPaginated={useTransactionPagination}
+            actionsSupported={usesToncenterApi}
+            actionsLoading={actionsLoading}
+            actionsError={actionsError}
+            actionsHasMore={actionsHasMore}
+            actionsLoadingMore={actionsLoadingMore}
             accountLoading={accountLoading}
             showHoldersTab={isJettonMasterAccount}
             client={client}
             onAddressClick={handleSearch}
             onTransactionClick={handleTransactionClick}
             onLoadMoreTransactions={loadMoreTransactions}
+            onLoadMoreActions={loadMoreActions}
             activeTabHash={activeTab}
             onTabChange={handleTabChange}
           />

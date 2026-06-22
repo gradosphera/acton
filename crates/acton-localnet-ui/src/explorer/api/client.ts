@@ -15,6 +15,7 @@ import type {
   NftItem,
   StartupWallet,
   StreamingTransactionsEvent,
+  V3ActionsResponse,
   V3BlocksResponse,
   V3RunGetMethodResponse,
   V3RunGetMethodStackEntry,
@@ -419,6 +420,17 @@ export class TonClient {
     const url = this.buildUrl(this.v3BaseUrl, "/traces")
     url.searchParams.append("tx_hash", hash)
     return this.request(url, "Failed to fetch traces")
+  }
+
+  async getAccountActions(address: string, limit = 20, offset = 0): Promise<V3ActionsResponse> {
+    const url = this.buildUrl(this.v3BaseUrl, "/actions")
+    url.searchParams.append("account", address)
+    url.searchParams.append("limit", limit.toString())
+    if (offset > 0) {
+      url.searchParams.append("offset", offset.toString())
+    }
+    url.searchParams.append("sort", "desc")
+    return this.request(url, "Failed to fetch account actions")
   }
 
   async getTracesByMessageHash(msgHash: string): Promise<V3TracesResponse> {

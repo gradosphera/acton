@@ -89,12 +89,12 @@ export function isSameAddress(a: string, b: string): boolean {
   return a === b
 }
 
-export function formatNano(nano: string | number): string {
+export function formatNano(nano: string | number, maximumFractionDigits = 9): string {
   const n = typeof nano === "string" ? BigInt(nano) : BigInt(nano)
   const ton = Number(n) / 1e9
   return ton.toLocaleString(undefined, {
     minimumFractionDigits: 0,
-    maximumFractionDigits: 5,
+    maximumFractionDigits,
   })
 }
 

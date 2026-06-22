@@ -576,7 +576,7 @@ export const AccountInfo: FC<AccountInfoProps> = ({
 
           <div className={styles.statusBar}>
             {stateLoading ? (
-              <div className={`${styles.skeleton} ${styles.skeletonTag}`} />
+              <div className={`${styles.skeleton} ${styles.statusSkeleton}`} />
             ) : (
               <span className={`${styles.status} ${styles[statusInfo.className]}`}>
                 {statusInfo.label}

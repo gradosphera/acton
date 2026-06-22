@@ -866,10 +866,36 @@
   border-radius: 999px;
 }
 
+.statusSkeleton {
+  display: flex;
+  align-items: center;
+  width: 58px;
+  height: 18px;
+  background: none;
+  border-radius: 999px;
+  animation: none;
+}
+
+.statusSkeleton::before {
+  content: "";
+  display: block;
+  width: 100%;
+  height: 16px;
+  background: linear-gradient(
+    90deg,
+    var(--tonscan-row-hover) 0%,
+    var(--litenode-control-hover) 45%,
+    var(--tonscan-row-hover) 90%
+  );
+  background-size: 220% 100%;
+  border-radius: 999px;
+  animation: skeleton-shimmer 1.15s ease-in-out infinite;
+}
+
 .skeletonTagWide {
   width: 110px;
-  height: 24px;
-  border-radius: 8px;
+  height: 20px;
+  border-radius: 6px;
 }
 
 @keyframes skeleton-shimmer {
