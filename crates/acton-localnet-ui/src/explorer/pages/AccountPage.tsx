@@ -48,6 +48,13 @@ const ACTION_PAGE_SIZE = 20
 const NEW_TRANSACTION_APPEAR_MS = 1400
 type AccountTab = "history" | "contract" | "tokens" | "nfts" | "holders"
 
+interface AccountLoadIssue {
+  readonly title: string
+  readonly description: string
+  readonly detail: string
+  readonly networkLabel: string
+}
+
 export const AccountPage: FC<AccountPageProps> = ({client}) => {
   const {address = ""} = useParams<{address: string}>()
   const navigate = useNavigate()
@@ -99,6 +106,10 @@ export const AccountPage: FC<AccountPageProps> = ({client}) => {
     [address, addressFormat],
   )
   const accountAddressKey = useMemo(() => toRawAddress(formattedAddress), [formattedAddress])
+  const accountRequestKey = useMemo(
+    () => `${network.id}:${accountAddressKey}`,
+    [accountAddressKey, network.id],
+  )
   const activeTab = useMemo<AccountTab>(() => {
     const tab = location.hash.replace("#", "")
     if (tab.startsWith("contract-")) {
@@ -162,8 +173,8 @@ export const AccountPage: FC<AccountPageProps> = ({client}) => {
         return
       }
 
-      const isAddressChange = activeAccountKeyRef.current !== accountAddressKey
-      activeAccountKeyRef.current = accountAddressKey
+      const isAddressChange = activeAccountKeyRef.current !== accountRequestKey
+      activeAccountKeyRef.current = accountRequestKey
 
       if (isAddressChange) {
         setAccountLoading(true)
@@ -303,7 +314,7 @@ export const AccountPage: FC<AccountPageProps> = ({client}) => {
     return () => {
       isActive = false
     }
-  }, [accountAddressKey, client, initialTransactionLimit, supportsAccountActions])
+  }, [accountRequestKey, client, initialTransactionLimit, supportsAccountActions])
 
   const loadMoreTransactions = async () => {
     if (
@@ -823,7 +834,19 @@ export const AccountPage: FC<AccountPageProps> = ({client}) => {
         `NFT #${item.index}`,
     }
   })
-  const showAccountHeader = accountLoading || Boolean(accountState)
+  const accountLoadIssue = useMemo(
+    () =>
+      accountError
+        ? getAccountLoadIssue({
+            error: accountError,
+            networkLabel: network.label,
+          })
+        : undefined,
+    [accountError, network.label],
+  )
+  const accountUnavailable =
+    accountLoadIssue !== undefined && !accountLoading && accountState === undefined
+  const showAccountHeader = accountLoading || Boolean(accountState) || accountUnavailable
   const hasHeaderContextCard = Boolean(
     accountState && (tokenInfo || currentNftItem || (nftCollectionName && !currentNftItem)),
   )
@@ -833,8 +856,6 @@ export const AccountPage: FC<AccountPageProps> = ({client}) => {
 
   return (
     <div className={styles.container}>
-      {accountError && <div className={styles.error}>{accountError}</div>}
-
       {formattedAddress && (
         <>
           <Breadcrumbs
@@ -847,26 +868,32 @@ export const AccountPage: FC<AccountPageProps> = ({client}) => {
           />
           {showAccountHeader && (
             <div className={topSectionClassName}>
-              <AccountInfo
-                address={formattedAddress}
-                state={accountState}
-                extendedContractAbi={extendedContractAbi}
-                contractInterfaces={
-                  Array.isArray(accountStateV3?.interfaces) ? accountStateV3.interfaces : undefined
-                }
-                jettonWallets={jettonWallets}
-                accountLoading={accountLoading}
-                assetsLoading={accountLoading || jettonWalletsLoading}
-                amount={jettonWalletAmountLabel}
-                amountLoading={isJettonWalletAccount && jettonWalletLoading}
-                client={client}
-                onMoreAssetsClick={() => handleTabChange("tokens")}
-                collectiblesCount={nftItems.length}
-                collectiblePreviews={collectiblePreviews}
-                collectiblesLoading={accountLoading || nftItemsLoading}
-                onCollectiblesClick={() => handleTabChange("nfts")}
-                hasContextCard={hasHeaderContextCard}
-              />
+              {accountUnavailable && accountLoadIssue ? (
+                <AccountIssueCard issue={accountLoadIssue} />
+              ) : (
+                <AccountInfo
+                  address={formattedAddress}
+                  state={accountState}
+                  extendedContractAbi={extendedContractAbi}
+                  contractInterfaces={
+                    Array.isArray(accountStateV3?.interfaces)
+                      ? accountStateV3.interfaces
+                      : undefined
+                  }
+                  jettonWallets={jettonWallets}
+                  accountLoading={accountLoading}
+                  assetsLoading={accountLoading || jettonWalletsLoading}
+                  amount={jettonWalletAmountLabel}
+                  amountLoading={isJettonWalletAccount && jettonWalletLoading}
+                  client={client}
+                  onMoreAssetsClick={() => handleTabChange("tokens")}
+                  collectiblesCount={nftItems.length}
+                  collectiblePreviews={collectiblePreviews}
+                  collectiblesLoading={accountLoading || nftItemsLoading}
+                  onCollectiblesClick={() => handleTabChange("nfts")}
+                  hasContextCard={hasHeaderContextCard}
+                />
+              )}
               {hasHeaderContextCard && (
                 <div className={styles.contextColumn}>
                   {accountState && tokenInfo && (
@@ -1042,13 +1069,13 @@ export const AccountPage: FC<AccountPageProps> = ({client}) => {
             nftsLoading={nftItemsLoading}
             holdersLoading={holdersLoading}
             transactionsLoading={transactionsLoading}
-            transactionsError={transactionsError}
+            transactionsError={accountUnavailable ? undefined : transactionsError}
             transactionsHasMore={transactionsHasMore}
             transactionsLoadingMore={transactionsLoadingMore}
             transactionsPaginated={useTransactionPagination}
             actionsSupported={supportsAccountActions}
             actionsLoading={actionsLoading}
-            actionsError={actionsError}
+            actionsError={accountUnavailable ? undefined : actionsError}
             actionsHasMore={actionsHasMore}
             actionsLoadingMore={actionsLoadingMore}
             accountLoading={accountLoading}
@@ -1283,6 +1310,24 @@ interface CopyAddressButtonProps {
   readonly title?: string
 }
 
+interface AccountIssueCardProps {
+  readonly issue: AccountLoadIssue
+}
+
+const AccountIssueCard: FC<AccountIssueCardProps> = ({issue}) => (
+  <section className={styles.accountIssue} aria-live="polite">
+    <div className={styles.accountIssueContent}>
+      <div className={styles.accountIssueEyebrow}>{issue.networkLabel}</div>
+      <h1 className={styles.accountIssueTitle}>{issue.title}</h1>
+      <p className={styles.accountIssueDescription}>{issue.detail}</p>
+      <div className={styles.accountIssueHint}>
+        <span className={styles.accountIssueHintLabel}>Hint</span>
+        <span className={styles.accountIssueHintText}>{issue.description}</span>
+      </div>
+    </div>
+  </section>
+)
+
 const CopyAddressButton: FC<CopyAddressButtonProps> = ({
   address,
   className,
@@ -1443,6 +1488,48 @@ function contentString(
 ): string | undefined {
   const value = content?.[key]
   return typeof value === "string" && value.length > 0 ? value : undefined
+}
+
+function getAccountLoadIssue({
+  error,
+  networkLabel,
+}: {
+  readonly error: string
+  readonly networkLabel: string
+}): AccountLoadIssue {
+  const normalizedError = error.trim() || "Unknown error"
+  const lowercaseError = normalizedError.toLowerCase()
+
+  if (
+    lowercaseError.includes("failed to fetch") ||
+    lowercaseError.includes("networkerror") ||
+    lowercaseError.includes("load failed")
+  ) {
+    return {
+      title: "Network request failed",
+      description:
+        "The selected network did not respond or blocked browser requests. Check that the V2/V3 endpoints are reachable and CORS is enabled.",
+      detail: normalizedError,
+      networkLabel,
+    }
+  }
+
+  if (lowercaseError.includes("unauthorized") || lowercaseError.includes("401")) {
+    return {
+      title: "Authentication failed",
+      description:
+        "The selected network rejected the request. Check the API key configured for this network.",
+      detail: normalizedError,
+      networkLabel,
+    }
+  }
+
+  return {
+    title: "Unable to load account",
+    description: "The selected network returned an error while loading this account.",
+    detail: normalizedError,
+    networkLabel,
+  }
 }
 
 function isAccountTab(value: string): value is AccountTab {

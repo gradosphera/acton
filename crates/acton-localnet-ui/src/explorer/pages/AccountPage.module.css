@@ -15,14 +15,6 @@
   color: var(--tonscan-text-secondary);
 }
 
-.error {
-  background-color: var(--litenode-danger-bg-soft);
-  border: 1px solid var(--tonscan-error);
-  color: var(--tonscan-error);
-  padding: var(--spacing-md);
-  border-radius: var(--border-radius-md);
-}
-
 .empty {
   text-align: center;
   padding: var(--spacing-xl);
@@ -30,6 +22,77 @@
   background-color: var(--tonscan-card-bg);
   border-radius: 16px;
   border: 1px solid var(--tonscan-border);
+}
+
+.accountIssue {
+  display: block;
+  min-height: 150px;
+  padding: 20px 24px;
+  border: 0;
+  border-radius: 12px;
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--litenode-danger-bg-soft) 72%, transparent),
+      color-mix(in srgb, var(--tonscan-card-bg) 94%, var(--tonscan-error))
+    ),
+    var(--tonscan-card-bg);
+  box-sizing: border-box;
+}
+
+.accountIssueContent {
+  min-width: 0;
+}
+
+.accountIssueEyebrow {
+  margin-bottom: 6px;
+  color: var(--tonscan-error);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  line-height: 16px;
+}
+
+.accountIssueTitle {
+  margin: 0;
+  color: var(--tonscan-text-primary);
+  font-size: 1.25rem;
+  font-weight: var(--font-weight-bold);
+  line-height: 28px;
+}
+
+.accountIssueDescription {
+  max-width: 72ch;
+  margin: 8px 0 0;
+  color: var(--tonscan-text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: 20px;
+}
+
+.accountIssueHint {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: 76ch;
+  margin: 14px 0 0;
+  padding: 8px 10px;
+  color: var(--tonscan-text-primary);
+  background: var(--tonscan-bg-secondary);
+  border-radius: 10px;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-normal);
+  line-height: 18px;
+}
+
+.accountIssueHintLabel {
+  flex: 0 0 auto;
+  color: var(--tonscan-text-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+.accountIssueHintText {
+  min-width: 0;
+  color: var(--tonscan-text-secondary);
+  overflow-wrap: anywhere;
 }
 
 .topSection {
@@ -622,6 +685,17 @@
     min-height: 0;
     padding: 16px;
     border-radius: 14px;
+  }
+
+  .accountIssue {
+    min-height: 0;
+    padding: 18px;
+    border-radius: 14px;
+  }
+
+  .accountIssueTitle {
+    font-size: 1.125rem;
+    line-height: 24px;
   }
 
   .nftPanelHeader {
