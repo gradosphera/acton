@@ -208,9 +208,9 @@ export const ContractCode: FC<ContractCodeProps> = ({
   }, [compilerAbi])
   const storageUnavailableMessage = compilerAbi
     ? dataBoc
-      ? "Storage data could not be decoded with this ABI."
-      : "No storage data available for this account."
-    : "No compiler ABI registered for storage decoding."
+      ? "Storage data could not be decoded with this ABI"
+      : "No storage data available for this account"
+    : "No ABI registered for storage decoding"
   const hasVerifiedSource = Boolean(verifiedSource?.verified && verifiedSource.bundles.length > 0)
 
   const handleContractTabChange = (tab: ContractCodeTab) => {
@@ -220,8 +220,8 @@ export const ContractCode: FC<ContractCodeProps> = ({
 
   if (!codeBoc || !codeData) {
     return (
-      <div className={styles.container}>
-        <div className={styles.empty}>No code available for this account.</div>
+      <div className={`${styles.container} ${styles.emptyContainer}`}>
+        <div className={styles.empty}>No code available for this account</div>
       </div>
     )
   }
@@ -266,7 +266,9 @@ export const ContractCode: FC<ContractCodeProps> = ({
           />
         ) : activeTab === "abi" ? (
           compilerAbiError ? (
-            <div className={styles.empty}>Failed to load compiler ABI: {compilerAbiError}</div>
+            <div className={`${styles.empty} ${styles.panelEmpty} ${styles.emptyError}`}>
+              Failed to load ABI: {compilerAbiError}
+            </div>
           ) : compilerAbiLoading ? (
             <AbiLoadingSkeleton />
           ) : compilerAbi && abiJson ? (
@@ -279,7 +281,9 @@ export const ContractCode: FC<ContractCodeProps> = ({
               client={client}
             />
           ) : (
-            <div className={styles.empty}>No compiler ABI registered for this contract.</div>
+            <div className={`${styles.empty} ${styles.panelEmpty}`}>
+              No ABI registered for this contract
+            </div>
           )
         ) : (
           <SourcePanel
@@ -393,7 +397,7 @@ function StoragePanel({
             </div>
           </section>
         ) : (
-          <div className={styles.empty}>{unavailableMessage}</div>
+          <div className={`${styles.empty} ${styles.panelEmpty}`}>{unavailableMessage}</div>
         )
       ) : activeStorage?.value ? (
         <ContractTextPanel
@@ -402,7 +406,9 @@ function StoragePanel({
           wrap={activeStorage.wrap}
         />
       ) : (
-        <div className={styles.empty}>No storage data available for this account.</div>
+        <div className={`${styles.empty} ${styles.panelEmpty}`}>
+          No storage data available for this account
+        </div>
       )}
     </section>
   )
@@ -624,7 +630,7 @@ function AbiGetMethodsSection({
           ))}
         </div>
       ) : (
-        <div className={styles.abiEmptyInline}>No get methods declared.</div>
+        <div className={styles.abiEmptyInline}>No get methods declared</div>
       )}
     </AbiSection>
   )
@@ -907,22 +913,22 @@ function AbiMessagesSection({
     {
       title: "Incoming/internal",
       messages: abi.incoming_messages,
-      empty: "No incoming internal messages declared.",
+      empty: "No incoming internal messages declared",
     },
     {
       title: "Incoming external",
       messages: abi.incoming_external,
-      empty: "No incoming external messages declared.",
+      empty: "No incoming external messages declared",
     },
     {
       title: "Outgoing",
       messages: abi.outgoing_messages,
-      empty: "No outgoing messages declared.",
+      empty: "No outgoing messages declared",
     },
     {
       title: "Emitted events",
       messages: abi.emitted_events,
-      empty: "No emitted events declared.",
+      empty: "No emitted events declared",
     },
   ]
   const count = groups.reduce((total, group) => total + group.messages.length, 0)
@@ -1006,7 +1012,7 @@ function AbiStorageSection({
           })}
         </div>
       ) : (
-        <div className={styles.abiEmptyInline}>No storage type indexes declared.</div>
+        <div className={styles.abiEmptyInline}>No storage type indexes declared</div>
       )}
     </AbiSection>
   )
@@ -1043,7 +1049,7 @@ function AbiDeclarationsSection({
           ))}
         </div>
       ) : (
-        <div className={styles.abiEmptyInline}>No declarations emitted.</div>
+        <div className={styles.abiEmptyInline}>No declarations emitted</div>
       )}
     </AbiSection>
   )
@@ -1070,7 +1076,7 @@ function AbiThrownErrorsSection({
           ))}
         </div>
       ) : (
-        <div className={styles.abiEmptyInline}>No thrown errors declared.</div>
+        <div className={styles.abiEmptyInline}>No thrown errors declared</div>
       )}
     </AbiSection>
   )
@@ -1110,7 +1116,7 @@ function VerifiedSourcePanel({source}: {readonly source: VerificationSourceRespo
   }, [bundles])
 
   if (!activeBundle) {
-    return <div className={styles.empty}>No verified source files stored for this contract.</div>
+    return <div className={styles.empty}>No verified source files stored for this contract</div>
   }
 
   return (
@@ -1175,7 +1181,7 @@ function VerifiedCodeViewer({
   const language = activeFile ? languageForPath(activeFile.path) : undefined
 
   if (!activeFile) {
-    return <div className={styles.empty}>No verified source files stored for this bundle.</div>
+    return <div className={styles.empty}>No verified source files stored for this bundle</div>
   }
 
   const selectFile = (path: string) => {

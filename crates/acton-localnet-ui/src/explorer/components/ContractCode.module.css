@@ -60,6 +60,10 @@
   min-width: 0;
 }
 
+.emptyContainer {
+  padding: 0;
+}
+
 .sourceShell {
   min-width: 0;
   overflow: visible;
@@ -1244,12 +1248,28 @@
 }
 
 .empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   text-align: center;
   padding: var(--spacing-xl);
   color: var(--tonscan-text-secondary);
-  background-color: var(--tonscan-row-hover);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+.panelEmpty {
+  background-color: var(--tonscan-bg);
   border: 1px solid var(--tonscan-border);
   border-radius: var(--border-radius-md);
+}
+
+.sourceShell > .panelEmpty {
+  border-radius: 0 8px 8px;
+}
+
+.emptyError {
+  color: var(--tonscan-error);
 }
 
 @media (max-width: 720px) {

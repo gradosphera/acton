@@ -4,7 +4,11 @@ import type {FC, ReactNode} from "react"
 import type {TonClient} from "../api/client"
 import type {LocalnetNodeInfo} from "../api/types"
 
-import {NetworkInfoContext, type NetworkInfoContextValue} from "./useNetworkInfo"
+import {
+  NetworkInfoContext,
+  type ExplorerNetworkInfo,
+  type NetworkInfoContextValue,
+} from "./useNetworkInfo"
 
 interface NetworkInfoProviderProps {
   readonly client: TonClient
@@ -41,11 +45,43 @@ export const NetworkInfoProvider: FC<NetworkInfoProviderProps> = ({client, child
   const normalizedForkNetwork = forkNetwork?.toLocaleLowerCase()
   const isFork = nodeInfo?.state_source === "remote" && Boolean(forkNetwork)
   const isMainnetFork = isFork && normalizedForkNetwork === "mainnet"
+  const network = useMemo<ExplorerNetworkInfo>(() => {
+    if (!isFork) {
+      return {
+        id: "localnet",
+        label: "Localnet",
+        testOnly: true,
+        supportsActions: false,
+      }
+    }
+    if (normalizedForkNetwork === "mainnet") {
+      return {
+        id: "mainnet",
+        label: "Mainnet",
+        testOnly: false,
+        supportsActions: true,
+      }
+    }
+    if (normalizedForkNetwork === "testnet") {
+      return {
+        id: "testnet",
+        label: "Testnet",
+        testOnly: true,
+        supportsActions: true,
+      }
+    }
+    return {
+      id: `custom:${normalizedForkNetwork ?? "fork"}`,
+      label: forkNetwork ?? "Custom",
+      testOnly: true,
+      supportsActions: false,
+    }
+  }, [forkNetwork, isFork, normalizedForkNetwork])
   const addressFormat = useMemo(
     () => ({
-      testOnly: !isMainnetFork,
+      testOnly: network.testOnly,
     }),
-    [isMainnetFork],
+    [network.testOnly],
   )
 
   const value = useMemo<NetworkInfoContextValue>(() => {
@@ -54,8 +90,9 @@ export const NetworkInfoProvider: FC<NetworkInfoProviderProps> = ({client, child
       forkNetwork: isFork ? forkNetwork : undefined,
       isMainnetFork,
       addressFormat,
+      network,
     }
-  }, [addressFormat, forkNetwork, isFork, isMainnetFork, nodeInfo])
+  }, [addressFormat, forkNetwork, isFork, isMainnetFork, network, nodeInfo])
 
   return <NetworkInfoContext.Provider value={value}>{children}</NetworkInfoContext.Provider>
 }

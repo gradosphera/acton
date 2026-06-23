@@ -18,7 +18,7 @@
   box-shadow: var(--litenode-shadow-popover, var(--shadow));
   padding: 0.875rem 0.875rem 0.875rem 1rem;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 0.75rem;
   animation: toast-enter 180ms ease-out;
 }

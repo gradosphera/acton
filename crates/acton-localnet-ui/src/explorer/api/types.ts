@@ -30,12 +30,12 @@ export interface BlockId {
 
 export interface AddressInformation {
   readonly balance: string
-  readonly code: string
-  readonly data: string
-  readonly frozen_hash: string
+  readonly code: string | null
+  readonly data: string | null
+  readonly frozen_hash: string | null
   readonly last_transaction_hash: string
   readonly last_transaction_lt: string
-  readonly status: "active" | "uninitialized" | "frozen" | "nonexist"
+  readonly status: "active" | "uninitialized" | "uninit" | "frozen" | "nonexist"
 }
 
 export interface AccountStateTokenInfo {

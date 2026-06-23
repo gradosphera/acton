@@ -189,7 +189,7 @@ export const AccountInfo: FC<AccountInfoProps> = ({
   const contractDescriptionUrl = contractDescription && getExternalUrl(contractDescription)
   const contractLinks = getContractAbiLinks(extendedContractAbi)
   const hasContractDescriptionPopover = Boolean(contractDescription || contractLinks.length > 0)
-  const statusInfo = getStatusInfo(state?.status)
+  const statusInfo = getStatusInfo(state)
   const shortAddress = formatAddress(displayAddress, true, addressFormat)
   const addressRowText = hasContextCard ? shortAddress : displayAddress
   const statusAddress = formatRawAddress(displayAddress)
@@ -993,11 +993,15 @@ function formatContractLinkKind(kind: string): string {
   return kind.replaceAll("_", " ")
 }
 
-function getStatusInfo(state?: AddressInformation["status"]): {
+function getStatusInfo(state?: AddressInformation): {
   readonly label: string
   readonly className: "statusActive" | "statusFrozen" | "statusUninit" | "statusNonexist"
 } {
-  switch (state) {
+  if (state && isEmptyZeroBalanceAccount(state)) {
+    return {label: "Nonexist", className: "statusNonexist"}
+  }
+
+  switch (state?.status) {
     case "active": {
       return {label: "Active", className: "statusActive"}
     }
@@ -1007,13 +1011,29 @@ function getStatusInfo(state?: AddressInformation["status"]): {
     case "nonexist": {
       return {label: "Nonexist", className: "statusNonexist"}
     }
-    case "uninitialized": {
+    case "uninitialized":
+    case "uninit": {
       return {label: "Uninit", className: "statusUninit"}
     }
     default: {
       return {label: "-", className: "statusUninit"}
     }
   }
+}
+
+function isEmptyZeroBalanceAccount(state: AddressInformation): boolean {
+  if (hasCellData(state.code) || hasCellData(state.data)) {
+    return false
+  }
+  try {
+    return BigInt(state.balance) === 0n
+  } catch {
+    return false
+  }
+}
+
+function hasCellData(value: string | null): boolean {
+  return value !== null && value.trim().length > 0
 }
 
 function getTonscanUrl(address: string, forkNetwork?: string): string | undefined {

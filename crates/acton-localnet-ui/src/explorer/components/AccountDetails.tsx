@@ -691,7 +691,7 @@ export const AccountDetails: FC<AccountDetailsProps> = ({
                     <div className={styles.filterSectionTitle}>Actions</div>
                     <div className={styles.actionFiltersList}>
                       {actionFilterOptions.length === 0 ? (
-                        <div className={styles.filterEmptyState}>No actions yet.</div>
+                        <div className={styles.filterEmptyState}>No actions yet</div>
                       ) : (
                         actionFilterOptions.map(option => {
                           const selected = !hiddenActionKeys.has(option.key)
@@ -821,8 +821,8 @@ export const AccountDetails: FC<AccountDetailsProps> = ({
                   <TableCell colSpan={5} className={styles.emptyCell}>
                     <div className={styles.tableState}>
                       {activeHistorySourceCount > 0
-                        ? `No ${historySubject} match filters.`
-                        : `No ${historySubject} found.`}
+                        ? `No ${historySubject} match filters`
+                        : `No ${historySubject} found`}
                     </div>
                   </TableCell>
                 </TableRow>
@@ -1168,7 +1168,7 @@ export const AccountDetails: FC<AccountDetailsProps> = ({
                 {(!holders || holders.length === 0) && (
                   <TableRow className={styles.emptyRow}>
                     <TableCell colSpan={3} className={styles.emptyCell}>
-                      <div className={styles.emptyState}>No holders found.</div>
+                      <div className={styles.emptyState}>No holders found</div>
                     </TableCell>
                   </TableRow>
                 )}
@@ -1186,7 +1186,7 @@ export const AccountDetails: FC<AccountDetailsProps> = ({
                 codeBoc={accountState?.code ?? ""}
                 ownerAddress={ownerAddress}
                 client={client}
-                dataBoc={accountState?.data}
+                dataBoc={accountState?.data ?? undefined}
                 compilerAbi={compilerAbi}
                 compilerAbiLoading={compilerAbiLoading}
                 compilerAbiError={compilerAbiError}

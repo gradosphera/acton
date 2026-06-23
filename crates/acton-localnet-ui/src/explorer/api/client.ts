@@ -29,6 +29,7 @@ interface TonClientOptions {
   readonly v3BaseUrl: string
   readonly addressNameBaseUrl: string
   readonly localnetControlEnabled?: boolean
+  readonly toncenterApiCompatible?: boolean
   readonly localnetApiToken?: string
   readonly onUnauthorized?: () => void
   readonly toncenterApiKey?: string
@@ -226,11 +227,24 @@ interface TransactionStreamHandlers {
   readonly onError?: (error: Error) => void
 }
 
+function isToncenterApiBaseUrl(baseUrl: string): boolean {
+  try {
+    const fullBase = baseUrl.startsWith("http")
+      ? baseUrl
+      : `${globalThis.location.origin}${baseUrl}`
+    const apiUrl = new URL(fullBase)
+    return apiUrl.hostname === "toncenter.com" || apiUrl.hostname.endsWith(".toncenter.com")
+  } catch {
+    return false
+  }
+}
+
 export class TonClient {
   private readonly v2BaseUrl: string
   private readonly v3BaseUrl: string
   private readonly addressNameBaseUrl: string
   private readonly localnetControlEnabled: boolean
+  private readonly toncenterApiCompatible: boolean
   private readonly localnetApiToken: string | undefined
   private readonly onUnauthorized: (() => void) | undefined
   private readonly toncenterApiKey: string | undefined
@@ -242,6 +256,7 @@ export class TonClient {
     v3BaseUrl,
     addressNameBaseUrl,
     localnetControlEnabled = true,
+    toncenterApiCompatible,
     localnetApiToken,
     onUnauthorized,
     toncenterApiKey,
@@ -251,6 +266,7 @@ export class TonClient {
     this.v3BaseUrl = v3BaseUrl
     this.addressNameBaseUrl = addressNameBaseUrl
     this.localnetControlEnabled = localnetControlEnabled
+    this.toncenterApiCompatible = toncenterApiCompatible ?? isToncenterApiBaseUrl(v3BaseUrl)
     this.localnetApiToken = localnetApiToken?.trim() || undefined
     this.onUnauthorized = onUnauthorized
     this.toncenterApiKey = toncenterApiKey?.trim() || undefined
@@ -700,8 +716,7 @@ export class TonClient {
   }
 
   usesToncenterApiEndpoint(): boolean {
-    const apiV3 = this.buildUrl(this.v3BaseUrl, "")
-    return apiV3.hostname === "toncenter.com" || apiV3.hostname.endsWith(".toncenter.com")
+    return this.toncenterApiCompatible
   }
 
   private buildUrl(base: string, path: string): URL {

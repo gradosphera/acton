@@ -110,6 +110,446 @@
   gap: 8px;
 }
 
+.networkDropdown {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.networkTrigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 120px;
+  min-height: 34px;
+  padding: 0 10px 0 12px;
+  border: 1px solid color-mix(in srgb, var(--tonscan-border) 80%, transparent);
+  border-radius: 8px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--litenode-surface-raised) 92%, transparent),
+    color-mix(in srgb, var(--litenode-surface-subtle) 88%, transparent)
+  );
+  color: var(--tonscan-text-primary);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--litenode-surface-raised) 80%, transparent);
+  box-sizing: border-box;
+  cursor: pointer;
+  transition:
+    background-color var(--transition-duration-fast),
+    border-color var(--transition-duration-fast),
+    box-shadow var(--transition-duration-fast),
+    color var(--transition-duration-fast);
+}
+
+.networkTrigger:hover,
+.networkTrigger[aria-expanded="true"] {
+  border-color: var(--litenode-border-control);
+  background: var(--litenode-surface-hover);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--litenode-border-control) 55%, transparent);
+}
+
+.networkTriggerLabel {
+  overflow: hidden;
+  color: inherit;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  line-height: 1;
+  letter-spacing: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.networkMenu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 40;
+  width: 300px;
+  padding: 6px;
+  border: 1px solid var(--tonscan-border);
+  border-radius: 10px;
+  background: var(--tonscan-card-bg);
+  box-shadow: var(--shadow-popover);
+  box-sizing: border-box;
+  overflow: hidden;
+  transform-origin: top right;
+  will-change: width;
+  transition:
+    width 280ms cubic-bezier(0.16, 1, 0.3, 1),
+    padding 240ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.networkMenu[data-adding="true"] {
+  width: 430px;
+  padding: 6px;
+}
+
+.networkOptions {
+  display: flex;
+  flex-direction: column;
+}
+
+.networkOptions > * + * {
+  margin-top: 4px;
+}
+
+.networkOption,
+.networkAddOption,
+.networkShareOption {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--tonscan-text-primary);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color var(--transition-duration-fast),
+    color var(--transition-duration-fast);
+}
+
+.networkOption {
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.networkOption:hover,
+.networkOption[data-active="true"] {
+  background: var(--litenode-surface-hover);
+}
+
+.networkOptionRow {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 48px;
+  border-radius: 8px;
+  background: transparent;
+  transition: background-color var(--transition-duration-fast);
+}
+
+.networkOptionRow:hover,
+.networkOptionRow[data-active="true"] {
+  background: var(--litenode-surface-hover);
+}
+
+.networkOptionSelect {
+  display: flex;
+  min-width: 0;
+  min-height: 48px;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 8px 0 10px;
+  border: 0;
+  background: transparent;
+  color: var(--tonscan-text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.networkOptionActions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+  padding-right: 6px;
+}
+
+.networkIconButton {
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--tonscan-text-secondary);
+  cursor: pointer;
+  opacity: 0.78;
+  transition:
+    background-color var(--transition-duration-fast),
+    color var(--transition-duration-fast),
+    opacity var(--transition-duration-fast);
+}
+
+.networkIconButton:hover {
+  background: var(--litenode-surface-active);
+  color: var(--tonscan-text-primary);
+  opacity: 1;
+}
+
+.networkOptionText {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.networkOptionLabel {
+  overflow: hidden;
+  color: var(--tonscan-text-primary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  line-height: 1.1;
+  letter-spacing: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.networkOptionMeta {
+  overflow: hidden;
+  color: var(--tonscan-text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.1;
+  letter-spacing: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.networkMenuDivider {
+  height: 1px;
+  margin: 6px 4px;
+  background: var(--tonscan-border);
+}
+
+.networkAddOption,
+.networkShareOption {
+  justify-content: flex-start;
+  gap: 8px;
+  min-height: 36px;
+  color: var(--tonscan-text-secondary);
+}
+
+.networkAddButtonFrame {
+  max-height: 78px;
+  overflow: hidden;
+  opacity: 1;
+  transition:
+    max-height 180ms cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 120ms ease,
+    visibility 1ms linear;
+}
+
+.networkAddButtonFrame[data-hidden="true"] {
+  max-height: 0;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    max-height 180ms cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 100ms ease,
+    visibility 1ms linear 180ms;
+}
+
+.networkAddButtonFrame > .networkAddOption,
+.networkAddButtonFrame > .networkShareOption {
+  overflow: hidden;
+}
+
+.networkAddOptionInner {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.networkAddOption:hover,
+.networkShareOption:hover {
+  color: var(--tonscan-text-primary);
+  background: var(--litenode-surface-hover);
+}
+
+.networkAddPanel {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    grid-template-rows 260ms cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 120ms ease,
+    visibility 1ms linear 260ms;
+}
+
+.networkAddPanel[data-open="true"] {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  visibility: visible;
+  transition:
+    grid-template-rows 300ms cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 160ms ease 80ms,
+    visibility 1ms linear;
+}
+
+.networkAddPanelInner {
+  min-height: 0;
+  overflow: hidden;
+  padding: 0 4px;
+  transition: padding 180ms ease;
+}
+
+.networkAddPanel[data-open="true"] .networkAddPanelInner {
+  padding: 2px 4px 4px;
+}
+
+.networkAddForm {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.networkFormTitle {
+  color: var(--tonscan-text-primary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  line-height: 1;
+}
+
+.networkField {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.networkFieldLabel {
+  color: var(--tonscan-text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+.networkInput {
+  width: 100%;
+  height: 36px;
+  padding: 0 11px;
+  border: 1px solid var(--litenode-border-control);
+  border-radius: 8px;
+  background: var(--litenode-surface);
+  color: var(--tonscan-text-primary);
+  font: inherit;
+  font-size: var(--font-size-xs);
+  line-height: 1;
+  box-sizing: border-box;
+  outline: none;
+  transition:
+    border-color var(--transition-duration-fast),
+    box-shadow var(--transition-duration-fast),
+    background-color var(--transition-duration-fast);
+}
+
+.networkInput::placeholder {
+  color: var(--tonscan-text-secondary);
+}
+
+.networkInput:hover {
+  border-color: var(--litenode-border-strong);
+}
+
+.networkInput:focus-visible {
+  border-color: var(--litenode-border-strong);
+  box-shadow: 0 0 0 2px var(--litenode-focus);
+}
+
+.networkInput:disabled {
+  opacity: 0.7;
+}
+
+.networkCheckboxRow {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 42px;
+  margin-top: 4px;
+  padding-inline: 3px;
+  color: var(--tonscan-text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  line-height: 1;
+  letter-spacing: 0;
+  cursor: pointer;
+}
+
+.networkCheckboxRow input {
+  width: 14px;
+  height: 14px;
+  margin: 1px 0 0;
+  accent-color: var(--tonscan-accent);
+}
+
+.networkCheckboxText {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.networkCheckboxLabel {
+  color: var(--tonscan-text-primary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  line-height: 1;
+}
+
+.networkCheckboxDescription {
+  color: var(--tonscan-text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.25;
+}
+
+.networkFormActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.networkCancelButton,
+.networkSubmitButton {
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 7px;
+  font: inherit;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background-color var(--transition-duration-fast),
+    border-color var(--transition-duration-fast),
+    color var(--transition-duration-fast),
+    box-shadow var(--transition-duration-fast);
+}
+
+.networkCancelButton {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--tonscan-text-secondary);
+}
+
+.networkCancelButton:hover {
+  color: var(--tonscan-text-primary);
+  background: var(--litenode-surface-hover);
+}
+
+.networkSubmitButton {
+  border: 1px solid var(--litenode-border-control);
+  background: var(--litenode-primary);
+  color: var(--litenode-primary-foreground);
+}
+
+.networkSubmitButton:hover {
+  background: var(--litenode-primary-hover);
+}
+
 .headerActions [data-theme-toggle] {
   margin-left: 0;
   flex: 0 0 auto;
@@ -123,7 +563,15 @@
 
 .githubButton:focus-visible,
 .navLink:focus-visible,
-.brand:focus-visible {
+.brand:focus-visible,
+.networkTrigger:focus-visible,
+.networkOption:focus-visible,
+.networkOptionSelect:focus-visible,
+.networkAddOption:focus-visible,
+.networkShareOption:focus-visible,
+.networkIconButton:focus-visible,
+.networkCancelButton:focus-visible,
+.networkSubmitButton:focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px var(--litenode-focus);
 }
@@ -167,5 +615,18 @@
 
   .headerActions {
     gap: 6px;
+  }
+
+  .networkTrigger {
+    width: 106px;
+  }
+
+  .networkMenu {
+    right: -46px;
+    width: min(300px, calc(100vw - 32px));
+  }
+
+  .networkMenu[data-adding="true"] {
+    width: min(430px, calc(100vw - 32px));
   }
 }

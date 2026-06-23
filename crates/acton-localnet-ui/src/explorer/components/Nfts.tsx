@@ -61,7 +61,7 @@ export const Nfts: FC<NftsProps> = ({items, onAddressClick}) => {
   }, [items, normalizedQuery])
 
   if (items.length === 0) {
-    return <div className={styles.empty}>No NFTs found.</div>
+    return <div className={styles.empty}>No NFTs found</div>
   }
 
   return (
@@ -117,7 +117,7 @@ export const Nfts: FC<NftsProps> = ({items, onAddressClick}) => {
           )
         })}
       </div>
-      {visibleItems.length === 0 && <div className={styles.empty}>No matching collectibles.</div>}
+      {visibleItems.length === 0 && <div className={styles.empty}>No matching collectibles</div>}
     </div>
   )
 }

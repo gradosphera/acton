@@ -53,7 +53,7 @@ export const AccountPage: FC<AccountPageProps> = ({client}) => {
   const navigate = useNavigate()
   const location = useLocation()
   const routes = useExplorerRoutePaths()
-  const {addressFormat} = useNetworkInfo()
+  const {addressFormat, network} = useNetworkInfo()
   const [accountState, setAccountState] = useState<AddressInformation | undefined>()
   const [accountStateV3, setAccountStateV3] = useState<V3AccountState | undefined>()
   const [transactions, setTransactions] = useState<V3TransactionListItem[]>([])
@@ -114,6 +114,7 @@ export const AccountPage: FC<AccountPageProps> = ({client}) => {
   const isNftItemAccount = hasAccountInterface(accountInterfaces, "nft_item")
   const isNftCollectionAccount = hasAccountInterface(accountInterfaces, "nft_collection")
   const usesToncenterApi = client.usesToncenterApiEndpoint()
+  const supportsAccountActions = usesToncenterApi && network.supportsActions
   const useTransactionPagination = !usesToncenterApi
   const initialTransactionLimit = usesToncenterApi
     ? INITIAL_TRANSACTION_LIMIT
@@ -167,7 +168,7 @@ export const AccountPage: FC<AccountPageProps> = ({client}) => {
       if (isAddressChange) {
         setAccountLoading(true)
         setTransactionsLoading(true)
-        setActionsLoading(usesToncenterApi)
+        setActionsLoading(supportsAccountActions)
         setAccountState(undefined)
         setAccountStateV3(undefined)
         setTransactions([])
@@ -261,7 +262,7 @@ export const AccountPage: FC<AccountPageProps> = ({client}) => {
       }
 
       const loadActions = async () => {
-        if (!usesToncenterApi) {
+        if (!supportsAccountActions) {
           setActions([])
           setActionMetadata({})
           setActionsOffset(0)
@@ -302,7 +303,7 @@ export const AccountPage: FC<AccountPageProps> = ({client}) => {
     return () => {
       isActive = false
     }
-  }, [accountAddressKey, client, initialTransactionLimit, usesToncenterApi])
+  }, [accountAddressKey, client, initialTransactionLimit, supportsAccountActions])
 
   const loadMoreTransactions = async () => {
     if (
@@ -336,7 +337,7 @@ export const AccountPage: FC<AccountPageProps> = ({client}) => {
   const loadMoreActions = async () => {
     if (
       !formattedAddress ||
-      !usesToncenterApi ||
+      !supportsAccountActions ||
       actionsLoadingMore ||
       actionsLoading ||
       !actionsHasMore
@@ -1045,7 +1046,7 @@ export const AccountPage: FC<AccountPageProps> = ({client}) => {
             transactionsHasMore={transactionsHasMore}
             transactionsLoadingMore={transactionsLoadingMore}
             transactionsPaginated={useTransactionPagination}
-            actionsSupported={usesToncenterApi}
+            actionsSupported={supportsAccountActions}
             actionsLoading={actionsLoading}
             actionsError={actionsError}
             actionsHasMore={actionsHasMore}

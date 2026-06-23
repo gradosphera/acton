@@ -66,7 +66,7 @@ export const Tokens: FC<TokensProps> = ({wallets, client, onAddressClick}) => {
   }, [wallets, client])
 
   if (wallets.length === 0) {
-    return <div className={styles.empty}>No tokens found.</div>
+    return <div className={styles.empty}>No tokens found</div>
   }
 
   return (
