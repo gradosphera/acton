@@ -30,8 +30,8 @@
 
 .headerPrimary {
   display: flex;
-  align-items: baseline;
-  gap: 22px;
+  align-items: center;
+  gap: 30px;
   min-width: 0;
 }
 
@@ -43,28 +43,38 @@
 }
 
 .brand {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   min-width: 0;
   color: var(--tonscan-text-primary);
   font-size: var(--font-size-md);
-  font-weight: 950;
+  font-weight: 850;
   line-height: 1;
   text-decoration: none;
   letter-spacing: 0;
   white-space: nowrap;
 }
 
+.brandIcon {
+  display: block;
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+}
+
 .nav {
   display: flex;
-  align-items: baseline;
-  gap: 10px;
+  align-items: center;
+  gap: 14px;
   margin-left: 0;
+  padding-top: 2px;
 }
 
 .navLink {
   display: inline-block;
   box-sizing: border-box;
-  padding: 0;
+  padding: 6px 0;
   border: 0;
   background: transparent;
   color: var(--tonscan-text-secondary);

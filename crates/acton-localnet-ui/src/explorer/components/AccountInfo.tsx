@@ -9,7 +9,7 @@ import type {AddressInformation, JettonMasterMetadata, JettonWallet} from "../ap
 import type {TonClient} from "../api/client"
 import type {ContractAbiLink, ExtendedContractABI} from "../api/compilerAbi"
 import {useAddressBook, useAddressName} from "../hooks/useAddressBook"
-import {useNetworkInfo} from "../hooks/useNetworkInfo"
+import {useNetworkInfo, type ExplorerNetworkId} from "../hooks/useNetworkInfo"
 
 import styles from "./AccountInfo.module.css"
 import {
@@ -74,7 +74,7 @@ export const AccountInfo: FC<AccountInfoProps> = ({
   const contractDescriptionId = useId()
   const {setAddressName} = useAddressBook()
   const resolvedName = useAddressName(address)
-  const {addressFormat, forkNetwork} = useNetworkInfo()
+  const {addressFormat, forkNetwork, network} = useNetworkInfo()
   const displayAddress = normalizeAddress(address, addressFormat)
   const rawAddress = toRawAddress(address)
 
@@ -193,7 +193,7 @@ export const AccountInfo: FC<AccountInfoProps> = ({
   const shortAddress = formatAddress(displayAddress, true, addressFormat)
   const addressRowText = hasContextCard ? shortAddress : displayAddress
   const statusAddress = formatRawAddress(displayAddress)
-  const tonscanUrl = getTonscanUrl(displayAddress, forkNetwork)
+  const tonscanUrl = getTonscanUrl(displayAddress, network.id, forkNetwork)
   const isNameUnchanged = editValue.trim() === (customName || "")
   const stateLoading = accountLoading
   const firstWallet = jettonWallets[0]
@@ -1036,17 +1036,34 @@ function hasCellData(value: string | null): boolean {
   return value !== null && value.trim().length > 0
 }
 
-function getTonscanUrl(address: string, forkNetwork?: string): string | undefined {
-  if (!forkNetwork) {
+function getTonscanUrl(
+  address: string,
+  networkId: ExplorerNetworkId,
+  forkNetwork?: string,
+): string | undefined {
+  const normalizedNetwork =
+    networkId === "mainnet" || networkId === "testnet"
+      ? networkId
+      : normalizeForkNetwork(forkNetwork)
+
+  if (!normalizedNetwork) {
     return undefined
   }
 
-  const normalizedFork = forkNetwork.trim().toLowerCase()
-  const baseUrl =
-    normalizedFork === "testnet"
-      ? "https://testnet.tonscan.org/address/"
-      : "https://tonscan.org/address/"
-  return `${baseUrl}${encodeURIComponent(address)}`
+  const encodedAddress = encodeURIComponent(address)
+  if (normalizedNetwork === "testnet") {
+    return `https://testnet.tonscan.org/address/${encodedAddress}`
+  }
+
+  return `https://tonscan.org/address/${encodedAddress}`
+}
+
+function normalizeForkNetwork(forkNetwork?: string): "mainnet" | "testnet" | undefined {
+  const normalizedFork = forkNetwork?.trim().toLowerCase()
+  if (normalizedFork === "mainnet" || normalizedFork === "testnet") {
+    return normalizedFork
+  }
+  return undefined
 }
 
 function formatTokenAmount(value: string, decimals: number): string {

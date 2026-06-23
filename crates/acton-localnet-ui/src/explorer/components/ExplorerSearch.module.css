@@ -179,11 +179,18 @@
   flex: 1 1 auto;
   min-width: 0;
   color: var(--text-primary);
-  font-family: var(--font-mono);
   font-size: var(--font-size-sm);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.historyAddressValue {
+  font-family: inherit;
+}
+
+.historyHashValue {
+  font-family: var(--font-mono);
 }
 
 .nameMatchButton {
@@ -213,7 +220,6 @@
 
 .nameMatchAddress {
   color: var(--text-secondary);
-  font-family: var(--font-mono);
   font-size: var(--font-size-xs);
   line-height: 1.2;
 }

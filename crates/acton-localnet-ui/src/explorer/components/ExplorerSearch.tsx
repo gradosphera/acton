@@ -232,7 +232,11 @@ export const ExplorerSearch: FC<ExplorerSearchProps> = ({
                 onClick={() => handleSearch(item)}
               >
                 <History size={16} className={styles.historyItemIcon} aria-hidden="true" />
-                <span className={styles.historyValue}>
+                <span
+                  className={`${styles.historyValue} ${
+                    parseAddress(item) ? styles.historyAddressValue : styles.historyHashValue
+                  }`}
+                >
                   {formatHistoryItem(item, addressFormat)}
                 </span>
               </button>

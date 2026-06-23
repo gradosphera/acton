@@ -22,6 +22,7 @@ import {TransactionPage} from "../../acton-localnet-ui/src/explorer/pages/Transa
 import type {ThemeMode} from "@acton/shared-ui"
 import "@acton/shared-ui/styles/tokens.css"
 import "../../acton-localnet-ui/src/index.css"
+import actonScanLogo from "./assets/acton-scan-logo-dark.svg"
 import styles from "./ExplorerApp.module.css"
 
 type BuiltinSelectableExplorerNetworkId = "mainnet" | "testnet"
@@ -853,6 +854,12 @@ export const ExplorerApp: FC = () => {
                   <div className={styles.headerInner}>
                     <div className={styles.headerPrimary}>
                       <Link className={styles.brand} to="/">
+                        <img
+                          className={styles.brandIcon}
+                          src={actonScanLogo}
+                          alt=""
+                          aria-hidden="true"
+                        />
                         <span className={styles.brandText}>actonscan</span>
                       </Link>
                       <nav className={styles.nav} aria-label="Explorer navigation">
