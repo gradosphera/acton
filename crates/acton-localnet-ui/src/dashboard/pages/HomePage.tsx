@@ -22,6 +22,7 @@ import {
 } from "../../explorer/components/DeveloperTransactionList"
 import {formatDuration} from "../../explorer/components/utils"
 import {useAddressBook} from "../../explorer/hooks/useAddressBook"
+import {useOpenExplorerPath} from "../../explorer/hooks/useOpenExplorerPath"
 import {useTransactionMessageNames} from "../../explorer/hooks/useTransactionMessageNames"
 import {collectRecentAccounts} from "../dashboardUtils"
 
@@ -29,7 +30,7 @@ import styles from "../DashboardPage.module.css"
 
 const HOME_RECENT_TRANSACTIONS_REFRESH_MS = 2000
 const HOME_NODE_INFO_REFRESH_MS = 1000
-const MASTERCHAIN_BLOCK_SHARD = "-9223372036854775808"
+const MASTERCHAIN_BLOCK_SHARD = "8000000000000000"
 
 interface HomePageProps {
   readonly client: TonClient
@@ -51,6 +52,7 @@ interface NodeInfoRow {
 
 export const HomePage: FC<HomePageProps> = ({client}) => {
   const navigate = useNavigate()
+  const openPath = useOpenExplorerPath()
   const {showToast} = useToast()
   const {prefetchNames} = useAddressBook()
   const [nodeInfo, setNodeInfo] = useState<LocalnetNodeInfo | undefined>()
@@ -378,11 +380,11 @@ export const HomePage: FC<HomePageProps> = ({client}) => {
             title="Recent transactions"
             transactions={homeState.transactions}
             messageNamesByAddress={messageNamesByAddress}
-            onTransactionClick={hashHex => {
-              void navigate(`/explorer/tx/${encodeURIComponent(hashHex)}`)
+            onTransactionClick={(hashHex, _transaction, event) => {
+              openPath(`/explorer/tx/${encodeURIComponent(hashHex)}`, event)
             }}
-            onAddressClick={address => {
-              void navigate(`/explorer/address/${encodeURIComponent(address)}`)
+            onAddressClick={(address, event) => {
+              openPath(`/explorer/address/${encodeURIComponent(address)}`, event)
             }}
           />
         )}
@@ -396,8 +398,8 @@ export const HomePage: FC<HomePageProps> = ({client}) => {
             <DeveloperAccountList
               title="Recent accounts"
               accounts={recentAccountItems}
-              onAddressClick={address => {
-                void navigate(`/explorer/address/${encodeURIComponent(address)}`)
+              onAddressClick={(address, event) => {
+                openPath(`/explorer/address/${encodeURIComponent(address)}`, event)
               }}
             />
           )}

@@ -116,7 +116,14 @@ export const App: FC = () => {
       }),
     [handleUnauthorized, localnetApiToken],
   )
-
+  const explorerApi = useMemo(
+    () => ({
+      v2BaseUrl: API_V2_BASE_URL,
+      v3BaseUrl: API_V3_BASE_URL,
+      toncenterApiKey: TONCENTER_API_KEY,
+    }),
+    [],
+  )
   useEffect(() => {
     document.documentElement.classList.toggle("dark-theme", theme === "dark")
     document.body.classList.toggle("dark-mode", theme === "dark")
@@ -127,7 +134,7 @@ export const App: FC = () => {
   return (
     <BrowserRouter>
       <ToastProvider>
-        <NetworkInfoProvider client={client}>
+        <NetworkInfoProvider client={client} api={explorerApi}>
           <AddressBookProvider client={client}>
             <WalletRuntimeProvider client={client} host={HOST} localnetApiToken={localnetApiToken}>
               <AppContent
@@ -335,6 +342,14 @@ const AppContent: FC<AppContentProps> = ({
               element={
                 <DashboardPage {...dashboardProps} embedded>
                   <AccountPage client={client} />
+                </DashboardPage>
+              }
+            />
+            <Route
+              path="/explorer/tx/:hash/trace"
+              element={
+                <DashboardPage {...dashboardProps} embedded>
+                  <TransactionPage client={client} openRetraceOnLoad />
                 </DashboardPage>
               }
             />

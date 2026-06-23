@@ -1,12 +1,15 @@
-import {useEffect, useLayoutEffect, useMemo, useRef, useState} from "react"
+import {useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState} from "react"
 import type {CSSProperties, FC, JSX} from "react"
 import {
   type ContractData,
+  type LoadedTransactionActions,
   TransactionDetails,
   type TransactionInfo,
   TransactionTree,
   ValueFlowTable,
   decodeStorageDataCell,
+  decodeStorageShardAccount,
+  getTransactionComputePhase,
   type ValueFlowItem,
 } from "@acton/shared-ui"
 import {Address} from "@ton/core"
@@ -16,6 +19,7 @@ import {
   CheckCircle2,
   CircleDotDashed,
   GitBranch,
+  RefreshCw,
   XCircle,
 } from "lucide-react"
 import {useNavigate, useParams, useSearchParams} from "react-router-dom"
@@ -33,13 +37,17 @@ import {
 } from "../components/utils"
 import {useAddressBook} from "../hooks/useAddressBook"
 import {useExplorerRoutePaths} from "../hooks/useExplorerRoutePaths"
-import {useAddressFormat} from "../hooks/useNetworkInfo"
+import {useAddressFormat, useNetworkInfo} from "../hooks/useNetworkInfo"
+import {traceTx} from "../retrace/txTrace/lib/traceTx"
+import type {RetraceResultAndCode} from "../retrace/txTrace/lib/types"
+import TransactionRetracePanel from "../retrace/txTrace/ui/TransactionRetracePanel"
 import {useDelayedLoadingVisibility} from "../../hooks/useDelayedLoadingVisibility"
 
 import styles from "./TransactionPage.module.css"
 
 interface TransactionPageProps {
   readonly client: TonClient
+  readonly openRetraceOnLoad?: boolean
 }
 
 type TabType = "transactions" | "value-flow"
@@ -59,6 +67,7 @@ interface TraceTransactionNodeProps {
   readonly compilerAbisByCodeHash: ReadonlyMap<string, ContractData["abi"]>
   readonly isIntermediateSibling?: boolean
   readonly onContractClick: (address: string) => void
+  readonly loadActions: (tx: TransactionInfo) => Promise<LoadedTransactionActions>
 }
 
 const buildTransactionsHexIndex = (
@@ -74,7 +83,88 @@ const buildTransactionsHexIndex = (
   return indexed
 }
 
-export const TransactionPage: FC<TransactionPageProps> = ({client}) => {
+const mapTraceTransactions = (
+  transactions: readonly TransactionInfo[],
+  updateTransaction: (tx: TransactionInfo) => TransactionInfo,
+): TransactionInfo[] => {
+  const clonedByOriginal = new Map<TransactionInfo, TransactionInfo>()
+
+  for (const tx of transactions) {
+    clonedByOriginal.set(tx, updateTransaction(tx))
+  }
+
+  for (const tx of transactions) {
+    const clonedTx = clonedByOriginal.get(tx)
+    if (!clonedTx) {
+      continue
+    }
+
+    clonedTx.parent = tx.parent ? clonedByOriginal.get(tx.parent) : undefined
+    clonedTx.children = tx.children
+      .map(child => clonedByOriginal.get(child))
+      .filter((child): child is TransactionInfo => child !== undefined)
+  }
+
+  return transactions
+    .map(tx => clonedByOriginal.get(tx))
+    .filter((tx): tx is TransactionInfo => tx !== undefined)
+}
+
+const withLoadedTransactionActions = (
+  transactions: readonly TransactionInfo[],
+  targetHash: string,
+  loadedActions: LoadedTransactionActions,
+): TransactionInfo[] => {
+  const normalizedTargetHash = targetHash.toLowerCase()
+
+  return mapTraceTransactions(transactions, tx => {
+    const txHash = tx.transaction.hash().toString("hex").toLowerCase()
+    if (txHash !== normalizedTargetHash) {
+      return {...tx}
+    }
+
+    return {
+      ...tx,
+      actions: loadedActions.actions,
+      outActions: loadedActions.outActions,
+      executorActions: loadedActions.executorActions ?? tx.executorActions,
+    }
+  })
+}
+
+const withRetracedStorage = (
+  transactions: readonly TransactionInfo[],
+  targetHash: string,
+  retraceResult: RetraceResultAndCode,
+): TransactionInfo[] => {
+  const normalizedTargetHash = targetHash.toLowerCase()
+
+  return mapTraceTransactions(transactions, tx => {
+    const txHash = tx.transaction.hash().toString("hex").toLowerCase()
+    if (txHash !== normalizedTargetHash) {
+      return {...tx}
+    }
+
+    const abi = tx.contractAbi
+    const shardAccountBefore =
+      tx.shardAccountBefore || retraceResult.result.account.shardAccountBefore
+    const shardAccountAfter = tx.shardAccountAfter || retraceResult.result.account.shardAccountAfter
+
+    return {
+      ...tx,
+      shardAccountBefore,
+      shardAccountAfter,
+      parsedStorageBefore:
+        tx.parsedStorageBefore ??
+        decodeStorageShardAccount(retraceResult.result.account.shardAccountBefore, abi),
+      parsedStorageAfter:
+        tx.parsedStorageAfter ??
+        decodeStorageShardAccount(retraceResult.result.account.shardAccountAfter, abi),
+    }
+  })
+}
+
+export const TransactionPage: FC<TransactionPageProps> = ({client, openRetraceOnLoad = false}) => {
   const {hash: routeHash = ""} = useParams<{hash: string}>()
   const hash = hashToHex(routeHash) ?? routeHash
   const navigate = useNavigate()
@@ -88,11 +178,15 @@ export const TransactionPage: FC<TransactionPageProps> = ({client}) => {
   >(new Map())
   const [error, setError] = useState<string | undefined>()
   const [activeTab, setActiveTab] = useState<TabType>(() => parseTabType(searchParams.get("tab")))
+  const [expandedRetraceHash, setExpandedRetraceHash] = useState<string | undefined>()
+  const [retraceAttempt, setRetraceAttempt] = useState(0)
   const [valueFlow, setValueFlow] = useState<ValueFlowItem[]>([])
   const {fetchName} = useAddressBook()
+  const {network} = useNetworkInfo()
   const addressFormat = useAddressFormat()
   const fetchNameRef = useRef(fetchName)
   const addressFormatRef = useRef(addressFormat)
+  const loadedActionsByHashRef = useRef(new Map<string, LoadedTransactionActions>())
   const showLoadingSkeleton = useDelayedLoadingVisibility(loading, 500)
   const selectedTransactionId = useMemo(() => {
     const requestedHash = hash.toLowerCase()
@@ -119,9 +213,75 @@ export const TransactionPage: FC<TransactionPageProps> = ({client}) => {
     )
   }
 
+  const handleRetrace = (txHash: string) => {
+    setExpandedRetraceHash(txHash)
+    setRetraceAttempt(currentAttempt => currentAttempt + 1)
+  }
+
+  const handleCloseRetrace = () => {
+    setExpandedRetraceHash(undefined)
+    if (openRetraceOnLoad) {
+      void navigate(routes.transactionPath(hash), {replace: true})
+    }
+  }
+
+  const loadTransactionActions = useCallback(
+    async (tx: TransactionInfo): Promise<LoadedTransactionActions> => {
+      const txHash = tx.transaction.hash().toString("hex").toLowerCase()
+      const cachedActions = loadedActionsByHashRef.current.get(txHash)
+      if (cachedActions) {
+        return cachedActions
+      }
+
+      const retraceResult = await traceTx(txHash, network)
+      const loadedActions: LoadedTransactionActions = {
+        actions: retraceResult.result.emulatedTx.c5,
+        outActions: retraceResult.result.emulatedTx.actions,
+        executorActions: tx.executorActions,
+      }
+
+      loadedActionsByHashRef.current.set(txHash, loadedActions)
+      setTraces(currentTraces =>
+        withRetracedStorage(
+          withLoadedTransactionActions(currentTraces, txHash, loadedActions),
+          txHash,
+          retraceResult,
+        ),
+      )
+
+      return loadedActions
+    },
+    [network],
+  )
+
+  const handleRetraceResult = useCallback((txHash: string, result: RetraceResultAndCode) => {
+    setTraces(currentTraces => withRetracedStorage(currentTraces, txHash, result))
+  }, [])
+
   useEffect(() => {
     setActiveTab(parseTabType(searchParams.get("tab")))
   }, [searchParams])
+
+  useEffect(() => {
+    setExpandedRetraceHash(undefined)
+    setRetraceAttempt(0)
+    loadedActionsByHashRef.current.clear()
+  }, [hash])
+
+  useEffect(() => {
+    if (!openRetraceOnLoad || traces.length === 0) {
+      return
+    }
+
+    const requestedHash = hash.toLowerCase()
+    const selectedTrace = traces.find(
+      tx => tx.transaction.hash().toString("hex").toLowerCase() === requestedHash,
+    )
+    const selectedTraceHash = selectedTrace?.transaction.hash().toString("hex")
+    if (selectedTraceHash) {
+      setExpandedRetraceHash(selectedTraceHash)
+    }
+  }, [hash, openRetraceOnLoad, traces])
 
   useEffect(() => {
     if (!hash) return
@@ -259,11 +419,50 @@ export const TransactionPage: FC<TransactionPageProps> = ({client}) => {
   }
 
   const firstTrace = traces[0]
+  const firstTraceComputePhase = firstTrace
+    ? getTransactionComputePhase(firstTrace.transaction)
+    : undefined
+  const firstTraceSucceeded =
+    firstTraceComputePhase?.type === "vm" && firstTraceComputePhase.success
   const traceAddress = firstTrace?.address?.toString() ?? ""
   const traceAddressDisplay = normalizeAddress(traceAddress, addressFormat)
   const rootTraceTransactions = [...traces]
     .filter(tx => !tx.parent)
     .sort(compareTransactionInfoByLt)
+  const renderSelectedTransactionMessageRouteAction = (tx: TransactionInfo): JSX.Element => {
+    const txHash = tx.transaction.hash().toString("hex")
+    const isRetraceOpen = expandedRetraceHash === txHash
+
+    return (
+      <button
+        type="button"
+        className={`${styles.retraceInlineButton} ${isRetraceOpen ? styles.retraceInlineButtonActive : ""}`}
+        onClick={() => handleRetrace(txHash)}
+        aria-expanded={isRetraceOpen}
+      >
+        <RefreshCw size={14} />
+        Retrace
+      </button>
+    )
+  }
+
+  const renderSelectedTransactionExtra = (tx: TransactionInfo): JSX.Element | null => {
+    const txHash = tx.transaction.hash().toString("hex")
+    if (expandedRetraceHash !== txHash) {
+      return null
+    }
+
+    return (
+      <div className={styles.selectedRetraceSection}>
+        <TransactionRetracePanel
+          key={`${txHash}:${retraceAttempt}`}
+          txHash={txHash}
+          onClose={handleCloseRetrace}
+          onResult={handleRetraceResult}
+        />
+      </div>
+    )
+  }
 
   return (
     <div className={styles.container}>
@@ -284,11 +483,9 @@ export const TransactionPage: FC<TransactionPageProps> = ({client}) => {
               <div className={styles.overviewCard}>
                 <div className={styles.overviewHeader}>
                   <div
-                    className={`${styles.status} ${firstTrace.transaction.description.type === "generic" && firstTrace.transaction.description.computePhase.type === "vm" && firstTrace.transaction.description.computePhase.success ? styles.statusSuccess : styles.statusError}`}
+                    className={`${styles.status} ${firstTraceSucceeded ? styles.statusSuccess : styles.statusError}`}
                   >
-                    {firstTrace.transaction.description.type === "generic" &&
-                    firstTrace.transaction.description.computePhase.type === "vm" &&
-                    firstTrace.transaction.description.computePhase.success ? (
+                    {firstTraceSucceeded ? (
                       <>
                         <CheckCircle2 size={18} /> Confirmed transaction
                       </>
@@ -328,6 +525,7 @@ export const TransactionPage: FC<TransactionPageProps> = ({client}) => {
                           contracts={contracts}
                           compilerAbisByCodeHash={compilerAbisByCodeHash}
                           onContractClick={handleContractClick}
+                          loadActions={loadTransactionActions}
                         />
                       ))}
                     </div>
@@ -344,6 +542,11 @@ export const TransactionPage: FC<TransactionPageProps> = ({client}) => {
                 allContracts={[]}
                 selectedTransactionId={selectedTransactionId}
                 onContractClick={handleContractClick}
+                renderSelectedTransactionExtra={renderSelectedTransactionExtra}
+                renderSelectedTransactionMessageRouteAction={
+                  renderSelectedTransactionMessageRouteAction
+                }
+                loadActions={loadTransactionActions}
               />
             </div>
           </>
@@ -505,6 +708,7 @@ const TraceTransactionNode: FC<TraceTransactionNodeProps> = ({
   compilerAbisByCodeHash,
   isIntermediateSibling = false,
   onContractClick,
+  loadActions,
 }) => {
   const cardRef = useRef<HTMLDivElement>(null)
   const childrenRef = useRef<HTMLDivElement>(null)
@@ -577,6 +781,7 @@ const TraceTransactionNode: FC<TraceTransactionNodeProps> = ({
             compilerAbisByCodeHash={compilerAbisByCodeHash}
             allContracts={[]}
             onContractClick={onContractClick}
+            loadActions={loadActions}
           />
         </div>
         {children.length > 0 && (
@@ -604,6 +809,7 @@ const TraceTransactionNode: FC<TraceTransactionNodeProps> = ({
               compilerAbisByCodeHash={compilerAbisByCodeHash}
               isIntermediateSibling={index < children.length - 1}
               onContractClick={onContractClick}
+              loadActions={loadActions}
             />
           ))}
         </div>
