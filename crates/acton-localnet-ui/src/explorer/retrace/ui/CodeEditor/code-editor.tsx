@@ -20,11 +20,13 @@ import {
   useTasmCompletionProvider,
   useTasmInlayProvider,
   useImplicitRetInlayProvider,
+  useSourceDebugValuesProvider,
   useFuncLanguageProviders,
   useFolding,
   type SupportedLanguage,
   type HighlightGroup,
   type HighlightRange,
+  type SourceDebugVariableValue,
 } from "./hooks"
 
 import styles from "./CodeEditor.module.css"
@@ -34,7 +36,7 @@ interface CodeEditorProps {
   /** The source code to display in the editor */
   readonly code: string
 
-  /** Programming language for syntax highlighting. Supports 'tasm' and 'func' */
+  /** Programming language for syntax highlighting. Supports 'tasm', 'func', and 'tolk' */
   readonly language?: SupportedLanguage
 
   /** Whether the editor is read-only or allows editing */
@@ -63,6 +65,9 @@ interface CodeEditorProps {
 
   /** Whether to center the editor view on the highlighted line */
   readonly shouldCenter?: boolean
+
+  /** Optional line to center when it differs from the current execution highlight. */
+  readonly centerLine?: number
 
   /** Exit code information to display as code lens above the error line */
   readonly exitCode?: ExitCode
@@ -101,6 +106,9 @@ interface CodeEditorProps {
 
   /** Use tighter Monaco gutters for embedded read-only trace views. */
   readonly compactGutter?: boolean
+
+  /** Source-debug locals used for hover values. */
+  readonly sourceDebugVariables?: readonly SourceDebugVariableValue[]
 }
 
 // use local instance of monaco
@@ -128,6 +136,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   onLineClick = () => {},
   onLineHover,
   shouldCenter = true,
+  centerLine,
   exitCode,
   readOnly = true,
   onChange,
@@ -143,10 +152,13 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   needFloatingTip = lineExecutionData && language === "tasm",
   modelPath,
   compactGutter = false,
+  sourceDebugVariables,
 }) => {
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
   const [editorReady, setEditorReady] = useState(false)
   const [isFoldedState, setIsFolded] = useState(false)
+  const modelKey =
+    modelPath ?? (language === "func" ? "main.fc" : language === "tolk" ? "main.tolk" : "out.tasm")
 
   const {monaco, isMac} = useMonacoSetup({language})
 
@@ -170,6 +182,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     isCtrlPressed,
     hoveredLine,
     shouldCenter,
+    centerLine,
   })
 
   useTasmHoverProvider({
@@ -228,6 +241,15 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     enabled: language === "tolk",
   })
 
+  useSourceDebugValuesProvider({
+    monaco,
+    editorRef,
+    editorReady,
+    languageId: language,
+    variables: sourceDebugVariables,
+    enabled: sourceDebugVariables !== undefined && sourceDebugVariables.length > 0,
+  })
+
   const {collapseInactiveBlocks} = useFolding({
     monaco,
     editorRef,
@@ -235,14 +257,16 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   })
 
   useEffect(() => {
-    if (!editorRef.current) return
+    if (!editorRef.current || !lineExecutionData || Object.keys(lineExecutionData).length === 0) {
+      return
+    }
     try {
       editorRef.current.trigger("unfold", "editor.unfoldAll", {})
     } catch {
       /* ignore */
     }
     setIsFolded(true)
-  }, [code, language])
+  }, [code, language, lineExecutionData])
 
   useEffect(() => {
     setIsFolded(false)
@@ -333,6 +357,19 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     handleCollapseInactiveBlocks()
   }, [editorReady, updateDecorations, handleCollapseInactiveBlocks])
 
+  useEffect(() => {
+    if (!editorReady || !editorRef.current) return
+
+    const frame = globalThis.requestAnimationFrame(() => {
+      if (editorRef.current) {
+        editorRef.current.layout()
+        updateDecorations(editorRef.current)
+      }
+    })
+
+    return () => globalThis.cancelAnimationFrame(frame)
+  }, [code, editorReady, language, modelKey, updateDecorations])
+
   // Update decorations on pressed ctrl
   useEffect(() => {
     if (editorRef.current) {
@@ -373,11 +410,10 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
           height="100%"
           width="100%"
           language={language}
-          path={
-            modelPath ??
-            (language === "func" ? "main.fc" : language === "tolk" ? "main.tolk" : "out.tasm")
-          }
+          path={modelKey}
           value={code}
+          saveViewState
+          keepCurrentModel
           options={{
             minimap: {enabled: false},
             readOnly,
@@ -385,7 +421,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
             automaticLayout: true,
             scrollBeyondLastLine: false,
             wordWrap: "on",
-            fontSize: 14,
+            fontSize: 13.5,
             tabSize: 4,
             insertSpaces: true,
             detectIndentation: false,

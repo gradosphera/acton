@@ -5,7 +5,7 @@ import type {LinesExecutionData} from "../../../txTrace/hooks"
 
 export interface HighlightGroup {
   readonly lines: number[]
-  readonly color: string
+  readonly color?: string
   readonly className?: string
 }
 
@@ -28,6 +28,7 @@ interface UseDecorationsOptions {
   readonly isCtrlPressed?: boolean
   readonly hoveredLine?: number | null
   readonly shouldCenter?: boolean
+  readonly centerLine?: number
 }
 
 interface UseDecorationsReturn {
@@ -56,16 +57,20 @@ const createHighlightGroupDecorations = (
   for (const [index, group] of highlightGroups.entries()) {
     for (const lineNumber of group.lines) {
       if (lineNumber > 0 && lineNumber <= totalLines) {
+        const options: monacoTypes.editor.IModelDecorationOptions = {
+          isWholeLine: true,
+          className: group.className || `source-map-group-${index}`,
+        }
+        if (group.color) {
+          options.overviewRuler = {
+            color: group.color,
+            position: 1,
+          }
+        }
+
         decorations.push({
           range: new monaco.Range(lineNumber, 1, lineNumber, 1),
-          options: {
-            isWholeLine: true,
-            className: group.className || `source-map-group-${index}`,
-            overviewRuler: {
-              color: group.color,
-              position: 1,
-            },
-          },
+          options,
         })
       }
     }
@@ -174,6 +179,7 @@ export const useDecorations = ({
   isCtrlPressed = false,
   hoveredLine = null,
   shouldCenter = true,
+  centerLine,
 }: UseDecorationsOptions): UseDecorationsReturn => {
   const decorationsRef = useRef<string[]>([])
 
@@ -232,11 +238,13 @@ export const useDecorations = ({
 
         // Center on highlighted line; if absent and implicit RET is present, center on it
         if (shouldCenter) {
-          if (highlightLine !== undefined) {
-            editor.revealLineInCenter(highlightLine)
+          if (centerLine !== undefined) {
+            editor.revealLineInCenterIfOutsideViewport(centerLine)
+          } else if (highlightLine !== undefined) {
+            editor.revealLineInCenterIfOutsideViewport(highlightLine)
           } else if (implicitRetLine !== undefined) {
             const markerLine = Math.min(Math.max(implicitRetLine + 1, 1), totalLines)
-            editor.revealLineInCenter(markerLine)
+            editor.revealLineInCenterIfOutsideViewport(markerLine)
           }
         }
       } catch (error) {
@@ -251,6 +259,7 @@ export const useDecorations = ({
       highlightRanges,
       lineExecutionData,
       shouldCenter,
+      centerLine,
       isCtrlPressed,
       hoveredLine,
       implicitRetLine,
