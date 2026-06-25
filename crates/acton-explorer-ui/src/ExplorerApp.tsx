@@ -1,8 +1,8 @@
 import {ThemeSwitch, ToastProvider, useToast} from "@acton/shared-ui"
 import {Check, ChevronDown, Edit2, Github, Plus, Share2, Trash2} from "lucide-react"
 import {useCallback, useEffect, useMemo, useRef, useState} from "react"
-import type {FC} from "react"
-import {BrowserRouter, Link, Navigate, Route, Routes} from "react-router-dom"
+import type {FC, ReactNode} from "react"
+import {BrowserRouter, Link, Navigate, Route, Routes, useLocation} from "react-router-dom"
 
 import {TonClient} from "../../acton-localnet-ui/src/explorer/api/client"
 import {getBundledCompilerAbis} from "../../acton-localnet-ui/src/explorer/api/compilerAbiCatalog"
@@ -776,6 +776,14 @@ function isCustomNetworkId(id: SelectableExplorerNetworkId): id is CustomExplore
   return id.startsWith("custom:")
 }
 
+const ExplorerHeaderFrame: FC<{readonly children: ReactNode}> = ({children}) => {
+  const location = useLocation()
+  const isHomePage = location.pathname === "/"
+  const headerClassName = isHomePage ? `${styles.header} ${styles.headerHome}` : styles.header
+
+  return <header className={headerClassName}>{children}</header>
+}
+
 export const ExplorerApp: FC = () => {
   const [theme, setTheme] = useState<ThemeMode>(readInitialTheme)
   const [networkState, setNetworkState] = useState<ExplorerNetworkState>(
@@ -880,7 +888,7 @@ export const ExplorerApp: FC = () => {
           <ExplorerRoutesProvider basePath="">
             <AddressBookProvider>
               <div className={styles.appShell}>
-                <header className={styles.header}>
+                <ExplorerHeaderFrame>
                   <div className={styles.headerInner}>
                     <div className={styles.headerPrimary}>
                       <Link className={styles.brand} to="/">
@@ -928,7 +936,7 @@ export const ExplorerApp: FC = () => {
                       </a>
                     </div>
                   </div>
-                </header>
+                </ExplorerHeaderFrame>
                 <main className={styles.main}>
                   <Routes>
                     <Route path="/" element={<ExplorerIndexPage />} />

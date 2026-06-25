@@ -17,6 +17,13 @@
   box-sizing: border-box;
 }
 
+.headerHome {
+  border-bottom: 0;
+  background: var(--tonscan-bg);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
 .headerInner {
   width: 100%;
   max-width: 1136px;

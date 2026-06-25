@@ -56,6 +56,10 @@
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--tonscan-accent) 22%, transparent);
 }
 
+.searchHero .inputWrapper.focused {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--tonscan-accent) 22%, transparent);
+}
+
 .searchHero .inputWrapper.inputInvalid.focused,
 .searchHeader .inputWrapper.inputInvalid.focused {
   box-shadow: 0 0 0 3px var(--litenode-danger-ring);
