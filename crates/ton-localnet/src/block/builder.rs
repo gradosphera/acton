@@ -71,6 +71,7 @@ pub(crate) fn create_block_boc(ctx: BlockBuildContext<'_>) -> anyhow::Result<Blo
     Ok(BlockBuildResult {
         block_boc: Boc::encode(cell).into(),
         block_hash,
+        state: new_state,
     })
 }
 

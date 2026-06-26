@@ -60,6 +60,8 @@ pub(crate) struct BlockBuildContext<'a> {
     pub prev_block: Option<&'a BlockMeta>,
     /// Previous masterchain block visible to this shard block.
     pub master_ref: Option<&'a MasterchainBlockMeta>,
+    /// Previously built full shard state, when the caller has it cached.
+    pub prev_state: Option<&'a BuiltShardState>,
     /// Post-block account metadata map after all transactions have executed.
     pub accounts_after: &'a HashMap<Addr, AccountMeta>,
     /// Transactions executed in this block in collation order.
@@ -74,6 +76,8 @@ pub(crate) struct BlockBuildResult {
     pub block_boc: BocBytes,
     /// Representation hash of the block root cell.
     pub block_hash: Hash256,
+    /// Post-block shard state built while assembling the block.
+    pub state: BuiltShardState,
 }
 
 /// Immutable inputs required to assemble a real localnet masterchain block.

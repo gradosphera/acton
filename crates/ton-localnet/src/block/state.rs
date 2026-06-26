@@ -14,22 +14,28 @@ use tycho_types::prelude::HashBytes;
 ///
 /// `mine_block` calls this after executing all transactions, so
 /// `accounts_after` already reflects the post-block view. To build the old root
-/// we replay transaction deltas backwards and reconstruct the account map as it
-/// looked before the block. The returned cells are full `ShardStateUnsplit`
-/// cells; the Merkle update currently stores full old/new roots rather than a
-/// pruned diff, which is larger but much simpler and still valid for indexing.
+/// we reuse the cached previous shard state when available. If the caller does
+/// not have that cache, we replay transaction deltas backwards and reconstruct
+/// the account map as it looked before the block. The returned cells are full
+/// `ShardStateUnsplit` cells; the Merkle update currently stores full old/new
+/// roots rather than a pruned diff, which is larger but much simpler and still
+/// valid for indexing.
 pub(super) fn build_old_and_new_states(
     ctx: &BlockBuildContext<'_>,
 ) -> anyhow::Result<(BuiltShardState, BuiltShardState)> {
-    let accounts_before = accounts_before_block(ctx.accounts_after, ctx.transactions);
-    let old_state = build_state(
-        ctx.cas,
-        &accounts_before,
-        ctx.seqno.saturating_sub(1),
-        ctx.prev_block.map_or(0, |block| block.gen_utime),
-        ctx.prev_block.map_or(0, |block| block.end_lt),
-    )
-    .context("Failed to build previous shard state")?;
+    let old_state = if let Some(prev_state) = ctx.prev_state {
+        prev_state.clone()
+    } else {
+        let accounts_before = accounts_before_block(ctx.accounts_after, ctx.transactions);
+        build_state(
+            ctx.cas,
+            &accounts_before,
+            ctx.seqno.saturating_sub(1),
+            ctx.prev_block.map_or(0, |block| block.gen_utime),
+            ctx.prev_block.map_or(0, |block| block.end_lt),
+        )
+        .context("Failed to build previous shard state")?
+    };
     let new_state = build_state(
         ctx.cas,
         ctx.accounts_after,

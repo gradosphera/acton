@@ -271,6 +271,7 @@ impl Node {
             .get_cell(&self.globals.config_boc_hash)
             .context("Config missing")?;
         self.latest_masterchain_state = None;
+        self.latest_shard_state = None;
         self.time_offset_seconds = snapshot.time_offset_seconds;
         self.next_block_timestamp = snapshot.next_block_timestamp;
         if let Some(latest_block) = self.history.blocks.last() {

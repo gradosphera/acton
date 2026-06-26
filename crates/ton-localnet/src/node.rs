@@ -3,7 +3,7 @@ use crate::block::{
     create_block_boc, create_masterchain_block_boc, create_masterchain_state_cell,
     create_shard_state_cell, file_hash as block_file_hash,
     types::{
-        BlockBuildContext, BlockTransaction, MASTERCHAIN_PREV_BLOCKS_LIMIT,
+        BlockBuildContext, BlockTransaction, BuiltShardState, MASTERCHAIN_PREV_BLOCKS_LIMIT,
         MasterchainBlockBuildContext,
     },
 };
@@ -70,6 +70,7 @@ pub struct Node {
     pub next_block_timestamp: Option<u32>,
     pub config_cell: Cell,
     pub latest_masterchain_state: Option<Cell>,
+    pub(crate) latest_shard_state: Option<BuiltShardState>,
     pub pending_freeze_current: VecDeque<Addr>,
 }
 
@@ -416,6 +417,7 @@ impl Node {
             next_block_timestamp: None,
             config_cell,
             latest_masterchain_state: None,
+            latest_shard_state: None,
             pending_freeze_current: VecDeque::new(),
         };
         node.rebuild_global_libraries_from_accounts()?;
@@ -648,6 +650,7 @@ impl Node {
         } else {
             None
         };
+        let prev_shard_state = self.latest_shard_state.take();
         let block = create_block_boc(BlockBuildContext {
             seqno,
             gen_utime,
@@ -655,12 +658,14 @@ impl Node {
             end_lt,
             prev_block: self.history.blocks.last(),
             master_ref: prev_masterchain_block.as_ref(),
+            prev_state: prev_shard_state.as_ref(),
             accounts_after: &self.latest.accounts,
             transactions: &block_transactions,
             cas: &self.cas,
         })?;
         let block_hash = block.block_hash;
         let file_hash = block_file_hash(&block.block_boc);
+        let next_shard_state = block.state;
         self.cas.put(block.block_boc, block_hash);
 
         let block_meta = BlockMeta {
@@ -730,6 +735,7 @@ impl Node {
         };
 
         self.apply_commit(pending)?;
+        self.latest_shard_state = Some(next_shard_state);
         self.latest_masterchain_state = Some(next_masterchain_state);
         Ok(block_meta)
     }
@@ -2130,6 +2136,7 @@ impl Node {
 
         self.persist_account_meta(addr, &meta)?;
         self.latest.accounts.insert(*addr, meta);
+        self.latest_shard_state = None;
         self.update_public_libraries_from_account_diff(
             addr,
             old_boc.as_ref(),
@@ -2709,6 +2716,7 @@ impl Node {
         }
         let lt = meta.last_trans_lt.unwrap_or(0);
         self.latest.accounts.insert(*addr, meta);
+        self.latest_shard_state = None;
         self.update_public_libraries_from_account_diff(addr, None, Some(&boc), lt)?;
         self.register_account_code_libraries(addr, Some(provider), &boc, lt)?;
         Ok(Some(boc))
@@ -2757,6 +2765,7 @@ impl Node {
         // models a single destination transaction, so the source account is adjusted here.
         giver_meta.balance = giver_balance - amount;
         self.latest.accounts.insert(GIVER_ADDR, giver_meta);
+        self.latest_shard_state = None;
 
         self.send_internal_boc(BocRepr::encode(message)?.into())
     }
