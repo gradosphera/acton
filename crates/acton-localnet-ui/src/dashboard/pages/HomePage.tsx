@@ -100,10 +100,9 @@ export const HomePage: FC<HomePageProps> = ({client}) => {
   const parsedTimeAdvanceSeconds = parseTimeAdvanceSeconds(timeAdvanceSeconds)
   const timeAdvanceShiftValue = formatReadableDuration(parsedTimeAdvanceSeconds ?? 0)
   const timeAdvanceCurrentValue = nodeInfo ? formatNodeDateTime(nodeInfo.current_unix_time) : "—"
-  const timeAdvanceTargetValue =
-    nodeInfo
-      ? formatNodeDateTime(nodeInfo.current_unix_time + (parsedTimeAdvanceSeconds ?? 0))
-      : "—"
+  const timeAdvanceTargetValue = nodeInfo
+    ? formatNodeDateTime(nodeInfo.current_unix_time + (parsedTimeAdvanceSeconds ?? 0))
+    : "—"
   const endpoints = useMemo(() => client.getEndpoints(), [client])
   const endpointRows = useMemo(
     () =>
@@ -671,7 +670,10 @@ function formatOptionalNodeInfoValue(value: string | null | undefined): string {
   return formatNodeInfoValue(value)
 }
 
-function formatForkInfo(network: string | null | undefined, block: number | null | undefined): string {
+function formatForkInfo(
+  network: string | null | undefined,
+  block: number | null | undefined,
+): string {
   const networkValue = formatOptionalNodeInfoValue(network)
   if (block === undefined || block === null) {
     return networkValue
