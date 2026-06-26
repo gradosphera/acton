@@ -1,5 +1,6 @@
 import {type CSSProperties, useEffect, useLayoutEffect, useRef, useState} from "react"
 import {X} from "lucide-react"
+import type {ContractABI} from "@ton/tolk-abi-to-typescript"
 
 import {useToast} from "@acton/shared-ui"
 
@@ -22,6 +23,7 @@ const MAX_RETRACE_FLOW_WIDTH = 1800
 interface TransactionRetracePanelProps {
   readonly client: TonClient
   readonly txHash: string
+  readonly contractAbi?: ContractABI
   readonly onClose: () => void
   readonly onResult?: (txHash: string, result: RetraceResultAndCode) => void
 }
@@ -33,6 +35,7 @@ function getErrorMessage(error: unknown): string {
 export default function TransactionRetracePanel({
   client,
   txHash,
+  contractAbi,
   onClose,
   onResult,
 }: TransactionRetracePanelProps) {
@@ -167,7 +170,9 @@ export default function TransactionRetracePanel({
           </div>
         )}
 
-        {state.type === "ready" && <RetraceWorkspace result={state.result} />}
+        {state.type === "ready" && (
+          <RetraceWorkspace result={state.result} contractAbi={contractAbi} />
+        )}
       </div>
     </div>
   )

@@ -458,6 +458,7 @@ export const TransactionPage: FC<TransactionPageProps> = ({client, openRetraceOn
           key={`${txHash}:${retraceAttempt}`}
           client={client}
           txHash={txHash}
+          contractAbi={tx.contractAbi}
           onClose={handleCloseRetrace}
           onResult={handleRetraceResult}
         />

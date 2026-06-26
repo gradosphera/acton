@@ -71,6 +71,17 @@ pub struct BuildSourceTraceRequest {
     pub vm_logs: String,
     pub code_hash: String,
     pub source_bundle: SourceTraceBundleRequest,
+    pub context: Option<SourceTraceContextRequest>,
+}
+
+#[derive(Deserialize)]
+pub struct SourceTraceContextRequest {
+    pub in_msg: Option<SourceTraceInMessageContextRequest>,
+}
+
+#[derive(Deserialize)]
+pub struct SourceTraceInMessageContextRequest {
+    pub sender_address: Option<String>,
 }
 
 #[derive(Deserialize)]

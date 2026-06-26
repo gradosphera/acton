@@ -116,6 +116,15 @@ function hoverRecordAtPosition(
       continue
     }
 
+    const fullRecord = recordsByExpression.get(token)
+    if (fullRecord) {
+      return {
+        record: fullRecord,
+        startColumn,
+        endColumn,
+      }
+    }
+
     const tokenOffset = Math.max(0, Math.min(token.length - 1, position.column - startColumn))
     const nextDotOffset = token.indexOf(".", tokenOffset)
     const expressionEndOffset = nextDotOffset === -1 ? token.length : nextDotOffset

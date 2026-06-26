@@ -2,6 +2,7 @@ import React, {memo, useCallback, useEffect, useRef, useState} from "react"
 import {Editor, loader} from "@monaco-editor/react"
 
 import * as monaco from "monaco-editor"
+import type {ContractABI} from "@ton/tolk-abi-to-typescript"
 
 import editorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker"
 
@@ -16,7 +17,7 @@ import {
   useDecorations,
   useEditorEvents,
   useTasmHoverProvider,
-  useTasmCodeLensProvider,
+  useCodeLensProvider,
   useTasmCompletionProvider,
   useTasmInlayProvider,
   useImplicitRetInlayProvider,
@@ -27,6 +28,7 @@ import {
   type HighlightGroup,
   type HighlightRange,
   type SourceDebugVariableValue,
+  type CodeLensAnnotation,
 } from "./hooks"
 
 import styles from "./CodeEditor.module.css"
@@ -71,6 +73,12 @@ interface CodeEditorProps {
 
   /** Exit code information to display as code lens above the error line */
   readonly exitCode?: ExitCode
+
+  /** Compiler ABI used to resolve custom thrown error names. */
+  readonly compilerAbi?: ContractABI
+
+  /** Explicit code lens annotation to display above a line. */
+  readonly codeLensAnnotation?: CodeLensAnnotation
 
   /** Whether to show instruction documentation in hover tooltips for TASM */
   readonly showInstructionDocs?: boolean
@@ -138,6 +146,8 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   shouldCenter = true,
   centerLine,
   exitCode,
+  compilerAbi,
+  codeLensAnnotation,
   readOnly = true,
   onChange,
   language = "tasm",
@@ -193,12 +203,15 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     enabled: language === "tasm",
   })
 
-  useTasmCodeLensProvider({
+  useCodeLensProvider({
     monaco,
     editorRef,
+    languageId: language,
     exitCode,
+    compilerAbi,
+    annotation: codeLensAnnotation,
     editorReady,
-    enabled: language === "tasm",
+    enabled: language === "tasm" || codeLensAnnotation !== undefined,
   })
 
   useTasmCompletionProvider({

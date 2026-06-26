@@ -21,6 +21,7 @@ use tycho_types::boc::Boc;
 const MAX_SOURCE_TRACE_STEPS: usize = 10_000;
 const MAX_RENDERED_VALUE_DEPTH: usize = 2;
 const MAX_RENDERED_CHILDREN: usize = 64;
+const INTERNAL_MESSAGE_ENTRYPOINT: &str = "onInternalMessage";
 
 struct SourceTraceTempDir {
     root: PathBuf,
@@ -180,6 +181,12 @@ fn build_source_trace_response(
             continue;
         };
         let call_stack = source_trace_call_stack(&replayer, &location, &source_path_by_file_id);
+        let mut locals: Vec<_> = replayer
+            .locals_for_frame(0)
+            .into_iter()
+            .map(source_trace_variable)
+            .collect();
+        inject_context_variables(&payload, &call_stack, &mut locals);
 
         steps.push(SourceTraceStep {
             index: steps.len(),
@@ -191,11 +198,7 @@ fn build_source_trace_response(
                     offset,
                 }
             }),
-            locals: replayer
-                .locals_for_frame(0)
-                .into_iter()
-                .map(source_trace_variable)
-                .collect(),
+            locals,
             stack: replayer.tvm_stack_rendered(),
             call_stack,
             exception: replayer
@@ -225,6 +228,39 @@ fn build_source_trace_response(
         steps,
         truncated,
     })
+}
+
+fn inject_context_variables(
+    payload: &BuildSourceTraceRequest,
+    call_stack: &[SourceTraceFrame],
+    locals: &mut Vec<SourceTraceVariable>,
+) {
+    if call_stack
+        .first()
+        .is_none_or(|frame| frame.function_name != INTERNAL_MESSAGE_ENTRYPOINT)
+    {
+        return;
+    }
+
+    let Some(sender_address) = payload
+        .context
+        .as_ref()
+        .and_then(|context| context.in_msg.as_ref())
+        .and_then(|in_msg| in_msg.sender_address.as_deref())
+        .filter(|sender_address| !sender_address.is_empty())
+    else {
+        return;
+    };
+
+    let sender_address = LocalVarRendered::in_sender_address(sender_address);
+    if locals
+        .iter()
+        .any(|local| local.name == sender_address.var_name)
+    {
+        return;
+    }
+
+    locals.insert(0, source_trace_variable(sender_address));
 }
 
 fn validate_bundle(bundle: &SourceTraceBundleRequest) -> anyhow::Result<()> {

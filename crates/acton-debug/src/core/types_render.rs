@@ -17,7 +17,7 @@ use tycho_types::dict;
 use tycho_types::models::{
     AnyAddr, Base64StdAddrFlags, ChangeLibraryMode, CurrencyCollection, DisplayBase64StdAddr,
     IntAddr, LibRef, OutAction, OutActionsRevIter, OwnedRelaxedMessage, RelaxedMsgInfo,
-    ReserveCurrencyFlags, SendMsgFlags, StateInit, StdAddr,
+    ReserveCurrencyFlags, SendMsgFlags, StateInit, StdAddr, StdAddrFormat,
 };
 
 // ---------------------------------------------------------------------------
@@ -3535,6 +3535,17 @@ fn render_optional_int_addr(addr: Option<&IntAddr>) -> RenderedValue {
     match addr {
         Some(addr) => render_int_addr(addr),
         None => RenderedValue::typed_leaf("null", "address?"),
+    }
+}
+
+pub(crate) fn render_address_text(address: &str) -> RenderedValue {
+    if let Ok((addr, _)) = StdAddr::from_str_ext(address, StdAddrFormat::any()) {
+        return render_int_addr(&IntAddr::Std(addr));
+    }
+
+    match address.parse::<IntAddr>() {
+        Ok(addr) => render_int_addr(&addr),
+        Err(_) => RenderedValue::typed_leaf(address.to_owned(), "address"),
     }
 }
 

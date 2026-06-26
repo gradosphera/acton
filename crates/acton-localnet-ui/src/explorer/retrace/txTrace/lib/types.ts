@@ -10,6 +10,10 @@ export type ExitCode = {
   readonly num: number
   readonly description: string
   readonly info: InstructionInfo | undefined
+  readonly vmPosition?: {
+    readonly cellHash: string
+    readonly offset: number
+  }
 }
 
 export interface RetraceResultAndCode {

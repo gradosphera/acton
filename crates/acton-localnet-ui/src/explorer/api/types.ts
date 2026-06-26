@@ -1342,6 +1342,15 @@ export interface BuildSourceTraceRequest {
   readonly vm_logs: string
   readonly code_hash: string
   readonly source_bundle: SourceBundle
+  readonly context?: SourceTraceContext
+}
+
+export interface SourceTraceContext {
+  readonly in_msg?: SourceTraceInMessageContext
+}
+
+export interface SourceTraceInMessageContext {
+  readonly sender_address?: string
 }
 
 export interface SourceTraceResponse {

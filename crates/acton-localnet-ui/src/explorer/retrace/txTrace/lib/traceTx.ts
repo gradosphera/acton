@@ -130,10 +130,18 @@ async function loadSourceTrace(
   }
 
   try {
+    const senderAddress = result.inMsg.sender?.toString()
     return await client.buildSourceTrace({
       vm_logs: result.emulatedTx.vmLogs,
       code_hash: result.codeCell.hash().toString("hex"),
       source_bundle: sourceBundle,
+      context: senderAddress
+        ? {
+            in_msg: {
+              sender_address: senderAddress,
+            },
+          }
+        : undefined,
     })
   } catch (error) {
     console.debug("Failed to build source trace for retrace", error)
@@ -235,6 +243,8 @@ export function findExitCode(vmLogs: string, mappingInfo: AssemblyMapping) {
     info: instructionsInfo[index],
     description: description.text,
     num: description.num,
+    vmPosition:
+      loc?.hash === undefined ? undefined : {cellHash: loc.hash.toLowerCase(), offset: loc.offset},
   }
 
   return exitCode

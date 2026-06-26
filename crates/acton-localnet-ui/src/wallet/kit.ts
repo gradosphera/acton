@@ -4,13 +4,12 @@ import {
   Network,
   Signer,
   TonWalletKit,
-  WalletV4R2Adapter,
-  WalletV5R1Adapter,
   createDeviceInfo,
   createWalletManifest,
   type Wallet,
 } from "@ton/walletkit"
 
+import {createLocalnetWalletV4R2Adapter, createLocalnetWalletV5R1Adapter} from "./localnetAdapters"
 import type {StartupWalletRecord} from "./types"
 
 const TON_CONNECT_BRIDGE_URL = "https://bridge.tonapi.io/bridge"
@@ -129,8 +128,8 @@ export async function addStartupWalletToKit(
 
   const adapter =
     walletRecord.version === "v4r2"
-      ? await WalletV4R2Adapter.create(signer, options)
-      : await WalletV5R1Adapter.create(signer, options)
+      ? await createLocalnetWalletV4R2Adapter(signer, options)
+      : await createLocalnetWalletV5R1Adapter(signer, options)
 
   return kit.addWallet(adapter)
 }

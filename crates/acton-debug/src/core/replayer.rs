@@ -8,8 +8,9 @@
 use super::debug_executor_handle::DebugExecutorHandle;
 use super::debug_executor_handle::RuntimeDebugSnapshot;
 use super::types_render::{
-    RenderedValue, SlotValue, debug_format_lazy, debug_print_from_stack, render_runtime_in_message,
-    render_runtime_out_actions, render_runtime_storage_with_abi, render_runtime_vm_value,
+    RenderedValue, SlotValue, debug_format_lazy, debug_print_from_stack, render_address_text,
+    render_runtime_in_message, render_runtime_out_actions, render_runtime_storage_with_abi,
+    render_runtime_vm_value,
 };
 use anyhow::anyhow;
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -69,6 +70,16 @@ pub struct CallFrameInfo {
 pub struct LocalVarRendered {
     pub var_name: String,
     pub value: RenderedValue,
+}
+
+impl LocalVarRendered {
+    #[must_use]
+    pub fn in_sender_address(sender_address: impl Into<String>) -> Self {
+        Self {
+            var_name: "in.senderAddress".to_owned(),
+            value: render_address_text(&sender_address.into()),
+        }
+    }
 }
 
 /// Low-level runtime events consumed by `TolkReplayer`.

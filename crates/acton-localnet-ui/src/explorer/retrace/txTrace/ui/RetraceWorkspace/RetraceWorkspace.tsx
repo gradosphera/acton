@@ -25,6 +25,7 @@ import {
 } from "lucide-react"
 
 import {Tooltip} from "@acton/shared-ui"
+import type {ContractABI} from "@ton/tolk-abi-to-typescript"
 
 import type {
   SourceBundle,
@@ -35,7 +36,8 @@ import type {
   SourceTraceVariable,
 } from "../../../../api/types"
 import {useLineExecutionData, useTraceStepper} from "../../hooks"
-import type {RetraceResultAndCode} from "../../lib/types"
+import {formatExitCode} from "../../lib/exitCodeFormatting"
+import type {ExitCode, RetraceResultAndCode} from "../../lib/types"
 import {
   buildInstructionDetails,
   calculateCumulativeGasSinceBegin,
@@ -99,6 +101,7 @@ const DEFAULT_SOURCE_DEBUG_COLLAPSED: Record<SourceDebugSectionId, boolean> = {
 
 interface RetraceWorkspaceProps {
   readonly result: RetraceResultAndCode
+  readonly contractAbi?: ContractABI
   readonly className?: string
 }
 
@@ -149,6 +152,91 @@ function sourceLocationLabel(location: SourceTraceLocation): string {
 
 function sourceLocationWithColumnLabel(location: SourceTraceLocation): string {
   return `${sourceFileLabel(location.file)}:${location.line}:${location.column}`
+}
+
+function sourceTraceExceptionStep(steps: readonly SourceTraceStep[]): SourceTraceStep | undefined {
+  for (let index = steps.length - 1; index >= 0; index -= 1) {
+    const step = steps[index]
+    if (step?.exception?.is_uncaught) {
+      return step
+    }
+  }
+
+  for (let index = steps.length - 1; index >= 0; index -= 1) {
+    const step = steps[index]
+    if (step?.exception) {
+      return step
+    }
+  }
+
+  return undefined
+}
+
+function sourceTraceExitStep(
+  steps: readonly SourceTraceStep[],
+  exitCode: ExitCode | undefined,
+): SourceTraceStep | undefined {
+  const exceptionStep = sourceTraceExceptionStep(steps)
+  if (exceptionStep) {
+    return exceptionStep
+  }
+
+  const vmPosition = exitCode?.vmPosition
+  if (vmPosition) {
+    for (let index = steps.length - 1; index >= 0; index -= 1) {
+      const step = steps[index]
+      if (
+        step?.vm_position &&
+        step.vm_position.cell_hash.toLowerCase() === vmPosition.cellHash &&
+        step.vm_position.offset === vmPosition.offset
+      ) {
+        return step
+      }
+    }
+  }
+
+  return exitCode && steps.length > 0 ? steps.at(-1) : undefined
+}
+
+function sourceExceptionCodeLensAnnotation(
+  step: SourceTraceStep | undefined,
+  activeFile: SourceFile | undefined,
+  exitCode: ExitCode | undefined,
+  compilerAbi: ContractABI | undefined,
+) {
+  if (!step || !activeFile) {
+    return undefined
+  }
+
+  const code = step.exception?.errno ?? exitCode?.num
+  if (code === undefined) {
+    return undefined
+  }
+  if (normalizeSourcePath(step.location.file) !== normalizeSourcePath(activeFile.path)) {
+    return undefined
+  }
+
+  const formatted = formatExitCode(code, {
+    compilerAbi,
+    vmDescription: step.exception?.symbolic_name ?? exitCode?.description,
+  })
+
+  return {
+    line: step.location.line,
+    id: `sourceException-${step.index}`,
+    title: formatted.title,
+    tooltip: formatted.tooltip,
+  }
+}
+
+function sourceExceptionLabel(
+  exception: NonNullable<SourceTraceStep["exception"]>,
+  compilerAbi: ContractABI | undefined,
+): string {
+  return formatExitCode(exception.errno, {
+    compilerAbi,
+    vmDescription: exception.symbolic_name,
+  }).description
 }
 
 function decodeSourceFile(file: SourceFile): string {
@@ -570,10 +658,12 @@ function SourceDebugResizableSection({
 function SourceDebugPanel({
   step,
   selectedCallFrameIndex,
+  contractAbi,
   onCallFrameSelect,
 }: {
   readonly step?: SourceTraceStep
   readonly selectedCallFrameIndex: number | null
+  readonly contractAbi?: ContractABI
   readonly onCallFrameSelect: (index: number) => void
 }) {
   const [collapsedSections, setCollapsedSections] = useState(() =>
@@ -725,7 +815,7 @@ function SourceDebugPanel({
         >
           <div className={styles.sourceDebugException}>
             <div className={styles.sourceDebugExceptionText}>
-              {step.exception.symbolic_name ?? `Exit code ${step.exception.errno}`}
+              {sourceExceptionLabel(step.exception, contractAbi)}
             </div>
           </div>
         </SourceDebugResizableSection>
@@ -791,11 +881,15 @@ function SourceFilesEditor({
   bundles,
   traceId,
   sourceTrace,
+  exitCode,
+  contractAbi,
   onToolbarModelChange,
 }: {
   readonly bundles: readonly SourceBundle[]
   readonly traceId: string
   readonly sourceTrace?: SourceTraceResponse
+  readonly exitCode?: ExitCode
+  readonly contractAbi?: ContractABI
   readonly onToolbarModelChange: (model: TraceStepToolbarModel | null) => void
 }) {
   const [activeBundleHash, setActiveBundleHash] = useState(bundles[0]?.source_bundle_hash ?? "")
@@ -857,6 +951,12 @@ function SourceFilesEditor({
       ]
     : []
   const centerSourceLine = selectedCallFrameLine ?? highlightedSourceLine
+  const sourceExceptionAnnotation = sourceExceptionCodeLensAnnotation(
+    sourceTraceExitStep(sourceSteps, exitCode),
+    activeFile,
+    exitCode,
+    contractAbi,
+  )
 
   useEffect(() => {
     const nextBundle = bundles[0]
@@ -1129,6 +1229,8 @@ function SourceFilesEditor({
               showInstructionDocs={false}
               compactGutter
               sourceDebugVariables={currentSourceStep?.locals ?? []}
+              codeLensAnnotation={sourceExceptionAnnotation}
+              compilerAbi={contractAbi}
             />
           </Suspense>
         </div>
@@ -1148,6 +1250,7 @@ function SourceFilesEditor({
           <SourceDebugPanel
             step={currentSourceStep}
             selectedCallFrameIndex={selectedCallFrameIndex}
+            contractAbi={contractAbi}
             onCallFrameSelect={handleCallFrameSelect}
           />
         )}
@@ -1156,7 +1259,7 @@ function SourceFilesEditor({
   )
 }
 
-function RetraceWorkspaceFc({result, className}: RetraceWorkspaceProps) {
+function RetraceWorkspaceFc({result, contractAbi, className}: RetraceWorkspaceProps) {
   const [selectedStackItem, setSelectedStackItem] = useState<{
     element: StackElement
     title: string
@@ -1326,6 +1429,8 @@ function RetraceWorkspaceFc({result, className}: RetraceWorkspaceProps) {
                 bundles={sourceBundles}
                 traceId={result.result.emulatedTx.lt.toString()}
                 sourceTrace={result.sourceTrace}
+                exitCode={result.exitCode}
+                contractAbi={contractAbi}
                 onToolbarModelChange={setSourceToolbarModel}
               />
             ) : traceViewMode === "assembler" ? (
@@ -1348,6 +1453,7 @@ function RetraceWorkspaceFc({result, className}: RetraceWorkspaceProps) {
                   onLineClick={findStepByLine}
                   shouldCenter={transitionType === "button"}
                   exitCode={result.exitCode}
+                  compilerAbi={contractAbi}
                   needBorderRadius={false}
                   compactGutter
                 />
