@@ -3,7 +3,11 @@ import {type StackElement} from "@ton/tasm/dist/trace"
 import {Cell} from "@ton/core"
 import {motion, AnimatePresence, type Variants} from "framer-motion"
 
-import {CopyValueButton} from "@acton/shared-ui"
+import {CopyValueButton, type ContractData} from "@acton/shared-ui"
+
+import {formatAddress} from "../../../../../components/utils"
+import {useAddressFormat} from "../../../../../hooks/useNetworkInfo"
+import {findAddressContract} from "../../../lib/addressContracts"
 
 import styles from "./StackViewer.module.css"
 
@@ -26,6 +30,7 @@ const truncateMiddle = (text: string, maxLength: number = 30): JSX.Element => {
 interface StackViewerProps {
   readonly stack: readonly StackElement[]
   readonly title?: string
+  readonly contracts?: Map<string, ContractData>
   readonly onStackItemClick?: (element: StackElement, title: string) => void
 }
 
@@ -72,7 +77,8 @@ const safeLoadAddress = (cell: Cell) => {
   }
 }
 
-const StackViewer: React.FC<StackViewerProps> = ({stack, title, onStackItemClick}) => {
+const StackViewer: React.FC<StackViewerProps> = ({stack, title, contracts, onStackItemClick}) => {
+  const addressFormat = useAddressFormat()
   const [expandedItem, setExpandedItem] = useState<string | null>(null)
 
   const toggleExpand = (key: string) => {
@@ -86,6 +92,22 @@ const StackViewer: React.FC<StackViewerProps> = ({stack, title, onStackItemClick
       setExpandedItem(null)
     }
   }
+
+  const renderAddressContent = (
+    readable: string,
+    keyPrefix: string,
+    contract: ContractData | undefined,
+  ) => (
+    <div className={styles.stackAddressContent}>
+      <div className={styles.stackItemLabel}>Address</div>
+      <div className={styles.stackAddressLine}>
+        <span className={styles.stackAddressBadge}>{contract?.letter ?? "?"}</span>
+        <div className={styles.stackItemValue}>
+          {expandedItem === keyPrefix ? readable : truncateMiddle(readable, 30)}
+        </div>
+      </div>
+    </div>
+  )
 
   const renderStackElement = (element: StackElement, keyPrefix: string): JSX.Element => {
     const handleItemClick = () => {
@@ -179,8 +201,9 @@ const StackViewer: React.FC<StackViewerProps> = ({stack, title, onStackItemClick
         if (cell.bits.length === 267 && cell.refs.length === 0) {
           const address = safeLoadAddress(cell)
           if (address) {
-            const string = address.toRawString()
-            const readable = address.toString()
+            const raw = address.toRawString()
+            const readable = formatAddress(raw, false, addressFormat)
+            const contract = findAddressContract(raw, contracts)
             return (
               <div
                 className={styles.addressItem}
@@ -193,13 +216,10 @@ const StackViewer: React.FC<StackViewerProps> = ({stack, title, onStackItemClick
                 role="button"
                 tabIndex={0}
               >
-                <div className={styles.stackItemLabel}>Address</div>
-                <div className={styles.stackItemValue}>
-                  {expandedItem === keyPrefix ? string : truncateMiddle(string, 35)}
-                </div>
+                {renderAddressContent(readable, keyPrefix, contract)}
                 <CopyValueButton
                   className={styles.addressItemCopyButton}
-                  label="address as base64"
+                  label="address"
                   value={readable}
                 />
               </div>
@@ -305,6 +325,8 @@ const StackViewer: React.FC<StackViewerProps> = ({stack, title, onStackItemClick
         )
       }
       case "Address": {
+        const readable = formatAddress(element.value, false, addressFormat)
+        const contract = findAddressContract(element.value, contracts)
         return (
           <div
             className={styles.addressItem}
@@ -314,14 +336,11 @@ const StackViewer: React.FC<StackViewerProps> = ({stack, title, onStackItemClick
             role="button"
             tabIndex={0}
           >
-            <div className={styles.stackItemLabel}>Address</div>
-            <div className={styles.stackItemValue}>
-              {expandedItem === keyPrefix ? element.value : truncateMiddle(element.value, 35)}
-            </div>
+            {renderAddressContent(readable, keyPrefix, contract)}
             <CopyValueButton
               className={styles.addressItemCopyButton}
-              label="address as base64"
-              value={element.value}
+              label="address"
+              value={readable}
             />
           </div>
         )

@@ -1,9 +1,9 @@
 import React from "react"
 
 import {type StackElement} from "@ton/tasm/dist/trace"
-import {Cell} from "@ton/core"
+import {Address, Cell} from "@ton/core"
 
-import {DataBlock} from "@acton/shared-ui"
+import {DataBlock, type ContractData} from "@acton/shared-ui"
 
 import AddressDetails from "../AddressDetails"
 import CellTreeView from "../CellTreeView/CellTreeView"
@@ -12,10 +12,18 @@ import styles from "./StackItemDetails.module.css"
 interface StackItemDetailsProps {
   readonly itemData: StackElement | null
   readonly title?: string
+  readonly contracts?: Map<string, ContractData>
+  readonly onContractClick?: (address: string) => void
   readonly onClose?: () => void
 }
 
-const StackItemDetails: React.FC<StackItemDetailsProps> = ({itemData, title, onClose}) => {
+const StackItemDetails: React.FC<StackItemDetailsProps> = ({
+  itemData,
+  title,
+  contracts,
+  onContractClick,
+  onClose,
+}) => {
   if (!itemData) {
     return (
       <div className={styles.detailsContainer}>
@@ -47,11 +55,26 @@ const StackItemDetails: React.FC<StackItemDetailsProps> = ({itemData, title, onC
 
   try {
     const rootCell = cellFromItem(itemData)
-    if (rootCell) {
+    if (itemData.$ === "Address") {
+      cellDetailsContent = (
+        <AddressDetails
+          address={Address.parse(itemData.value)}
+          contracts={contracts}
+          onContractClick={onContractClick}
+        />
+      )
+      treeViewContent = null
+    } else if (rootCell) {
       if (rootCell.bits.length === 267 && rootCell.refs.length === 0) {
         const address = safeLoadAddress(rootCell)
         if (address) {
-          cellDetailsContent = <AddressDetails address={address} />
+          cellDetailsContent = (
+            <AddressDetails
+              address={address}
+              contracts={contracts}
+              onContractClick={onContractClick}
+            />
+          )
           treeViewContent = null
         } else {
           cellDetailsContent = (

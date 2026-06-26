@@ -38,6 +38,7 @@ import {
 import {useAddressBook} from "../hooks/useAddressBook"
 import {useExplorerRoutePaths} from "../hooks/useExplorerRoutePaths"
 import {useAddressFormat, useNetworkInfo} from "../hooks/useNetworkInfo"
+import {openExplorerPath, type ExplorerNavigationClickEvent} from "../hooks/useOpenExplorerPath"
 import {traceTx} from "../retrace/txTrace/lib/traceTx"
 import type {RetraceResultAndCode} from "../retrace/txTrace/lib/types"
 import TransactionRetracePanel from "../retrace/txTrace/ui/TransactionRetracePanel"
@@ -178,9 +179,9 @@ export const TransactionPage: FC<TransactionPageProps> = ({client, openRetraceOn
   fetchNameRef.current = fetchName
   addressFormatRef.current = addressFormat
 
-  const handleContractClick = (address: string) => {
+  const handleContractClick = (address: string, event?: ExplorerNavigationClickEvent) => {
     const formattedAddr = normalizeAddress(address, addressFormat)
-    void navigate(routes.addressPath(formattedAddr))
+    openExplorerPath(navigate, routes.addressPath(formattedAddr), event)
   }
 
   const handleActiveTabChange = (tab: TabType) => {
@@ -433,8 +434,11 @@ export const TransactionPage: FC<TransactionPageProps> = ({client, openRetraceOn
           key={`${txHash}:${retraceAttempt}`}
           client={client}
           txHash={txHash}
+          className={styles.selectedRetracePanel}
           contractAbi={tx.contractAbi}
+          contracts={contracts}
           onClose={handleCloseRetrace}
+          onContractClick={handleContractClick}
           onResult={handleRetraceResult}
         />
       </div>

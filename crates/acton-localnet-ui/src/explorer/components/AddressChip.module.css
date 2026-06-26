@@ -6,6 +6,10 @@
   min-width: 0;
 }
 
+.addressClusterFull {
+  align-items: center;
+}
+
 .addressText,
 .addressButton {
   min-width: 0;
@@ -23,6 +27,20 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.addressFull,
+.addressFull > span {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.addressFull {
+  font-size: var(--font-size-sm);
+  line-height: 1.35;
 }
 
 .addressText {

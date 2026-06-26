@@ -24,7 +24,7 @@ import {
   SkipForward,
 } from "lucide-react"
 
-import {Tooltip} from "@acton/shared-ui"
+import {Tooltip, type ContractData} from "@acton/shared-ui"
 import type {ContractABI} from "@ton/tolk-abi-to-typescript"
 
 import type {
@@ -36,6 +36,7 @@ import type {
   SourceTraceVariable,
 } from "../../../../api/types"
 import {useLineExecutionData, useTraceStepper} from "../../hooks"
+import {findAddressContract, isTonAddress} from "../../lib/addressContracts"
 import {formatExitCode} from "../../lib/exitCodeFormatting"
 import type {ExitCode, RetraceResultAndCode} from "../../lib/types"
 import {
@@ -102,6 +103,8 @@ const DEFAULT_SOURCE_DEBUG_COLLAPSED: Record<SourceDebugSectionId, boolean> = {
 interface RetraceWorkspaceProps {
   readonly result: RetraceResultAndCode
   readonly contractAbi?: ContractABI
+  readonly contracts?: Map<string, ContractData>
+  readonly onContractClick?: (address: string) => void
   readonly className?: string
 }
 
@@ -407,10 +410,12 @@ function TraceStepToolbar({
 
 function SourceVariableList({
   variables,
+  contracts,
   depth = 0,
   parentPath = "",
 }: {
   readonly variables: readonly SourceTraceVariable[]
+  readonly contracts?: Map<string, ContractData>
   readonly depth?: number
   readonly parentPath?: string
 }) {
@@ -426,6 +431,7 @@ function SourceVariableList({
           <SourceVariableRow
             key={variablePath}
             variable={variable}
+            contracts={contracts}
             depth={depth}
             path={variablePath}
           />
@@ -467,16 +473,45 @@ function sourceVariableTooltip(variable: SourceTraceVariable): string {
   return `${variable.name}${typeLabel} = ${variable.value}`
 }
 
+function isAddressVariable(variable: SourceTraceVariable): boolean {
+  return variable.type?.toLowerCase() === "address"
+}
+
+function sourceVariableAddress(variable: SourceTraceVariable): string | undefined {
+  if (!isAddressVariable(variable)) {
+    return undefined
+  }
+
+  const directValue = variable.value.trim()
+  if (directValue && isTonAddress(directValue)) {
+    return directValue
+  }
+
+  for (const child of variable.children) {
+    const childValue = child.value.trim()
+    if (childValue && isTonAddress(childValue)) {
+      return childValue
+    }
+  }
+
+  return undefined
+}
+
 function SourceVariableRow({
   variable,
+  contracts,
   depth,
   path,
 }: {
   readonly variable: SourceTraceVariable
+  readonly contracts?: Map<string, ContractData>
   readonly depth: number
   readonly path: string
 }) {
   const hasChildren = variable.children.length > 0
+  const address = sourceVariableAddress(variable)
+  const showAddressBadge = address !== undefined
+  const addressContract = address ? findAddressContract(address, contracts) : undefined
   const [expanded, setExpanded] = useState(false)
   const rowStyle = {
     "--source-variable-depth": depth,
@@ -530,15 +565,25 @@ function SourceVariableRow({
         <SourceVariableIcon />
         <span className={styles.sourceVariableExpression} title={sourceVariableTooltip(variable)}>
           <span className={styles.sourceVariableName}>{variable.name}</span>
-          <span className={styles.sourceVariableEquals}> = </span>
+          <span className={styles.sourceVariableEquals}>=</span>
           {variable.type && (
-            <span className={styles.sourceVariableType}>{`{${variable.type}} `}</span>
+            <span className={styles.sourceVariableType}>{`{${variable.type}}`}</span>
+          )}
+          {showAddressBadge && (
+            <span className={styles.sourceVariableAddressBadge}>
+              {addressContract?.letter ?? "?"}
+            </span>
           )}
           <span className={styles.sourceVariableValue}>{variable.value}</span>
         </span>
       </div>
       {hasChildren && expanded && (
-        <SourceVariableList variables={variable.children} depth={depth + 1} parentPath={path} />
+        <SourceVariableList
+          variables={variable.children}
+          contracts={contracts}
+          depth={depth + 1}
+          parentPath={path}
+        />
       )}
     </div>
   )
@@ -659,11 +704,13 @@ function SourceDebugPanel({
   step,
   selectedCallFrameIndex,
   contractAbi,
+  contracts,
   onCallFrameSelect,
 }: {
   readonly step?: SourceTraceStep
   readonly selectedCallFrameIndex: number | null
   readonly contractAbi?: ContractABI
+  readonly contracts?: Map<string, ContractData>
   readonly onCallFrameSelect: (index: number) => void
 }) {
   const [collapsedSections, setCollapsedSections] = useState(() =>
@@ -833,7 +880,7 @@ function SourceDebugPanel({
         onResizeStart={startSectionResize}
         setSectionElement={setSectionElement}
       >
-        <SourceVariableList variables={step.locals} />
+        <SourceVariableList variables={step.locals} contracts={contracts} />
       </SourceDebugResizableSection>
 
       <SourceDebugResizableSection
@@ -883,6 +930,7 @@ function SourceFilesEditor({
   sourceTrace,
   exitCode,
   contractAbi,
+  contracts,
   onToolbarModelChange,
 }: {
   readonly bundles: readonly SourceBundle[]
@@ -890,6 +938,7 @@ function SourceFilesEditor({
   readonly sourceTrace?: SourceTraceResponse
   readonly exitCode?: ExitCode
   readonly contractAbi?: ContractABI
+  readonly contracts?: Map<string, ContractData>
   readonly onToolbarModelChange: (model: TraceStepToolbarModel | null) => void
 }) {
   const [activeBundleHash, setActiveBundleHash] = useState(bundles[0]?.source_bundle_hash ?? "")
@@ -1251,6 +1300,7 @@ function SourceFilesEditor({
             step={currentSourceStep}
             selectedCallFrameIndex={selectedCallFrameIndex}
             contractAbi={contractAbi}
+            contracts={contracts}
             onCallFrameSelect={handleCallFrameSelect}
           />
         )}
@@ -1259,7 +1309,13 @@ function SourceFilesEditor({
   )
 }
 
-function RetraceWorkspaceFc({result, contractAbi, className}: RetraceWorkspaceProps) {
+function RetraceWorkspaceFc({
+  result,
+  contractAbi,
+  contracts,
+  onContractClick,
+  className,
+}: RetraceWorkspaceProps) {
   const [selectedStackItem, setSelectedStackItem] = useState<{
     element: StackElement
     title: string
@@ -1431,6 +1487,7 @@ function RetraceWorkspaceFc({result, contractAbi, className}: RetraceWorkspacePr
                 sourceTrace={result.sourceTrace}
                 exitCode={result.exitCode}
                 contractAbi={contractAbi}
+                contracts={contracts}
                 onToolbarModelChange={setSourceToolbarModel}
               />
             ) : traceViewMode === "assembler" ? (
@@ -1472,6 +1529,8 @@ function RetraceWorkspaceFc({result, contractAbi, className}: RetraceWorkspacePr
               <StackItemDetails
                 itemData={selectedStackItem.element}
                 title={selectedStackItem.title}
+                contracts={contracts}
+                onContractClick={onContractClick}
                 onClose={() => setSelectedStackItem(null)}
               />
             </div>
@@ -1481,6 +1540,7 @@ function RetraceWorkspaceFc({result, contractAbi, className}: RetraceWorkspacePr
         {workspaceTab === "trace" && (
           <TraceSidePanel
             currentStack={currentStack}
+            contracts={contracts}
             onStackItemClick={handleStackItemClick}
             className={styles.sidePanel}
           />

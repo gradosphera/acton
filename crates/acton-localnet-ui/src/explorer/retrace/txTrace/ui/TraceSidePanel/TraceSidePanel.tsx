@@ -2,11 +2,14 @@ import React from "react"
 
 import type {StackElement} from "@ton/tasm/dist/trace"
 
+import type {ContractData} from "@acton/shared-ui"
+
 import StackViewer from "../stack/StackViewer"
 import styles from "./TraceSidePanel.module.css"
 
 export interface TraceSidePanelProps {
   readonly currentStack?: readonly StackElement[]
+  readonly contracts?: Map<string, ContractData>
 
   readonly onStackItemClick?: (element: StackElement, title: string) => void
   readonly className?: string
@@ -14,6 +17,7 @@ export interface TraceSidePanelProps {
 
 const TraceSidePanel: React.FC<TraceSidePanelProps> = ({
   currentStack = [],
+  contracts,
   onStackItemClick,
   className,
 }) => {
@@ -24,7 +28,12 @@ const TraceSidePanel: React.FC<TraceSidePanelProps> = ({
           <div className={styles.stackHeader}>
             <span>Stack</span>
           </div>
-          <StackViewer stack={currentStack} title="" onStackItemClick={onStackItemClick} />
+          <StackViewer
+            stack={currentStack}
+            title=""
+            contracts={contracts}
+            onStackItemClick={onStackItemClick}
+          />
         </div>
       </div>
     </div>

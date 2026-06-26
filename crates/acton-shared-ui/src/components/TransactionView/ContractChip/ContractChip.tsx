@@ -15,7 +15,8 @@ interface ContractChipProps {
   readonly contracts: Map<string, ContractData>
   readonly addressFormat?: AddressFormatOptions
   readonly trimSoloAddress?: boolean
-  readonly onContractClick?: (address: string) => void
+  readonly className?: string
+  readonly onContractClick?: (address: string, event?: React.MouseEvent<HTMLElement>) => void
 }
 
 function formatChipAddress(
@@ -35,10 +36,12 @@ export function ContractChip({
   contracts,
   addressFormat,
   trimSoloAddress = true,
+  className,
   onContractClick,
 }: ContractChipProps): React.JSX.Element {
   const [isCopied, setIsCopied] = useState(false)
   const displayAddress = address ? formatChipAddress(address, addressFormat) : undefined
+  const chipClassName = className ? `${styles.contractChip} ${className}` : styles.contractChip
 
   const handleCopy = useCallback(
     (event: React.MouseEvent) => {
@@ -58,10 +61,10 @@ export function ContractChip({
   )
 
   const handleChipClick = useCallback(
-    (event: React.MouseEvent) => {
+    (event: React.MouseEvent<HTMLButtonElement>) => {
       event.stopPropagation()
       if (displayAddress && onContractClick) {
-        onContractClick(displayAddress)
+        onContractClick(displayAddress, event)
       }
     },
     [displayAddress, onContractClick],
@@ -113,7 +116,7 @@ export function ContractChip({
   )
 
   if (!address) {
-    return <span className={styles.contractChip}>Unknown</span>
+    return <span className={chipClassName}>Unknown</span>
   }
 
   const visibleAddress = displayAddress ?? address
@@ -158,7 +161,7 @@ export function ContractChip({
   if (isClickable) {
     return (
       <button
-        className={`${styles.contractChip} ${styles.clickable}`}
+        className={`${chipClassName} ${styles.clickable}`}
         onClick={handleChipClick}
         title="Click to view contract details"
         type="button"
@@ -168,5 +171,5 @@ export function ContractChip({
     )
   }
 
-  return <span className={styles.contractChip}>{chipContent}</span>
+  return <span className={chipClassName}>{chipContent}</span>
 }

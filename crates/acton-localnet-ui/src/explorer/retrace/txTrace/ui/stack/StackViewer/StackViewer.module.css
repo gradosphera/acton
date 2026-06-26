@@ -92,6 +92,50 @@
   font-size: var(--font-size-sm);
 }
 
+.stackAddressContent {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding-right: 28px;
+}
+
+.stackAddressLine {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: min(100%, 58ch);
+  line-height: 20px;
+}
+
+.stackAddressLine .stackItemValue {
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 50ch;
+  overflow: hidden;
+  word-break: normal;
+  white-space: nowrap;
+  line-height: 20px;
+}
+
+.stackAddressBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  align-self: center;
+  border-radius: 50%;
+  background-color: var(--text-secondary, var(--color-text-secondary));
+  color: var(--bg-color, var(--color-background-primary));
+  font-size: 11px;
+  font-weight: var(--font-weight-semibold);
+  line-height: 1;
+}
+
 .stackItemDetails {
   font-size: var(--font-size-xs);
   color: var(--stack-item-details-text);

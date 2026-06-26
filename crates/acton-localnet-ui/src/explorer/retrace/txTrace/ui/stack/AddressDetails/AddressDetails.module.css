@@ -1,24 +1,48 @@
 .addressSection {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-md);
+  display: grid;
+  gap: 10px;
+  min-width: 0;
   margin-bottom: var(--spacing-md);
 }
 
-.addressRow {
+.contractLine {
   display: flex;
-  flex-direction: column;
-  gap: var(--spacing-xs);
+  align-items: center;
+  min-width: 0;
+  overflow: visible;
+  padding: 2px 0 4px;
+}
+
+.contractChip {
+  overflow: visible;
+}
+
+.addressRow {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.rawAddressRow {
+  min-width: 0;
+  padding-top: 6px;
 }
 
 .addressLabel {
-  font-size: var(--font-size-sm);
-  font-weight: 500;
   color: var(--color-text-secondary);
-  letter-spacing: 0.05em;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1;
+  text-transform: uppercase;
 }
 
-.addressValue {
+.addressChipLine {
   display: flex;
   align-items: center;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0;
+  color: var(--color-text-primary);
+  background: transparent;
 }

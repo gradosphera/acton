@@ -2,7 +2,7 @@ import {type CSSProperties, useEffect, useLayoutEffect, useRef, useState} from "
 import {X} from "lucide-react"
 import type {ContractABI} from "@ton/tolk-abi-to-typescript"
 
-import {useToast} from "@acton/shared-ui"
+import {useToast, type ContractData} from "@acton/shared-ui"
 
 import type {TonClient} from "../../../../api/client"
 import {useNetworkInfo} from "../../../../hooks/useNetworkInfo"
@@ -24,7 +24,10 @@ interface TransactionRetracePanelProps {
   readonly client: TonClient
   readonly txHash: string
   readonly contractAbi?: ContractABI
+  readonly contracts?: Map<string, ContractData>
+  readonly className?: string
   readonly onClose: () => void
+  readonly onContractClick?: (address: string) => void
   readonly onResult?: (txHash: string, result: RetraceResultAndCode) => void
 }
 
@@ -36,7 +39,10 @@ export default function TransactionRetracePanel({
   client,
   txHash,
   contractAbi,
+  contracts,
+  className,
   onClose,
+  onContractClick,
   onResult,
 }: TransactionRetracePanelProps) {
   const {network} = useNetworkInfo()
@@ -139,7 +145,11 @@ export default function TransactionRetracePanel({
   } as CSSProperties
 
   return (
-    <div ref={rootRef} className={`${styles.root} retraceRoot`} style={rootStyle}>
+    <div
+      ref={rootRef}
+      className={`${styles.root} ${className ?? ""} retraceRoot`}
+      style={rootStyle}
+    >
       <div className={styles.header}>
         <div className={styles.title}>Debug</div>
         <button
@@ -171,7 +181,12 @@ export default function TransactionRetracePanel({
         )}
 
         {state.type === "ready" && (
-          <RetraceWorkspace result={state.result} contractAbi={contractAbi} />
+          <RetraceWorkspace
+            result={state.result}
+            contractAbi={contractAbi}
+            contracts={contracts}
+            onContractClick={onContractClick}
+          />
         )}
       </div>
     </div>

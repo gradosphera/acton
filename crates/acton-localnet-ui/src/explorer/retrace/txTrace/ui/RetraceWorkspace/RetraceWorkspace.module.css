@@ -634,12 +634,14 @@
 }
 
 .sourceVariableExpression {
-  display: block;
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
   min-width: 0;
   overflow: hidden;
   color: var(--tonscan-text-primary);
   cursor: default;
-  text-overflow: ellipsis;
+  line-height: 1.25;
   white-space: nowrap;
 }
 
@@ -647,24 +649,50 @@
 .sourceVariableType,
 .sourceVariableEquals,
 .sourceVariableValue {
-  display: inline;
+  display: block;
 }
 
 .sourceVariableName {
+  flex: 0 0 auto;
   color: var(--source-debug-variable-name-color);
   font-weight: var(--font-weight-medium);
 }
 
 .sourceVariableType {
+  flex: 0 0 auto;
+  margin-right: 5px;
   color: var(--source-debug-variable-type-color);
 }
 
+.sourceVariableAddressBadge {
+  display: inline-grid;
+  flex: 0 0 17px;
+  align-items: center;
+  justify-content: center;
+  width: 17px;
+  height: 17px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: var(--text-secondary, var(--color-text-secondary));
+  color: var(--bg-color, var(--color-background-primary));
+  font-size: 12px;
+  font-weight: var(--font-weight-semibold);
+  line-height: 16px;
+}
+
 .sourceVariableEquals {
+  flex: 0 0 auto;
+  margin: 0 5px;
   color: var(--source-debug-variable-equals-color);
 }
 
 .sourceVariableValue {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
   color: var(--source-debug-variable-value-color);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .sourceCallStack {

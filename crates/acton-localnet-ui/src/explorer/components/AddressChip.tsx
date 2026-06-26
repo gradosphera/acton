@@ -11,6 +11,7 @@ import {formatAddress} from "./utils"
 import styles from "./AddressChip.module.css"
 
 type AddressChipCopyPlacement = "left" | "right"
+type AddressChipDisplayFormat = "network" | "raw"
 
 interface AddressChipProps {
   readonly address: string
@@ -18,6 +19,8 @@ interface AddressChipProps {
   readonly copiedAddress?: string
   readonly highlighted?: boolean
   readonly copyPlacement?: AddressChipCopyPlacement
+  readonly displayFormat?: AddressChipDisplayFormat
+  readonly shorten?: boolean
   readonly resolveName?: boolean
   readonly nameFallback?: string
   readonly onAddressClick?: (address: string, event?: ExplorerNavigationClickEvent) => void
@@ -31,6 +34,8 @@ export const AddressChip: FC<AddressChipProps> = ({
   copiedAddress,
   highlighted = false,
   copyPlacement = "right",
+  displayFormat = "network",
+  shorten = true,
   resolveName = true,
   nameFallback,
   onAddressClick,
@@ -40,9 +45,15 @@ export const AddressChip: FC<AddressChipProps> = ({
   const addressFormat = useAddressFormat()
   const [isCopiedInternally, setIsCopiedInternally] = useState(false)
   const isCopied = copiedAddress === address || isCopiedInternally
-  const fullAddress = address ? formatAddress(address, false, addressFormat) : ""
+  const fullAddress = address
+    ? displayFormat === "raw"
+      ? address
+      : formatAddress(address, false, addressFormat)
+    : ""
   const addressContent = address
-    ? formatAddress(address, true, addressFormat)
+    ? shorten
+      ? formatChipAddress(fullAddress)
+      : fullAddress
     : (fallback ?? "Unknown")
   const addressLabel =
     address && resolveName ? (
@@ -53,6 +64,7 @@ export const AddressChip: FC<AddressChipProps> = ({
   const addressClassName = `${onAddressClick ? styles.addressButton : styles.addressText} ${
     highlighted ? styles.addressHighlighted : ""
   }`
+  const fullAddressClassName = shorten ? "" : styles.addressFull
 
   useEffect(() => {
     if (!isCopiedInternally) {
@@ -83,7 +95,7 @@ export const AddressChip: FC<AddressChipProps> = ({
   const addressNode = onAddressClick ? (
     <button
       type="button"
-      className={addressClassName}
+      className={`${addressClassName} ${fullAddressClassName}`}
       title={fullAddress}
       onClick={event => {
         event.stopPropagation()
@@ -93,7 +105,7 @@ export const AddressChip: FC<AddressChipProps> = ({
       {addressLabel}
     </button>
   ) : (
-    <span className={addressClassName} title={fullAddress}>
+    <span className={`${addressClassName} ${fullAddressClassName}`} title={fullAddress}>
       {addressLabel}
     </span>
   )
@@ -119,7 +131,7 @@ export const AddressChip: FC<AddressChipProps> = ({
 
   return (
     <span
-      className={styles.addressCluster}
+      className={`${styles.addressCluster} ${shorten ? "" : styles.addressClusterFull}`}
       onMouseEnter={() => onHoverAddressChange?.(address)}
       onMouseLeave={() => onHoverAddressChange?.(undefined)}
     >
@@ -128,4 +140,21 @@ export const AddressChip: FC<AddressChipProps> = ({
       {copyPlacement === "right" && copyButton}
     </span>
   )
+}
+
+function formatChipAddress(address: string): string {
+  if (!address) {
+    return "Unknown"
+  }
+
+  if (address.includes(":")) {
+    const [workchain, hash] = address.split(":")
+    return `${workchain}:${hash.slice(0, 6)}…${hash.slice(-6)}`
+  }
+
+  if (address.length > 12) {
+    return `${address.slice(0, 6)}…${address.slice(-6)}`
+  }
+
+  return address
 }
