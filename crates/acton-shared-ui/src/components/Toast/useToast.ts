@@ -10,7 +10,7 @@ export interface ToastOptions {
 }
 
 export interface ToastContextValue {
-  readonly showToast: (options: ToastOptions) => void
+  readonly showToast: (options: ToastOptions) => string
   readonly dismissToast: (id: string) => void
 }
 

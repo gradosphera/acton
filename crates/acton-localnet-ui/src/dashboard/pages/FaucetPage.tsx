@@ -1,7 +1,6 @@
-import {ArrowUpRight, Check, ChevronDown, Coins, Wallet} from "lucide-react"
+import {ArrowUpRight, Check, ChevronDown, Coins, Loader2, X} from "lucide-react"
 import {Button, Input, useToast} from "@acton/shared-ui"
 import type {Address} from "@ton/core"
-import {useSearchParams} from "react-router-dom"
 import {useCallback, useEffect, useId, useMemo, useRef, useState} from "react"
 import type {FC, FormEvent, ReactNode} from "react"
 
@@ -21,6 +20,7 @@ import {
   normalizeJettonDecimals,
   parseJettonAmount,
 } from "../jettonFaucet"
+import usdtLogo from "../assets/usdt-logo.png"
 
 import styles from "../DashboardPage.module.css"
 
@@ -30,7 +30,10 @@ interface FaucetPageProps {
 
 type FaucetMode = "ton" | "jetton"
 
-const FAUCET_MODE_QUERY_PARAM = "mode"
+const GRAM_LOGO_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" fill="none" viewBox="0 0 80 80"><path fill="#30A1F5" d="M52.017 12.097H27.984c-3.201 0-4.802 0-6.25.448a10 10 0 0 0-3.496 1.909c-1.159.975-2.024 2.322-3.755 5.014l-7.64 11.884c-1.144 1.78-1.716 2.668-1.87 3.605a4.6 4.6 0 0 0 .263 2.45c.35.882 1.098 1.63 2.593 3.125L36.217 68.92c1.325 1.324 1.987 1.986 2.75 2.234a3.34 3.34 0 0 0 2.067 0c.763-.248 1.425-.91 2.75-2.234l28.388-28.388c1.495-1.495 2.243-2.243 2.593-3.125.31-.778.4-1.625.263-2.45-.155-.937-.727-1.826-1.87-3.605l-7.64-11.884c-1.73-2.692-2.596-4.039-3.756-5.014a10 10 0 0 0-3.496-1.91c-1.448-.447-3.048-.447-6.249-.447"/><path fill="#fff" d="M47.465 21.472c.39-1.055 1.883-1.055 2.274 0l2.698 7.292a1.6 1.6 0 0 0 .945.946l7.293 2.698c1.055.39 1.055 1.883 0 2.274l-7.293 2.698a1.6 1.6 0 0 0-.945.945l-2.698 7.293c-.39 1.055-1.883 1.055-2.274 0l-2.698-7.293a1.6 1.6 0 0 0-.946-.945l-7.292-2.698c-1.055-.39-1.055-1.883 0-2.274l7.292-2.698a1.6 1.6 0 0 0 .946-.946z"/></svg>'
+const GRAM_LOGO_IMAGE = `data:image/svg+xml,${encodeURIComponent(GRAM_LOGO_SVG)}`
+const PINNED_USDT_MINTER_ADDRESS = "EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs"
 
 interface FaucetOption {
   readonly id: string
@@ -43,12 +46,9 @@ interface FaucetOption {
 }
 
 export const FaucetPage: FC<FaucetPageProps> = ({client}) => {
-  const {showToast} = useToast()
+  const {dismissToast, showToast} = useToast()
   const addressFormat = useAddressFormat()
-  const [searchParams, setSearchParams] = useSearchParams()
-  const [mode, setMode] = useState<FaucetMode>(() =>
-    parseFaucetMode(searchParams.get(FAUCET_MODE_QUERY_PARAM)),
-  )
+  const [mode, setMode] = useState<FaucetMode>("ton")
   const [address, setAddress] = useState("")
   const [jettonMinter, setJettonMinter] = useState("")
   const [amount, setAmount] = useState("1")
@@ -57,8 +57,13 @@ export const FaucetPage: FC<FaucetPageProps> = ({client}) => {
   const [walletsLoading, setWalletsLoading] = useState(true)
   const [jettonsLoading, setJettonsLoading] = useState(true)
   const [walletsError, setWalletsError] = useState<string>()
-  const [jettonsError, setJettonsError] = useState<string>()
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isAssetModalOpen, setIsAssetModalOpen] = useState(false)
+  const [minterAddressDraft, setMinterAddressDraft] = useState("")
+  const minterInputRef = useRef<HTMLInputElement>(null)
+  const lastAutoMinterLookupAddressRef = useRef<string | undefined>(undefined)
+  const minterLookupSequenceRef = useRef(0)
+  const minterLookupToastRef = useRef<string | undefined>(undefined)
   const amountNano = useMemo(() => parseGramAmount(amount), [amount])
   const isJettonMode = mode === "jetton"
   const isSubmitDisabled =
@@ -67,24 +72,79 @@ export const FaucetPage: FC<FaucetPageProps> = ({client}) => {
     amount.trim().length === 0 ||
     (isJettonMode && jettonMinter.trim().length === 0)
 
-  useEffect(() => {
-    setMode(parseFaucetMode(searchParams.get(FAUCET_MODE_QUERY_PARAM)))
-  }, [searchParams])
+  const selectMode = useCallback((nextMode: FaucetMode) => {
+    setMode(nextMode)
+  }, [])
 
-  const selectMode = useCallback(
-    (nextMode: FaucetMode) => {
-      setMode(nextMode)
-      setSearchParams(
-        currentSearchParams => {
-          const nextSearchParams = new URLSearchParams(currentSearchParams)
-          nextSearchParams.set(FAUCET_MODE_QUERY_PARAM, nextMode)
-          return nextSearchParams
-        },
-        {replace: true},
-      )
+  const openAssetModal = useCallback(() => {
+    setMinterAddressDraft("")
+    lastAutoMinterLookupAddressRef.current = undefined
+    setIsAssetModalOpen(true)
+  }, [])
+
+  const selectGramAsset = useCallback(() => {
+    selectMode("ton")
+    setIsAssetModalOpen(false)
+  }, [selectMode])
+
+  const selectJettonAsset = useCallback(
+    (option: FaucetOption) => {
+      setJettonMinter(option.value)
+      selectMode("jetton")
+      setIsAssetModalOpen(false)
     },
-    [setSearchParams],
+    [selectMode],
   )
+
+  useEffect(() => {
+    if (!isAssetModalOpen) {
+      return
+    }
+
+    const frame = globalThis.requestAnimationFrame(() => {
+      minterInputRef.current?.focus()
+    })
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsAssetModalOpen(false)
+      }
+    }
+
+    globalThis.addEventListener("keydown", onKeyDown)
+    return () => {
+      globalThis.cancelAnimationFrame(frame)
+      globalThis.removeEventListener("keydown", onKeyDown)
+    }
+  }, [isAssetModalOpen])
+
+  useEffect(() => {
+    if (!isAssetModalOpen) {
+      return
+    }
+
+    const parsedMinter = parseAddress(minterAddressDraft.trim())
+    if (!parsedMinter) {
+      return
+    }
+
+    const normalizedMinter = parsedMinter.toString(addressFormat)
+    if (lastAutoMinterLookupAddressRef.current === normalizedMinter) {
+      return
+    }
+
+    const timeoutId = globalThis.setTimeout(() => {
+      if (lastAutoMinterLookupAddressRef.current === normalizedMinter) {
+        return
+      }
+
+      lastAutoMinterLookupAddressRef.current = normalizedMinter
+      void loadMinterAddress(normalizedMinter)
+    }, 250)
+
+    return () => {
+      globalThis.clearTimeout(timeoutId)
+    }
+  }, [addressFormat, isAssetModalOpen, minterAddressDraft])
 
   useEffect(() => {
     let cancelled = false
@@ -120,7 +180,6 @@ export const FaucetPage: FC<FaucetPageProps> = ({client}) => {
 
     void (async () => {
       setJettonsLoading(true)
-      setJettonsError(undefined)
 
       try {
         const masters = await client.getJettonMasters(undefined, 100, 0)
@@ -130,7 +189,7 @@ export const FaucetPage: FC<FaucetPageProps> = ({client}) => {
       } catch (error) {
         if (!cancelled) {
           setJettonMasters([])
-          setJettonsError(error instanceof Error ? error.message : "Failed to load jettons")
+          console.error(error instanceof Error ? error.message : "Failed to load jettons")
         }
       } finally {
         if (!cancelled) {
@@ -163,33 +222,48 @@ export const FaucetPage: FC<FaucetPageProps> = ({client}) => {
     () => walletOptions.find(option => isSameAddress(option.value, address)),
     [address, walletOptions],
   )
-  const jettonOptions = useMemo<FaucetOption[]>(
-    () =>
-      jettonMasters
-        .filter(master => master.mintable)
-        .map(master => {
-          const symbol = jettonSymbol(master)
-          const value = parseAddress(master.address)?.toString(addressFormat) ?? master.address
-          return {
-            id: master.address,
-            title: master.jetton_content.name || symbol,
-            subtitle: formatAddress(value, true, addressFormat),
-            value,
-            badge: symbol,
-            image:
-              typeof master.jetton_content.image === "string" &&
-              master.jetton_content.image.length > 0
-                ? master.jetton_content.image
-                : TOKEN_PLACEHOLDER_IMAGE,
-            fallbackInitial: symbol.slice(0, 1).toUpperCase(),
-          }
-        }),
-    [addressFormat, jettonMasters],
-  )
+  const jettonOptions = useMemo<FaucetOption[]>(() => {
+    const usdtValue =
+      parseAddress(PINNED_USDT_MINTER_ADDRESS)?.toString(addressFormat) ??
+      PINNED_USDT_MINTER_ADDRESS
+    const pinnedUsdtOption: FaucetOption = {
+      id: PINNED_USDT_MINTER_ADDRESS,
+      title: "Tether USD",
+      subtitle: formatAddress(usdtValue, true, addressFormat),
+      value: usdtValue,
+      badge: "USD₮",
+      image: usdtLogo,
+      fallbackInitial: "U",
+    }
+    const apiOptions = jettonMasters
+      .filter(master => master.mintable)
+      .filter(master => !isSameAddress(master.address, PINNED_USDT_MINTER_ADDRESS))
+      .map(master => {
+        const symbol = jettonSymbol(master)
+        const value = parseAddress(master.address)?.toString(addressFormat) ?? master.address
+        return {
+          id: master.address,
+          title: master.jetton_content.name || symbol,
+          subtitle: formatAddress(value, true, addressFormat),
+          value,
+          badge: symbol,
+          image:
+            typeof master.jetton_content.image === "string" &&
+            master.jetton_content.image.length > 0
+              ? master.jetton_content.image
+              : TOKEN_PLACEHOLDER_IMAGE,
+          fallbackInitial: symbol.slice(0, 1).toUpperCase(),
+        }
+      })
+
+    return [pinnedUsdtOption, ...apiOptions]
+  }, [addressFormat, jettonMasters])
   const selectedJettonOption = useMemo(
     () => jettonOptions.find(option => isSameAddress(option.value, jettonMinter)),
     [jettonMinter, jettonOptions],
   )
+  const selectedAssetSymbol = isJettonMode ? (selectedJettonOption?.badge ?? "JETTON") : "GRAM"
+  const selectedAssetTitle = isJettonMode ? (selectedJettonOption?.title ?? "Jetton") : "GRAM"
 
   async function handleSubmit(event?: FormEvent): Promise<void> {
     event?.preventDefault()
@@ -268,10 +342,10 @@ export const FaucetPage: FC<FaucetPageProps> = ({client}) => {
     const normalizedMinter = parsedMinter.toString(addressFormat)
     const [master] = await client.getJettonMasters([normalizedMinter])
     if (!master) {
-      throw new Error("Jetton master was not found in localnet metadata.")
+      throw new Error("This address is not a mintable token minter.")
     }
     if (!master.mintable) {
-      throw new Error("This jetton master is not mintable.")
+      throw new Error("This address is not a mintable token minter.")
     }
     if (!master.admin_address) {
       throw new Error("This jetton master has no admin address, so faucet cannot mint it.")
@@ -341,6 +415,85 @@ export const FaucetPage: FC<FaucetPageProps> = ({client}) => {
     })
   }
 
+  async function loadMinterAddress(rawMinter: string): Promise<void> {
+    const parsedMinter = parseAddress(rawMinter.trim())
+    if (!parsedMinter) {
+      showToast({
+        variant: "error",
+        title: "Token not loaded",
+        description: "Enter a valid token minter address.",
+      })
+      return
+    }
+
+    const normalizedMinter = parsedMinter.toString(addressFormat)
+    const lookupSequence = minterLookupSequenceRef.current + 1
+    minterLookupSequenceRef.current = lookupSequence
+    const cachedOption = jettonOptions.find(option => isSameAddress(option.value, normalizedMinter))
+    if (cachedOption) {
+      setJettonMinter(cachedOption.value)
+      lastAutoMinterLookupAddressRef.current = undefined
+      selectMode("jetton")
+      return
+    }
+
+    lastAutoMinterLookupAddressRef.current = normalizedMinter
+    if (minterLookupToastRef.current) {
+      dismissToast(minterLookupToastRef.current)
+    }
+    minterLookupToastRef.current = showToast({
+      variant: "info",
+      title: "Loading token",
+      description: `Checking ${formatAddress(normalizedMinter, true, addressFormat)}.`,
+      durationMs: 60_000,
+    })
+
+    try {
+      const [master] = await client.getJettonMasters([normalizedMinter])
+      if (minterLookupSequenceRef.current !== lookupSequence) {
+        return
+      }
+      if (!master) {
+        throw new Error("This address is not a mintable token minter.")
+      }
+      if (!master.mintable) {
+        throw new Error("This address is not a mintable token minter.")
+      }
+
+      setJettonMasters(current => {
+        const exists = current.some(item => isSameAddress(item.address, master.address))
+        if (!exists) {
+          return [master, ...current]
+        }
+        return current.map(item => (isSameAddress(item.address, master.address) ? master : item))
+      })
+      setJettonMinter(normalizedMinter)
+      lastAutoMinterLookupAddressRef.current = undefined
+      selectMode("jetton")
+      showToast({
+        variant: "success",
+        title: "Token loaded",
+        description: `${jettonSymbol(master)} is ready in the faucet.`,
+      })
+    } catch (error) {
+      if (minterLookupSequenceRef.current !== lookupSequence) {
+        return
+      }
+      const description =
+        error instanceof Error ? error.message : "This address is not a mintable token minter."
+      showToast({
+        variant: "error",
+        title: "Token not loaded",
+        description,
+      })
+    } finally {
+      if (minterLookupSequenceRef.current === lookupSequence && minterLookupToastRef.current) {
+          dismissToast(minterLookupToastRef.current)
+          minterLookupToastRef.current = undefined
+        }
+    }
+  }
+
   async function waitForTraceTransactionHash(msgHash: string): Promise<string | undefined> {
     for (let attempt = 0; attempt < 8; attempt += 1) {
       if (attempt > 0) {
@@ -373,79 +526,69 @@ export const FaucetPage: FC<FaucetPageProps> = ({client}) => {
     <>
       <section className={styles.hero}>
         <div>
-          <h1 className={styles.title}>Local faucet</h1>
-          <p className={styles.subtitle}>
-            Top up any wallet address with test GRAM or mint local jettons from a minter.
-          </p>
+          <h1 className={styles.title}>Faucet</h1>
         </div>
       </section>
 
       <section className={styles.faucetLayout}>
         <form className={styles.formCard} onSubmit={event => void handleSubmit(event)}>
-          <div className={styles.cardHeader}>
-            <div className={styles.cardTitleRow}>
-              <div className={styles.cardIcon}>
-                <Wallet size={16} />
-              </div>
-              <div>
-                <h2 className={styles.cardTitle}>
-                  {isJettonMode ? "Jetton mint" : "Wallet top up"}
-                </h2>
-                <p className={styles.cardDescription}>
-                  {isJettonMode
-                    ? "Enter a minter, recipient, and amount."
-                    : "Enter an address, choose an amount, and send funds."}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className={styles.modeToggle} aria-label="Faucet asset type">
-            <button
-              type="button"
-              className={`${styles.modeToggleButton} ${mode === "ton" ? styles.modeToggleButtonActive : ""}`}
-              aria-pressed={mode === "ton"}
-              onClick={() => selectMode("ton")}
-            >
-              <Wallet size={15} />
-              GRAM
-            </button>
-            <button
-              type="button"
-              className={`${styles.modeToggleButton} ${mode === "jetton" ? styles.modeToggleButtonActive : ""}`}
-              aria-pressed={mode === "jetton"}
-              onClick={() => selectMode("jetton")}
-            >
-              <Coins size={15} />
-              Jetton
-            </button>
-          </div>
-
-          {isJettonMode && (
-            <div className={styles.fieldBlock}>
-              <label className={styles.label} htmlFor="dashboard-jetton-minter">
-                Jetton minter
-              </label>
-              <FaucetDropdownInput
-                id="dashboard-jetton-minter"
-                menuLabel="Choose jetton"
-                emptyLabel={jettonsError ?? "No mintable jettons found."}
-                isLoading={jettonsLoading}
-                loadingLabel="Loading jettons..."
-                options={jettonOptions}
-                placeholder="EQ..."
-                selectedOption={selectedJettonOption}
-                showOptionBadge
-                value={jettonMinter}
-                onChange={setJettonMinter}
-                onSelect={option => setJettonMinter(option.value)}
+          <div className={styles.fieldBlock}>
+            <label className={styles.label} htmlFor="dashboard-amount">
+              Amount
+            </label>
+            <div className={styles.amountAssetField}>
+              <Input
+                id="dashboard-amount"
+                aria-label="Amount"
+                className={`${styles.fieldInput} ${styles.amountAssetInput}`}
+                inputMode="decimal"
+                placeholder={isJettonMode ? "0.0" : "0.0 GRAM"}
+                value={amount}
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
+                onChange={event => setAmount(event.target.value)}
               />
+              <button
+                type="button"
+                className={styles.assetSelectorButton}
+                aria-label="Choose faucet asset"
+                aria-haspopup="dialog"
+                aria-expanded={isAssetModalOpen}
+                onClick={openAssetModal}
+              >
+                <span className={styles.assetSelectorIcon}>
+                  {isJettonMode && selectedJettonOption?.image ? (
+                    <img
+                      src={selectedJettonOption.image}
+                      alt=""
+                      onError={event => {
+                        const imageElement = event.currentTarget
+                        if (imageElement.getAttribute("src") !== TOKEN_PLACEHOLDER_IMAGE) {
+                          imageElement.src = TOKEN_PLACEHOLDER_IMAGE
+                        }
+                      }}
+                    />
+                  ) : isJettonMode ? (
+                    <Coins size={17} />
+                  ) : (
+                    <img src={GRAM_LOGO_IMAGE} alt="" />
+                  )}
+                </span>
+                <span className={styles.assetSelectorText}>
+                  <span className={styles.assetSelectorSymbol}>{selectedAssetSymbol}</span>
+                  {isJettonMode && selectedAssetTitle !== selectedAssetSymbol && (
+                    <span className={styles.assetSelectorName}>{selectedAssetTitle}</span>
+                  )}
+                </span>
+                <ChevronDown size={16} aria-hidden="true" />
+              </button>
             </div>
-          )}
+          </div>
 
           <div className={styles.fieldBlock}>
             <label className={styles.label} htmlFor="dashboard-address">
-              Recipient address
+              Recipient
             </label>
             <FaucetDropdownInput
               id="dashboard-address"
@@ -459,23 +602,6 @@ export const FaucetPage: FC<FaucetPageProps> = ({client}) => {
               value={address}
               onChange={setAddress}
               onSelect={option => setAddress(option.value)}
-            />
-          </div>
-
-          <div className={styles.fieldBlock}>
-            <label className={styles.label} htmlFor="dashboard-amount">
-              Amount
-            </label>
-            <Input
-              id="dashboard-amount"
-              className={styles.fieldInput}
-              inputMode="decimal"
-              placeholder={isJettonMode ? "0.0" : "0.0 GRAM"}
-              value={amount}
-              autoComplete="off"
-              autoCorrect="off"
-              spellCheck={false}
-              onChange={event => setAmount(event.target.value)}
             />
           </div>
 
@@ -505,12 +631,135 @@ export const FaucetPage: FC<FaucetPageProps> = ({client}) => {
           </div>
         </form>
       </section>
+
+      {isAssetModalOpen && (
+        <div
+          className={styles.assetModalBackdrop}
+          onMouseDown={event => {
+            if (event.target === event.currentTarget) {
+              setIsAssetModalOpen(false)
+            }
+          }}
+        >
+          <section
+            className={styles.assetModal}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="faucet-asset-modal-title"
+          >
+            <div className={styles.assetModalHeader}>
+              <div>
+                <h2 id="faucet-asset-modal-title" className={styles.assetModalTitle}>
+                  Faucet asset
+                </h2>
+              </div>
+              <button
+                type="button"
+                className={styles.assetModalCloseButton}
+                aria-label="Close asset selector"
+                onClick={() => setIsAssetModalOpen(false)}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className={styles.assetModalContent}>
+              <div className={styles.assetChoiceList}>
+                <button
+                  type="button"
+                  className={`${styles.assetChoiceButton} ${isJettonMode ? "" : styles.assetChoiceButtonSelected}`}
+                  onClick={selectGramAsset}
+                >
+                  <img src={GRAM_LOGO_IMAGE} alt="" className={styles.assetChoiceImage} />
+                  <span className={styles.assetChoiceText}>
+                    <span className={styles.assetChoiceTitle}>GRAM</span>
+                    <span className={styles.assetChoiceSubtitle}>Native localnet balance</span>
+                  </span>
+                  {!isJettonMode && <Check size={17} className={styles.assetChoiceCheck} />}
+                </button>
+
+                {jettonOptions.map(option => {
+                  const isSelected = isJettonMode && isSameAddress(option.value, jettonMinter)
+                  return (
+                    <button
+                      key={option.id}
+                      type="button"
+                      className={`${styles.assetChoiceButton} ${isSelected ? styles.assetChoiceButtonSelected : ""}`}
+                      onClick={() => selectJettonAsset(option)}
+                    >
+                      {option.image ? (
+                        <img
+                          src={option.image}
+                          alt=""
+                          className={styles.assetChoiceImage}
+                          onError={event => {
+                            const imageElement = event.currentTarget
+                            if (imageElement.getAttribute("src") !== TOKEN_PLACEHOLDER_IMAGE) {
+                              imageElement.src = TOKEN_PLACEHOLDER_IMAGE
+                            }
+                          }}
+                        />
+                      ) : (
+                        <span className={styles.assetChoiceIcon}>
+                          <Coins size={18} />
+                        </span>
+                      )}
+                      <span className={styles.assetChoiceText}>
+                        <span className={styles.assetChoiceTitle}>{option.title}</span>
+                        <span className={styles.assetChoiceSubtitle}>{option.subtitle}</span>
+                      </span>
+                      {option.badge && (
+                        <span className={styles.assetChoiceBadge}>{option.badge}</span>
+                      )}
+                      {isSelected && <Check size={17} className={styles.assetChoiceCheck} />}
+                    </button>
+                  )
+                })}
+                {jettonsLoading && (
+                  <div className={styles.assetLookupStatus}>
+                    <Loader2 size={14} className={styles.spinning} />
+                    Loading local jettons...
+                  </div>
+                )}
+              </div>
+
+              <div className={styles.assetMinterLookup}>
+                <label className={styles.label} htmlFor="dashboard-asset-minter">
+                  Paste token minter address
+                </label>
+                <Input
+                  ref={minterInputRef}
+                  id="dashboard-asset-minter"
+                  className={styles.fieldInput}
+                  placeholder="EQ..."
+                  value={minterAddressDraft}
+                  autoComplete="off"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  onChange={event => {
+                    setMinterAddressDraft(event.target.value)
+                  }}
+                  onPaste={event => {
+                    const pastedText = event.clipboardData.getData("text")
+                    const parsedMinter = parseAddress(pastedText.trim())
+                    if (!parsedMinter) {
+                      return
+                    }
+
+                    event.preventDefault()
+                    const normalizedMinter = parsedMinter.toString(addressFormat)
+                    lastAutoMinterLookupAddressRef.current = normalizedMinter
+                    setMinterAddressDraft(normalizedMinter)
+                    void loadMinterAddress(normalizedMinter)
+                  }}
+                />
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
     </>
   )
-}
-
-function parseFaucetMode(value: string | null): FaucetMode {
-  return value === "jetton" ? "jetton" : "ton"
 }
 
 function delay(durationMs: number): Promise<void> {

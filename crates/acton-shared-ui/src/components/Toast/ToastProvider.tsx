@@ -123,8 +123,9 @@ export const ToastProvider: React.FC<React.PropsWithChildren> = ({children}) => 
   }, [])
 
   const showToast = React.useCallback((options: ToastOptions) => {
+    const id = createToastId()
     const toast: ToastRecord = {
-      id: createToastId(),
+      id,
       title: options.title,
       description: options.description,
       variant: options.variant ?? "info",
@@ -132,6 +133,7 @@ export const ToastProvider: React.FC<React.PropsWithChildren> = ({children}) => 
     }
 
     setToasts(current => [...current, toast])
+    return id
   }, [])
 
   const contextValue = React.useMemo<ToastContextValue>(
