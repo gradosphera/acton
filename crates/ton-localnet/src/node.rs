@@ -73,7 +73,47 @@ pub struct Node {
     pub pending_freeze_current: VecDeque<Addr>,
 }
 
-const CASCADE_TX_HARD_LIMIT: usize = 10_000;
+const BASECHAIN_BLOCK_LIMITS: BlockLimits = BlockLimits {
+    bytes_hard_limit: 2_097_152,
+    gas_hard_limit: 20_000_000,
+    lt_delta_hard_limit: 10_000,
+};
+const CASCADE_TX_HARD_LIMIT: usize = BASECHAIN_BLOCK_LIMITS.lt_delta_hard_limit;
+
+#[derive(Clone, Copy)]
+struct BlockLimits {
+    bytes_hard_limit: usize,
+    gas_hard_limit: u64,
+    lt_delta_hard_limit: usize,
+}
+
+#[derive(Clone, Copy, Default)]
+struct BlockResourceUsage {
+    bytes: usize,
+    gas: u64,
+    lt_delta: usize,
+}
+
+impl BlockResourceUsage {
+    const fn hard_limit_reached(self, limits: BlockLimits) -> bool {
+        self.bytes >= limits.bytes_hard_limit
+            || self.gas >= limits.gas_hard_limit
+            || self.lt_delta >= limits.lt_delta_hard_limit
+    }
+
+    const fn add_transaction(&mut self, usage: TransactionResourceUsage) {
+        self.bytes = self.bytes.saturating_add(usage.bytes);
+        self.gas = self.gas.saturating_add(usage.gas);
+        self.lt_delta = self.lt_delta.saturating_add(1);
+    }
+}
+
+#[derive(Clone, Copy)]
+struct TransactionResourceUsage {
+    bytes: usize,
+    gas: u64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NodeClockInfo {
     pub current_unix_time: u32,
@@ -87,6 +127,46 @@ struct TransactionCommit {
     out_msg_hashes: Vec<Hash256>,
     msg_to_tx: Vec<(Hash256, Hash256)>,
     block_tx: BlockTransaction,
+    resource_usage: TransactionResourceUsage,
+}
+
+const fn compute_exit_code_from_tx_info(tx_info: Option<&TxInfo>) -> Option<i32> {
+    let Some(TxInfo::Ordinary(info)) = tx_info else {
+        return None;
+    };
+    let ComputePhase::Executed(phase) = &info.compute_phase else {
+        return None;
+    };
+    Some(phase.exit_code)
+}
+
+fn action_result_code_from_tx_info(tx_info: Option<&TxInfo>) -> Option<i32> {
+    let Some(TxInfo::Ordinary(info)) = tx_info else {
+        return None;
+    };
+    info.action_phase.as_ref().map(|phase| phase.result_code)
+}
+
+fn gas_used_from_tx_info(tx_info: Option<&TxInfo>) -> u64 {
+    let Some(TxInfo::Ordinary(info)) = tx_info else {
+        return 0;
+    };
+    let ComputePhase::Executed(phase) = &info.compute_phase else {
+        return 0;
+    };
+    u64::from(phase.gas_used)
+}
+
+fn transaction_fee_breakdown(tx: &Transaction, tx_info: Option<&TxInfo>) -> (u128, u128) {
+    let total: u128 = tx.total_fees.tokens.into();
+    let storage = if let Some(TxInfo::Ordinary(info)) = tx_info {
+        info.storage_phase
+            .as_ref()
+            .map_or(0, |phase| phase.storage_fees_collected.into())
+    } else {
+        0
+    };
+    (storage, total.saturating_sub(storage))
 }
 
 pub const GIVER_ADDR: Addr = Addr {
@@ -418,16 +498,28 @@ impl Node {
     }
 
     pub fn mine_block(&mut self) -> anyhow::Result<BlockMeta> {
+        self.mine_block_with_limits(BASECHAIN_BLOCK_LIMITS)
+    }
+
+    fn mine_block_with_limits(&mut self, block_limits: BlockLimits) -> anyhow::Result<BlockMeta> {
         let seqno = self.globals.head_seqno + 1;
         let prev_lt = self.globals.global_lt;
         let gen_utime = self.next_block_gen_utime()?;
         let initial_pending = self.pool.external.len() + self.pool.internal.len();
 
         let mut tx_commits = Vec::new();
+        let mut block_usage = BlockResourceUsage::default();
         let mut new_msgs = VecDeque::new();
         let mut deferred_msg_hashes = Vec::new();
 
         for _ in 0..initial_pending {
+            if block_usage.hard_limit_reached(block_limits) {
+                tracing::info!(
+                    "Basechain block hard limit reached in block {seqno}; leaving remaining queued messages for the next block"
+                );
+                break;
+            }
+
             let Some(msg_hash) = self
                 .pool
                 .pop_next(self.globals.queue_policy, &self.history.msg_by_hash)
@@ -437,6 +529,7 @@ impl Node {
             match self.execute_message_in_block(msg_hash, seqno, gen_utime) {
                 Ok(commit) => {
                     self.collect_local_internal_messages(&commit.out_msg_hashes, &mut new_msgs);
+                    block_usage.add_transaction(commit.resource_usage);
                     tx_commits.push(commit);
                 }
                 Err(e) => {
@@ -451,6 +544,15 @@ impl Node {
 
         let mut cascade_txs = 0usize;
         while let Some(msg_hash) = new_msgs.pop_front() {
+            if block_usage.hard_limit_reached(block_limits) {
+                tracing::info!(
+                    "Basechain block hard limit reached in block {seqno}; deferring remaining cascade messages"
+                );
+                deferred_msg_hashes.push(msg_hash);
+                deferred_msg_hashes.extend(new_msgs);
+                break;
+            }
+
             if cascade_txs >= CASCADE_TX_HARD_LIMIT {
                 tracing::error!(
                     "Cascade transaction hard limit reached in block {seqno}; deferring remaining messages"
@@ -464,6 +566,7 @@ impl Node {
             match self.execute_message_in_block(msg_hash, seqno, gen_utime) {
                 Ok(commit) => {
                     self.collect_local_internal_messages(&commit.out_msg_hashes, &mut new_msgs);
+                    block_usage.add_transaction(commit.resource_usage);
                     tx_commits.push(commit);
                 }
                 Err(e) => {
@@ -477,8 +580,17 @@ impl Node {
         }
 
         while let Some(addr) = self.pending_freeze_current.pop_front() {
+            if block_usage.hard_limit_reached(block_limits) {
+                tracing::info!(
+                    "Basechain block hard limit reached in block {seqno}; deferring remaining account freezes"
+                );
+                self.pending_freeze_current.push_front(addr);
+                break;
+            }
+
             match self.build_freeze_account_transaction(&addr, seqno, gen_utime) {
                 Ok(commit) => {
+                    block_usage.add_transaction(commit.resource_usage);
                     tx_commits.push(commit);
                 }
                 Err(e) => {
@@ -729,6 +841,11 @@ impl Node {
         )?;
 
         // 6. Store outputs & 7. Derive hashes
+        let tx_info = exec_result.tx.info.load().ok();
+        let resource_usage = TransactionResourceUsage {
+            bytes: exec_result.tx_boc.len(),
+            gas: gas_used_from_tx_info(tx_info.as_ref()),
+        };
         let tx_hash = exec_result.tx_boc.hash()?;
         self.cas.put(exec_result.tx_boc.clone(), tx_hash);
         let tx_cell =
@@ -797,19 +914,10 @@ impl Node {
             self.history.msg_by_hash.insert(h, out_meta);
         }
 
-        let compute_exit_code = exec_result.compute_exit_code();
-        let action_result_code = exec_result.action_result_code();
-
-        let info = exec_result.tx.info.load().ok();
-        let (storage_fees, other_fees) = if let Some(TxInfo::Ordinary(ord)) = info {
-            let storage: u128 = ord
-                .storage_phase
-                .map_or(0, |p| p.storage_fees_collected.into());
-            let total: u128 = exec_result.tx.total_fees.tokens.into();
-            (storage, total.saturating_sub(storage))
-        } else {
-            (0, exec_result.tx.total_fees.tokens.into())
-        };
+        let compute_exit_code = compute_exit_code_from_tx_info(tx_info.as_ref());
+        let action_result_code = action_result_code_from_tx_info(tx_info.as_ref());
+        let (storage_fees, other_fees) =
+            transaction_fee_breakdown(&exec_result.tx, tx_info.as_ref());
         let total_fees = exec_result.tx.total_fees.tokens.into();
 
         let tx_meta = TxMeta {
@@ -875,6 +983,7 @@ impl Node {
             delta,
             out_msg_hashes,
             msg_to_tx: vec![(msg_hash, tx_hash)],
+            resource_usage,
         })
     }
 
@@ -1755,9 +1864,13 @@ impl Node {
         Some(self.transaction_info_from_meta(tx))
     }
 
-    fn get_rich_transaction_by_hash(&self, hash: &Hash256) -> Option<TransactionInfo> {
+    fn get_rich_transaction_by_hash(
+        &self,
+        hash: &Hash256,
+        account_state_cache: &mut HashMap<Hash256, Option<AccountStateSnapshot>>,
+    ) -> Option<TransactionInfo> {
         let tx = self.history.tx_by_hash.get(hash).cloned()?;
-        Some(self.rich_transaction_info_from_meta(tx))
+        Some(self.rich_transaction_info_from_meta(tx, account_state_cache))
     }
 
     /// Fast transaction view used by list-style endpoints. It intentionally skips
@@ -1782,10 +1895,18 @@ impl Node {
 
     /// Rich transaction view used by traces. Traces need full before/after account
     /// states, so this path pays the extra parsing and CAS lookup cost explicitly.
-    fn rich_transaction_info_from_meta(&self, tx: TxMeta) -> TransactionInfo {
+    fn rich_transaction_info_from_meta(
+        &self,
+        tx: TxMeta,
+        account_state_cache: &mut HashMap<Hash256, Option<AccountStateSnapshot>>,
+    ) -> TransactionInfo {
         let mut info = self.transaction_info_from_meta(tx);
-        (info.account_state_before, info.account_state_after) =
-            self.transaction_account_state_snapshots(&info.meta.tx_hash, &info.tx_boc);
+        (info.account_state_before, info.account_state_after) = self
+            .transaction_account_state_snapshots(
+                &info.meta.tx_hash,
+                &info.tx_boc,
+                account_state_cache,
+            );
         info
     }
 
@@ -1793,6 +1914,7 @@ impl Node {
         &self,
         tx_hash: &Hash256,
         tx_boc: &BocBytes,
+        account_state_cache: &mut HashMap<Hash256, Option<AccountStateSnapshot>>,
     ) -> (Option<AccountStateSnapshot>, Option<AccountStateSnapshot>) {
         let Some(state_update) = self
             .cas
@@ -1805,16 +1927,41 @@ impl Node {
         };
 
         (
-            self.find_account_state_snapshot(&Hash256::from(&state_update.old)),
-            self.find_account_state_snapshot(&Hash256::from(&state_update.new)),
+            self.find_account_state_snapshot_cached(
+                &Hash256::from(&state_update.old),
+                account_state_cache,
+            ),
+            self.find_account_state_snapshot_cached(
+                &Hash256::from(&state_update.new),
+                account_state_cache,
+            ),
         )
     }
 
+    fn find_account_state_snapshot_cached(
+        &self,
+        state_hash: &Hash256,
+        account_state_cache: &mut HashMap<Hash256, Option<AccountStateSnapshot>>,
+    ) -> Option<AccountStateSnapshot> {
+        if let Some(snapshot) = account_state_cache.get(state_hash) {
+            return snapshot.clone();
+        }
+
+        let snapshot = self.find_account_state_snapshot(state_hash);
+        account_state_cache.insert(*state_hash, snapshot.clone());
+        snapshot
+    }
+
     fn find_account_state_snapshot(&self, state_hash: &Hash256) -> Option<AccountStateSnapshot> {
-        if let Some(cell) = self.cas.get_cell(state_hash)
-            && let Some(snapshot) = account_state_snapshot_from_cell(&cell)
-        {
-            return Some(snapshot);
+        if let Some(cell) = self.cas.get_cell(state_hash) {
+            if let Some(snapshot) = account_state_snapshot_from_account_state_cell(&cell) {
+                return Some(snapshot);
+            }
+            if let Some(snapshot) = account_state_snapshot_from_cell(&cell)
+                && snapshot.hash == *state_hash
+            {
+                return Some(snapshot);
+            }
         }
 
         self.cas.find_map_cell(|cell| {
@@ -1875,8 +2022,9 @@ impl Node {
         });
 
         let mut visited_down = HashSet::new();
+        let mut account_state_cache = HashMap::new();
         let mut trace = self
-            .build_trace_node(&root_hash, &mut visited_down)
+            .build_trace_node(&root_hash, &mut visited_down, &mut account_state_cache)
             .ok_or_else(|| anyhow::anyhow!("Root transaction not found"))?;
         trace.external_hash = external_hash;
         Ok(trace)
@@ -1914,17 +2062,19 @@ impl Node {
         &self,
         tx_hash: &Hash256,
         visited: &mut HashSet<Hash256>,
+        account_state_cache: &mut HashMap<Hash256, Option<AccountStateSnapshot>>,
     ) -> Option<TraceNode> {
         if !visited.insert(*tx_hash) {
             return None;
         }
 
-        let tx_info = self.get_rich_transaction_by_hash(tx_hash)?;
+        let tx_info = self.get_rich_transaction_by_hash(tx_hash, account_state_cache)?;
         let mut children = Vec::new();
 
         for out_msg in &tx_info.meta.out_msg_hashes {
             if let Some(child_tx_hash) = self.history.msg_to_tx.get(out_msg)
-                && let Some(child_node) = self.build_trace_node(child_tx_hash, visited)
+                && let Some(child_node) =
+                    self.build_trace_node(child_tx_hash, visited, account_state_cache)
             {
                 children.push(child_node);
             }
@@ -2123,6 +2273,10 @@ impl Node {
             .context("Failed to build synthetic freeze transaction info")?,
         };
         let tx_boc = BocBytes::from(BocRepr::encode(tx)?);
+        let resource_usage = TransactionResourceUsage {
+            bytes: tx_boc.len(),
+            gas: 0,
+        };
         let tx_hash = tx_boc.hash()?;
         self.cas.put(tx_boc.clone(), tx_hash);
         let tx_cell = Boc::decode(&tx_boc).context("Failed to decode synthetic freeze tx BOC")?;
@@ -2191,6 +2345,7 @@ impl Node {
             delta,
             out_msg_hashes: Vec::new(),
             msg_to_tx: vec![(in_msg_hash, tx_hash)],
+            resource_usage,
         })
     }
 
@@ -2314,18 +2469,11 @@ impl Node {
             });
         }
 
-        let compute_exit_code = exec_result.compute_exit_code();
-        let action_result_code = exec_result.action_result_code();
-        let info = exec_result.tx.info.load().ok();
-        let (storage_fees, other_fees) = if let Some(TxInfo::Ordinary(ord)) = info {
-            let storage: u128 = ord
-                .storage_phase
-                .map_or(0, |p| p.storage_fees_collected.into());
-            let total: u128 = exec_result.tx.total_fees.tokens.into();
-            (storage, total.saturating_sub(storage))
-        } else {
-            (0, exec_result.tx.total_fees.tokens.into())
-        };
+        let tx_info = exec_result.tx.info.load().ok();
+        let compute_exit_code = compute_exit_code_from_tx_info(tx_info.as_ref());
+        let action_result_code = action_result_code_from_tx_info(tx_info.as_ref());
+        let (storage_fees, other_fees) =
+            transaction_fee_breakdown(&exec_result.tx, tx_info.as_ref());
         let total_fees = exec_result.tx.total_fees.tokens.into();
 
         let tx_meta = TxMeta {
@@ -2641,6 +2789,15 @@ fn account_state_snapshot_from_cell(cell: &Cell) -> Option<AccountStateSnapshot>
         ));
     }
 
+    let hash = Hash256::from(cell.repr_hash());
+    let optional_account = cell.parse::<OptionalAccount>().ok()?;
+    Some(account_state_snapshot_from_optional_account(
+        hash,
+        optional_account,
+    ))
+}
+
+fn account_state_snapshot_from_account_state_cell(cell: &Cell) -> Option<AccountStateSnapshot> {
     let hash = Hash256::from(cell.repr_hash());
     let optional_account = cell.parse::<OptionalAccount>().ok()?;
     Some(account_state_snapshot_from_optional_account(
@@ -3512,6 +3669,24 @@ mod tests {
     }
 
     #[test]
+    fn account_state_snapshot_lookup_reads_stored_account_state_cell_directly() {
+        let mut node = make_test_node(Box::new(NoopExecutor));
+        let account = test_addr(0x23);
+        let boc =
+            make_active_shard_account_boc_with_state(account, None, None, Dict::new(), 888_000);
+        let state_hash = store_account_state_cell_from_shard_account_boc(&mut node.cas, &boc)
+            .expect("account state cell must be stored");
+
+        let snapshot = node
+            .find_account_state_snapshot(&state_hash)
+            .expect("snapshot must be found by stored account state hash");
+
+        assert_eq!(snapshot.hash, state_hash);
+        assert_eq!(snapshot.balance, 888_000);
+        assert_eq!(snapshot.status, AccountStatus::Active);
+    }
+
+    #[test]
     fn mine_block_creates_empty_block_without_pending_messages() {
         let mut node = make_test_node(Box::new(NoopExecutor));
         let assert_pruned_masterchain_block = |node: &Node, seqno| {
@@ -3671,6 +3846,59 @@ mod tests {
         assert_eq!(tx.account, HashBytes(account.addr));
         assert_eq!(tx.lt, block.start_lt);
         assert_eq!(block.tx_hashes, vec![Hash256::from(tx_ref.repr_hash())]);
+    }
+
+    #[test]
+    fn mine_block_defers_messages_after_lt_delta_hard_limit() {
+        let account = test_addr(0x45);
+        let mut node = make_test_node(Box::new(SingleTxExecutor));
+        let limits = BlockLimits {
+            bytes_hard_limit: usize::MAX,
+            gas_hard_limit: u64::MAX,
+            lt_delta_hard_limit: 2,
+        };
+
+        for value in 1..=3 {
+            let message = OwnedMessage {
+                info: MsgInfo::Int(IntMsgInfo {
+                    ihr_disabled: true,
+                    bounce: false,
+                    bounced: false,
+                    src: GIVER_ADDR.into(),
+                    dst: account.into(),
+                    ihr_fee: Default::default(),
+                    value: CurrencyCollection::new(value),
+                    fwd_fee: Default::default(),
+                    created_at: 0,
+                    created_lt: value as u64,
+                }),
+                init: None,
+                body: Default::default(),
+                layout: None,
+            };
+            node.send_internal_boc(
+                BocRepr::encode(message)
+                    .expect("message must serialize")
+                    .into(),
+            )
+            .expect("message must be queued");
+        }
+
+        let first_block = node
+            .mine_block_with_limits(limits)
+            .expect("first block must be mined");
+
+        assert_eq!(first_block.tx_hashes.len(), 2);
+        assert_eq!(node.pool.internal.len(), 1);
+        assert_eq!(node.globals.head_seqno, 1);
+
+        let second_block = node
+            .mine_block_with_limits(limits)
+            .expect("second block must be mined");
+
+        assert_eq!(second_block.tx_hashes.len(), 1);
+        assert!(node.pool.internal.is_empty());
+        assert_eq!(node.globals.head_seqno, 2);
     }
 
     #[test]

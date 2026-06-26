@@ -336,6 +336,19 @@ pub(crate) enum Request {
     GetAllTransactions {
         resp: oneshot::Sender<anyhow::Result<Vec<LocalnetTransaction>>>,
     },
+    GetAllTransactionsPage {
+        limit: usize,
+        offset: usize,
+        descending: bool,
+        resp: oneshot::Sender<anyhow::Result<Vec<LocalnetTransaction>>>,
+    },
+    GetBlockTransactionsPage {
+        seqno: u32,
+        limit: usize,
+        offset: usize,
+        descending: bool,
+        resp: oneshot::Sender<anyhow::Result<Vec<LocalnetTransaction>>>,
+    },
     GetBlocks {
         resp: oneshot::Sender<anyhow::Result<Vec<LocalnetBlock>>>,
     },
@@ -910,6 +923,44 @@ impl Localnet {
     pub async fn get_all_transactions(&self) -> anyhow::Result<Vec<LocalnetTransaction>> {
         let (resp, rx) = oneshot::channel();
         self.tx.send(Request::GetAllTransactions { resp }).await?;
+        rx.await?
+    }
+
+    pub async fn get_all_transactions_page(
+        &self,
+        limit: usize,
+        offset: usize,
+        descending: bool,
+    ) -> anyhow::Result<Vec<LocalnetTransaction>> {
+        let (resp, rx) = oneshot::channel();
+        self.tx
+            .send(Request::GetAllTransactionsPage {
+                limit,
+                offset,
+                descending,
+                resp,
+            })
+            .await?;
+        rx.await?
+    }
+
+    pub async fn get_block_transactions_page(
+        &self,
+        seqno: u32,
+        limit: usize,
+        offset: usize,
+        descending: bool,
+    ) -> anyhow::Result<Vec<LocalnetTransaction>> {
+        let (resp, rx) = oneshot::channel();
+        self.tx
+            .send(Request::GetBlockTransactionsPage {
+                seqno,
+                limit,
+                offset,
+                descending,
+                resp,
+            })
+            .await?;
         rx.await?
     }
 
@@ -1734,6 +1785,25 @@ fn process_loop_request(
             let res = handle_get_all_transactions(node);
             let _ = resp.send(res);
         }
+        Request::GetAllTransactionsPage {
+            limit,
+            offset,
+            descending,
+            resp,
+        } => {
+            let res = handle_get_all_transactions_page(node, limit, offset, descending);
+            let _ = resp.send(res);
+        }
+        Request::GetBlockTransactionsPage {
+            seqno,
+            limit,
+            offset,
+            descending,
+            resp,
+        } => {
+            let res = handle_get_block_transactions_page(node, seqno, limit, offset, descending);
+            let _ = resp.send(res);
+        }
         Request::GetBlocks { resp } => {
             let res = handle_get_blocks(node);
             let _ = resp.send(res);
@@ -2361,6 +2431,72 @@ fn handle_get_all_transactions(node: &Node) -> anyhow::Result<Vec<LocalnetTransa
     let mut result = Vec::with_capacity(metas.len());
     for meta in metas {
         if let Some(tx) = node.get_transaction_by_hash(&meta.tx_hash) {
+            result.push(convert_to_tx_struct(&tx, tx.tx_boc.clone())?);
+        }
+    }
+    Ok(result)
+}
+
+fn handle_get_all_transactions_page(
+    node: &Node,
+    limit: usize,
+    offset: usize,
+    descending: bool,
+) -> anyhow::Result<Vec<LocalnetTransaction>> {
+    let mut metas = node
+        .history
+        .tx_by_hash
+        .values()
+        .cloned()
+        .collect::<Vec<_>>();
+    if descending {
+        metas.sort_by(|a, b| b.lt.cmp(&a.lt).then_with(|| b.tx_hash.cmp(&a.tx_hash)));
+    } else {
+        metas.sort_by(|a, b| a.lt.cmp(&b.lt).then_with(|| a.tx_hash.cmp(&b.tx_hash)));
+    }
+
+    let mut result = Vec::with_capacity(limit.min(metas.len().saturating_sub(offset)));
+    for meta in metas.into_iter().skip(offset).take(limit) {
+        if let Some(tx) = node.get_transaction_by_hash(&meta.tx_hash) {
+            result.push(convert_to_tx_struct(&tx, tx.tx_boc.clone())?);
+        }
+    }
+    Ok(result)
+}
+
+fn handle_get_block_transactions_page(
+    node: &Node,
+    seqno: u32,
+    limit: usize,
+    offset: usize,
+    descending: bool,
+) -> anyhow::Result<Vec<LocalnetTransaction>> {
+    let Some(block_header) = node.get_block_header(seqno) else {
+        return Err(LocalnetError::BlockNotFound { seqno }.into());
+    };
+
+    let hashes = if descending {
+        block_header
+            .tx_hashes
+            .iter()
+            .rev()
+            .skip(offset)
+            .take(limit)
+            .copied()
+            .collect::<Vec<_>>()
+    } else {
+        block_header
+            .tx_hashes
+            .iter()
+            .skip(offset)
+            .take(limit)
+            .copied()
+            .collect::<Vec<_>>()
+    };
+
+    let mut result = Vec::with_capacity(hashes.len());
+    for tx_hash in hashes {
+        if let Some(tx) = node.get_transaction_by_hash(&tx_hash) {
             result.push(convert_to_tx_struct(&tx, tx.tx_boc.clone())?);
         }
     }

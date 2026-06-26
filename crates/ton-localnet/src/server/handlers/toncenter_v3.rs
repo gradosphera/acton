@@ -29,6 +29,9 @@ use tycho_types::models::{Base64StdAddrFlags, DisplayBase64StdAddr, StdAddr, Std
 use tycho_types::prelude::HashBytes;
 use url::form_urlencoded;
 
+const BLOCK_WORKCHAIN: i32 = 0;
+const BLOCK_SHARD: i64 = i64::MIN;
+
 pub async fn get_traces(
     State(node): State<Arc<Localnet>>,
     Query(payload): Query<GetTracesQuery>,
@@ -117,6 +120,29 @@ pub async fn get_transactions_v3(
         Ok(parsed) => parsed,
         Err(e) => return v3_bad_request(e.to_string()),
     };
+
+    match transactions_fast_path(&parsed) {
+        Some(TransactionsFastPath::Empty) => {
+            return (StatusCode::OK, Json(v3::map_transactions_response(&[]))).into_response();
+        }
+        Some(TransactionsFastPath::Block { seqno }) => {
+            let descending = matches!(parsed.sort, SortOrder::Desc);
+            return handle_v3_result(
+                node.get_block_transactions_page(seqno, parsed.limit, parsed.offset, descending),
+                |txs| v3::map_transactions_response(txs),
+            )
+            .await;
+        }
+        Some(TransactionsFastPath::Recent) => {
+            let descending = matches!(parsed.sort, SortOrder::Desc);
+            return handle_v3_result(
+                node.get_all_transactions_page(parsed.limit, parsed.offset, descending),
+                |txs| v3::map_transactions_response(txs),
+            )
+            .await;
+        }
+        None => {}
+    }
 
     handle_v3_result(node.get_all_transactions(), move |txs| {
         let filtered = filter_transactions_v3(txs, &parsed);
@@ -387,6 +413,13 @@ enum MessageDirection {
     Out,
 }
 
+#[derive(Debug, PartialEq, Eq)]
+enum TransactionsFastPath {
+    Empty,
+    Block { seqno: u32 },
+    Recent,
+}
+
 struct ParsedTransactionsV3Query {
     workchain: Option<i32>,
     shard: Option<i64>,
@@ -608,9 +641,6 @@ fn filter_transactions_v3(
     txs: &[LocalnetTransaction],
     query: &ParsedTransactionsV3Query,
 ) -> Vec<LocalnetTransaction> {
-    const BLOCK_WORKCHAIN: i32 = 0;
-    const BLOCK_SHARD: i64 = i64::MIN;
-
     let mut filtered = txs
         .iter()
         .filter(|tx| {
@@ -685,6 +715,40 @@ fn filter_transactions_v3(
         .skip(query.offset)
         .take(query.limit)
         .collect()
+}
+
+const fn transactions_fast_path(query: &ParsedTransactionsV3Query) -> Option<TransactionsFastPath> {
+    let has_expensive_filters = query.account.is_some()
+        || query.exclude_account.is_some()
+        || query.hash.is_some()
+        || query.lt.is_some()
+        || query.start_utime.is_some()
+        || query.end_utime.is_some()
+        || query.start_lt.is_some()
+        || query.end_lt.is_some();
+    if has_expensive_filters {
+        return None;
+    }
+
+    if let Some(workchain) = query.workchain
+        && workchain != BLOCK_WORKCHAIN
+    {
+        return Some(TransactionsFastPath::Empty);
+    }
+    if let Some(shard) = query.shard
+        && shard != BLOCK_SHARD
+    {
+        return Some(TransactionsFastPath::Empty);
+    }
+
+    match (query.seqno, query.mc_seqno) {
+        (Some(seqno), Some(mc_seqno)) if seqno == mc_seqno => {
+            Some(TransactionsFastPath::Block { seqno })
+        }
+        (Some(_), Some(_)) => Some(TransactionsFastPath::Empty),
+        (Some(seqno), None) | (None, Some(seqno)) => Some(TransactionsFastPath::Block { seqno }),
+        (None, None) => Some(TransactionsFastPath::Recent),
+    }
 }
 
 fn filter_blocks_v3(blocks: &[LocalnetBlock], query: &ParsedBlocksV3Query) -> Vec<LocalnetBlock> {
@@ -1221,4 +1285,76 @@ fn request_error(status: StatusCode, error: impl Into<String>) -> Response {
         })),
     )
         .into_response()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn transactions_query() -> ParsedTransactionsV3Query {
+        ParsedTransactionsV3Query {
+            workchain: None,
+            shard: None,
+            seqno: None,
+            mc_seqno: None,
+            account: None,
+            exclude_account: None,
+            hash: None,
+            lt: None,
+            start_utime: None,
+            end_utime: None,
+            start_lt: None,
+            end_lt: None,
+            limit: 5,
+            offset: 0,
+            sort: SortOrder::Desc,
+        }
+    }
+
+    #[test]
+    fn transactions_fast_path_uses_block_page_for_simple_block_query() {
+        let mut query = transactions_query();
+        query.workchain = Some(BLOCK_WORKCHAIN);
+        query.shard = Some(BLOCK_SHARD);
+        query.seqno = Some(42);
+
+        assert_eq!(
+            transactions_fast_path(&query),
+            Some(TransactionsFastPath::Block { seqno: 42 })
+        );
+    }
+
+    #[test]
+    fn transactions_fast_path_keeps_account_filters_on_general_path() {
+        let mut query = transactions_query();
+        query.workchain = Some(BLOCK_WORKCHAIN);
+        query.shard = Some(BLOCK_SHARD);
+        query.seqno = Some(42);
+        query.account = Some(HashSet::new());
+
+        assert_eq!(transactions_fast_path(&query), None);
+    }
+
+    #[test]
+    fn transactions_fast_path_returns_empty_for_non_localnet_block_shard() {
+        let mut query = transactions_query();
+        query.workchain = Some(BLOCK_WORKCHAIN);
+        query.shard = Some(123);
+        query.seqno = Some(42);
+
+        assert_eq!(
+            transactions_fast_path(&query),
+            Some(TransactionsFastPath::Empty)
+        );
+    }
+
+    #[test]
+    fn transactions_fast_path_uses_recent_page_for_simple_recent_query() {
+        let query = transactions_query();
+
+        assert_eq!(
+            transactions_fast_path(&query),
+            Some(TransactionsFastPath::Recent)
+        );
+    }
 }
