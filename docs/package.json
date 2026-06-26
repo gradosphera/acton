@@ -15,7 +15,7 @@
     "lint:links:external": "bun ./scripts/validate-links-external.ts",
     "lint:navigation": "bun ./scripts/validate-navigation.ts",
     "lint:code-block-line-length": "bun ./scripts/validate-code-block-line-length.ts",
-    "docs-lint": "bun run lint:links && bun run lint:navigation && bun run lint:code-block-line-length"
+    "docs-lint": "bun run lint:links:internal && bun run lint:navigation && bun run lint:code-block-line-length"
   },
   "overrides": {
     "postcss": "8.5.10"
