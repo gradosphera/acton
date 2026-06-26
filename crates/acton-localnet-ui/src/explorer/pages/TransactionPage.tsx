@@ -286,13 +286,8 @@ export const TransactionPage: FC<TransactionPageProps> = ({client, openRetraceOn
           const processed = buildTraceTransactionInfos(transactionsMap, trace.trace)
 
           const contractsMap = new Map<string, ContractData>()
-          const addresses = new Set<string>()
-
-          for (const t of processed) {
-            if (t.address) addresses.add(t.address.toString())
-          }
-
-          const requestedAddresses = [...addresses].sort()
+          const traceAddressOrder = collectTraceAddressOrder(processed)
+          const requestedAddresses = [...traceAddressOrder].sort()
           const additionalCodeHashes = new Set<string>()
           for (const tx of Object.values(transactionsMap)) {
             if (tx.account_state_before?.code_hash) {
@@ -341,10 +336,9 @@ export const TransactionPage: FC<TransactionPageProps> = ({client, openRetraceOn
             )
           }
 
-          let nextLetterCode = 65
           await Promise.all(
-            requestedAddresses.map(async addr => {
-              const letter = String.fromCodePoint(nextLetterCode++)
+            traceAddressOrder.map(async (addr, index) => {
+              const letter = String.fromCodePoint(65 + index)
               const displayAddr = normalizeAddress(addr, addressFormatRef.current)
               const customName = await fetchNameRef.current(addr)
               const abi = abiByCodeHash.get(addressToCodeHash.get(addressKey(addr)) ?? "")
@@ -799,6 +793,27 @@ const TraceTransactionNode: FC<TraceTransactionNodeProps> = ({
       )}
     </div>
   )
+}
+
+function collectTraceAddressOrder(processed: readonly TransactionInfo[]): readonly string[] {
+  const addresses = new Set<string>()
+
+  const visit = (tx: TransactionInfo) => {
+    const address = tx.address?.toString()
+    if (address) {
+      addresses.add(address)
+    }
+
+    for (const child of [...tx.children].sort(compareTransactionInfoByLt)) {
+      visit(child)
+    }
+  }
+
+  for (const tx of [...processed].filter(tx => !tx.parent).sort(compareTransactionInfoByLt)) {
+    visit(tx)
+  }
+
+  return [...addresses]
 }
 
 function compareTransactionInfoByLt(left: TransactionInfo, right: TransactionInfo): number {

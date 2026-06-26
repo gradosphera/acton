@@ -22,6 +22,22 @@ export function ValueFlowTable({
 }: ValueFlowTableProps): React.JSX.Element {
   const totalFee = items.reduce((sum, item) => sum + item.fee, 0n)
   const showTotal = items.length > 1
+  const sortedItems = [...items].sort((left, right) => {
+    const leftLetter = contracts.get(left.address)?.letter
+    const rightLetter = contracts.get(right.address)?.letter
+
+    if (leftLetter && rightLetter) {
+      return leftLetter.localeCompare(rightLetter)
+    }
+    if (leftLetter) {
+      return -1
+    }
+    if (rightLetter) {
+      return 1
+    }
+
+    return left.address.localeCompare(right.address)
+  })
 
   return (
     <div
@@ -36,7 +52,7 @@ export function ValueFlowTable({
           <div className={`${styles.flowCol} ${styles.amountCol}`}>Balance Change</div>
           <div className={`${styles.flowCol} ${styles.feeCol}`}>Network Fee</div>
         </div>
-        {items.map(item => (
+        {sortedItems.map(item => (
           <div key={item.address} className={styles.flowRow}>
             <div className={styles.flowCol}>
               <ContractChip
