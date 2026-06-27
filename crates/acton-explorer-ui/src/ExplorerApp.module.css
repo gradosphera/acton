@@ -5,6 +5,8 @@
 }
 
 .header {
+  position: relative;
+  z-index: 20;
   min-height: 52px;
   padding: 0 28px;
   background: color-mix(in srgb, var(--tonscan-bg) 88%, transparent);
