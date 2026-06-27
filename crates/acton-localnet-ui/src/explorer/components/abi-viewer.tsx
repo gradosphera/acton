@@ -1108,6 +1108,9 @@ function v3StackEntryToTupleItem(entry: V3RunGetMethodStackEntry): TupleItem {
       if (!Array.isArray(entry.value)) {
         throw new TypeError(`${entry.type} stack value must be an array.`)
       }
+      if (entry.type === "list") {
+        return v3StackListToTupleItem(entry.value)
+      }
       return {
         type: "tuple",
         items: entry.value
@@ -1122,6 +1125,19 @@ function v3StackEntryToTupleItem(entry: V3RunGetMethodStackEntry): TupleItem {
       throw new Error(`Unsupported stack entry type: ${entry.type}.`)
     }
   }
+}
+
+function v3StackListToTupleItem(entries: readonly unknown[]): TupleItem {
+  let tail: TupleItem = {type: "null"}
+
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    tail = {
+      type: "tuple",
+      items: [v3StackEntryToTupleItem(assertV3StackEntry(entries[index])), tail],
+    }
+  }
+
+  return tail
 }
 
 function assertV3StackEntry(value: unknown): V3RunGetMethodStackEntry {
