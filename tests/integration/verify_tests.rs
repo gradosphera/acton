@@ -44,7 +44,6 @@ const TEST_TONCENTER_MAINNET_V3_URL_ENV: &str = "ACTON_TEST_TONCENTER_MAINNET_V3
 const VERIFY_BACKENDS_ENV: &str = "ACTON_VERIFY_BACKENDS";
 const VERIFY_TEST_REGISTRY_ADDRESS: &str = "EQD-BJSVUJviud_Qv7Ymfd3qzXdrmV525e3YDzWQoHIAiInL";
 const VERIFY_TEST_API_KEY: &str = "verify-test-api-key";
-const VERIFY_TEST_MAINNET_ADDRESS: &str = "UQC2jeGorIAFh2LXwsDjHfRK-GSo9UzchdIEMh24A7T7ACfo";
 const VERIFY_TEST_CODE_HASH: &str =
     "e67eec3bd481c7910c87a061e60ca509e82edd687a0e1c8bf1b437e6de3e6973";
 const VERIFY_TEST_SOURCE_BUNDLE_HASH: &str =
@@ -848,16 +847,7 @@ fn test_verify_new_verifier_sends_new_api_payload_and_reports_success() {
             "compiled_code_hash": VERIFY_TEST_CODE_HASH,
             "verification_result": "match",
             "source_bundle_hash": VERIFY_TEST_SOURCE_BUNDLE_HASH,
-            "source_storage": {
-                "provider": "git",
-                "commit": "0123456789abcdef",
-                "bundle_path": format!("sources/{VERIFY_TEST_CODE_HASH}/{VERIFY_TEST_SOURCE_BUNDLE_HASH}")
-            },
-            "onchain_registration": {
-                "status": "confirmed",
-                "master_address": VERIFY_TEST_REGISTRY_ADDRESS,
-                "verification_record_address": "EQCsdKYwUaXkgJkz2l0ol6qT_WxeRbE_wBCwnEybmR0u5TO8"
-            }
+            "storage_revision": "0123456789abcdef"
         })
         .to_string(),
         headers: vec![],
@@ -929,7 +919,6 @@ fn test_verify_new_verifier_address_option_validates_deployed_code_hash() {
     let (mock_url, mock_handle, _captured) = spawn_verifier_mock(vec![VerifierMockResponse {
         status: 200,
         body: serde_json::json!({
-            "address": VERIFY_TEST_MAINNET_ADDRESS,
             "code_hash": VERIFY_TEST_CODE_HASH,
             "compiled_code_hash": VERIFY_TEST_CODE_HASH,
             "verification_result": "match",
@@ -1021,8 +1010,7 @@ fn test_verify_new_verifier_reports_mismatch() {
             "compiled_code_hash": "2222222222222222222222222222222222222222222222222222222222222222",
             "verification_result": "mismatch",
             "source_bundle_hash": null,
-            "source_storage": null,
-            "onchain_registration": null
+            "storage_revision": null
         })
         .to_string(),
         headers: vec![],

@@ -2,7 +2,7 @@ use crate::commands::common::{error_fmt, select_contract, select_wallet};
 use crate::context::Wallet;
 use crate::contract_interface::is_boc_path;
 use crate::tonconnect::TonConnectSession;
-use crate::wallets::open_wallets;
+use crate::wallets::{open_wallets, wallet_message_expire_at};
 use acton_config::color::OwoColorize;
 use acton_config::config::{ActonConfig, project_root as configured_project_root};
 use anyhow::{Context, anyhow};
@@ -625,10 +625,7 @@ pub fn verify_cmd(
     let (seqno, need_state_init) = wallet.seqno(&api_client)?;
     wait_for_rate_limit(api_client.has_api_key());
 
-    let expired_at_time = std::time::SystemTime::now() + std::time::Duration::from_secs(600);
-    let expire_at = expired_at_time
-        .duration_since(std::time::UNIX_EPOCH)?
-        .as_secs() as u32;
+    let expire_at = wallet_message_expire_at(&network)?;
     let message_cell_boc = Boc::encode(message_cell);
     let message_cell = TonCell::from_boc(message_cell_boc)?;
 
@@ -766,19 +763,13 @@ struct SignResponse {
 
 #[derive(Debug, Deserialize)]
 struct NewVerifyResponse {
-    #[allow(dead_code)]
-    #[serde(default)]
-    address: Option<String>,
     code_hash: String,
     compiled_code_hash: String,
     verification_result: NewVerificationResult,
     #[serde(default)]
     source_bundle_hash: Option<String>,
-    #[allow(dead_code)]
     #[serde(default)]
-    source_storage: Option<NewSourceStorageResponse>,
-    #[serde(default)]
-    onchain_registration: Option<NewOnchainRegistration>,
+    storage_revision: Option<String>,
 }
 
 #[derive(Debug, Deserialize, PartialEq, Eq)]
@@ -786,25 +777,6 @@ struct NewVerifyResponse {
 enum NewVerificationResult {
     Match,
     Mismatch,
-}
-
-#[derive(Debug, Deserialize)]
-struct NewSourceStorageResponse {
-    #[allow(dead_code)]
-    provider: String,
-    #[allow(dead_code)]
-    commit: String,
-    #[allow(dead_code)]
-    bundle_path: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct NewOnchainRegistration {
-    #[allow(dead_code)]
-    status: String,
-    #[allow(dead_code)]
-    master_address: String,
-    verification_record_address: String,
 }
 
 #[derive(Debug)]
@@ -968,11 +940,11 @@ fn verify_with_new_verifier(
             source_bundle_hash.dimmed()
         );
     }
-    if let Some(registration) = &verify_result.onchain_registration {
+    if let Some(storage_revision) = &verify_result.storage_revision {
         println!(
-            "  {} Verification record: {}",
+            "  {} Storage revision: {}",
             "→".blue().bold(),
-            registration.verification_record_address.dimmed()
+            storage_revision.dimmed()
         );
     }
 

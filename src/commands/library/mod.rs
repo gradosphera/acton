@@ -3,7 +3,7 @@ use crate::commands::disasm::disasm_cmd;
 use crate::context::Wallet;
 use crate::external_send::{SendBocContext, format_send_boc_error};
 use crate::tonconnect::TonConnectSession;
-use crate::wallets::open_wallets;
+use crate::wallets::{open_wallets, wallet_message_expire_at};
 use acton_config::color::OwoColorize;
 use acton_config::config::{
     ActonConfig, LibrariesFile, LibraryConfig, global_libraries_path, project_root,
@@ -470,11 +470,7 @@ impl LibrarySender {
         match self {
             Self::Local { wallet } => {
                 let (seqno, need_state_init) = wallet.seqno(api_client)?;
-                let expired_at_time =
-                    std::time::SystemTime::now() + std::time::Duration::from_secs(600);
-                let expire_at = expired_at_time
-                    .duration_since(std::time::UNIX_EPOCH)?
-                    .as_secs() as u32;
+                let expire_at = wallet_message_expire_at(network)?;
 
                 let message_cell = TonCell::from_boc(Boc::encode(message.clone()))?;
                 let external = wallet.wallet.create_ext_in_msg(

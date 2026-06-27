@@ -13,6 +13,7 @@ use crate::external_send::{SendBocContext, format_send_boc_error};
 use crate::paths;
 use crate::retrace;
 use crate::tonconnect;
+use crate::wallets::wallet_message_expire_at;
 use acton_config::color::OwoColorize;
 use acton_config::config::Explorer;
 use acton_debug::replayer::StepMode;
@@ -1421,12 +1422,10 @@ fn send_wallet_message(
     network: &Network,
     custom_networks: HashMap<String, acton_config::config::CustomNetworkUrls>,
 ) -> anyhow::Result<(Cell, HashBytes)> {
-    let expired_at_time = std::time::SystemTime::now() + Duration::from_secs(600);
-    let expire_at = expired_at_time.duration_since(UNIX_EPOCH)?.as_secs() as u32;
-
     let client = TonApiClient::new(network.clone(), custom_networks)?;
 
     let (seqno, need_state_init) = wallet.seqno(&client)?;
+    let expire_at = wallet_message_expire_at(network)?;
     let message_ton = TonCell::from_boc(Boc::encode(message))?;
     let external =
         wallet

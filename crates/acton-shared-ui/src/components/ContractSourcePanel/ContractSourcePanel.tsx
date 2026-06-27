@@ -35,39 +35,33 @@ export type ContractSourceTab =
 type HighlightLanguage = "tasm" | "json" | "tolk" | "func"
 
 export interface ContractVerifiedSource {
-  readonly address: string | null
   readonly code_hash: string
   readonly verified: boolean
-  readonly onchain?: {
-    readonly master_address: string
-    readonly verification_record_address: string
-  }
   readonly bundles: readonly SourceBundle[]
 }
 
 interface SourceBundle {
   readonly source_bundle_hash: string
   readonly verified_at: number
-  readonly commit: string | null
-  readonly bundle_path: string
-  readonly language: string
-  readonly compiler_version: string
+  readonly storage_revision: string
   readonly entrypoint: string
-  readonly compile_params?: unknown
-  readonly sources?: readonly SourceFileSummary[]
+  readonly compiler: CompilerMetadata
   readonly files: readonly SourceFile[]
 }
 
-interface SourceFileSummary {
-  readonly path: string
-  readonly is_entrypoint: boolean
+interface CompilerMetadata {
+  readonly language: string
+  readonly version: string
+  readonly params: unknown
 }
 
 interface SourceFile {
   readonly path: string
-  readonly sha256?: string
-  readonly content_base64: string
-  readonly content_text?: string | null
+  readonly content_hash: string
+  readonly include_in_command: boolean | null
+  readonly is_stdlib: boolean | null
+  readonly has_include_directives: boolean | null
+  readonly content: string
 }
 
 interface ContractCodeData {
@@ -353,6 +347,7 @@ function VerifiedCodeViewer({
     [activePath, bundle.files, entrypointPath],
   )
   const tree = useMemo(() => buildFileTree(bundle.files), [bundle.files])
+  const treeEntrypoint = entrypointPath ?? bundle.entrypoint
   const code = activeFile ? fileContent(activeFile) : ""
   const language = activeFile ? languageForPath(activeFile.path) : undefined
 
@@ -372,7 +367,7 @@ function VerifiedCodeViewer({
           <FileTreeRows
             nodes={tree}
             activePath={activeFile.path}
-            entrypoint={entrypointPath}
+            entrypoint={treeEntrypoint}
             onSelect={selectFile}
           />
         </div>
@@ -418,7 +413,7 @@ function VerifiedCodeViewer({
             <FileTreeRows
               nodes={tree}
               activePath={activeFile.path}
-              entrypoint={entrypointPath}
+              entrypoint={treeEntrypoint}
               onSelect={selectFile}
             />
           </div>
@@ -447,7 +442,7 @@ function FileTreeRows({
 }: {
   readonly nodes: readonly FileTreeNode[]
   readonly activePath: string
-  readonly entrypoint?: string
+  readonly entrypoint: string
   readonly depth?: number
   readonly onSelect: (path: string) => void
 }): JSX.Element {
@@ -496,8 +491,7 @@ function FileTreeRows({
 }
 
 function fileContent(file: SourceFile): string {
-  const content = file.content_text ?? Buffer.from(file.content_base64, "base64").toString("utf8")
-  return content.endsWith("\n") ? content.slice(0, -1) : content
+  return file.content.endsWith("\n") ? file.content.slice(0, -1) : file.content
 }
 
 function languageForPath(path: string): HighlightLanguage | undefined {
@@ -543,10 +537,10 @@ function findFileByPath(
 
 function findEntrypointFile(
   files: readonly SourceFile[],
-  entrypoint: string | undefined,
+  entrypoint: string,
 ): SourceFile | undefined {
   const exactMatch = findFileByPath(files, entrypoint)
-  if (exactMatch || !entrypoint) {
+  if (exactMatch) {
     return exactMatch
   }
 

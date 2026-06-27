@@ -140,7 +140,6 @@ function shouldShowSourceFile(path: string): boolean {
 function visibleSourceBundle(bundle: SourceBundle): SourceBundle {
   return {
     ...bundle,
-    sources: bundle.sources.filter(source => shouldShowSourceFile(source.path)),
     files: bundle.files.filter(file => shouldShowSourceFile(file.path)),
   }
 }
@@ -243,17 +242,7 @@ function sourceExceptionLabel(
 }
 
 function decodeSourceFile(file: SourceFile): string {
-  if (file.content_text !== null) {
-    return file.content_text
-  }
-
-  try {
-    const binary = globalThis.atob(file.content_base64)
-    const bytes = Uint8Array.from(binary, char => char.charCodeAt(0))
-    return new TextDecoder().decode(bytes)
-  } catch {
-    return ""
-  }
+  return file.content
 }
 
 function sourceLanguage(path: string): SourceEditorLanguage {
@@ -474,7 +463,8 @@ function sourceVariableTooltip(variable: SourceTraceVariable): string {
 }
 
 function isAddressVariable(variable: SourceTraceVariable): boolean {
-  return variable.type?.toLowerCase() === "address"
+  const normalizedType = variable.type?.trim().toLowerCase().replace(/\?+$/, "")
+  return normalizedType === "address" || normalizedType === "any_address"
 }
 
 function sourceVariableAddress(variable: SourceTraceVariable): string | undefined {

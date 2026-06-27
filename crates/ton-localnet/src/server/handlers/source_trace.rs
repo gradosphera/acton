@@ -7,7 +7,6 @@ use acton_debug::RenderedValue;
 use acton_debug::replayer::{ExceptionBreakMode, LocalVarRendered, StepMode, Tick, TolkReplayer};
 use anyhow::Context;
 use axum::Json;
-use base64::Engine;
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -264,13 +263,13 @@ fn inject_context_variables(
 }
 
 fn validate_bundle(bundle: &SourceTraceBundleRequest) -> anyhow::Result<()> {
-    if bundle.language.trim().to_lowercase() != "tolk" {
+    if bundle.compiler.language.trim().to_lowercase() != "tolk" {
         anyhow::bail!("Source-level retrace supports only Tolk bundles");
     }
-    if !is_compiler_version_at_least(&bundle.compiler_version, [1, 4, 0]) {
+    if !is_compiler_version_at_least(&bundle.compiler.version, [1, 4, 0]) {
         anyhow::bail!(
             "Source-level retrace requires Tolk compiler 1.4.0 or newer, got {}",
-            bundle.compiler_version
+            bundle.compiler.version
         );
     }
     if bundle.files.is_empty() {
@@ -350,18 +349,12 @@ fn write_source_file(root: &Path, file: &SourceTraceFileRequest) -> anyhow::Resu
             .with_context(|| format!("Failed to create source dir {}", parent.display()))?;
     }
 
-    let content = source_file_content(file)?;
+    let content = source_file_content(file);
     fs::write(&path, content).with_context(|| format!("Failed to write {}", path.display()))
 }
 
-fn source_file_content(file: &SourceTraceFileRequest) -> anyhow::Result<Vec<u8>> {
-    if let Some(content) = &file.content_text {
-        return Ok(content.as_bytes().to_vec());
-    }
-
-    base64::engine::general_purpose::STANDARD
-        .decode(file.content_base64.as_bytes())
-        .with_context(|| format!("Failed to decode {}", file.path))
+fn source_file_content(file: &SourceTraceFileRequest) -> Vec<u8> {
+    file.content.as_bytes().to_vec()
 }
 
 fn temp_import_mappings(

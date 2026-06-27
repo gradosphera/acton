@@ -84,8 +84,8 @@ function isCompilerVersionAtLeast(
 
 function isSupportedTolkBundle(bundle: SourceBundle): boolean {
   return (
-    bundle.language.trim().toLowerCase() === "tolk" &&
-    isCompilerVersionAtLeast(bundle.compiler_version, [1, 4, 0])
+    bundle.compiler.language.trim().toLowerCase() === "tolk" &&
+    isCompilerVersionAtLeast(bundle.compiler.version, [1, 4, 0])
   )
 }
 

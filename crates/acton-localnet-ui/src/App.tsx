@@ -6,6 +6,7 @@ import {Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState} from 
 import type {FC, ReactNode} from "react"
 
 import {TonClient} from "./explorer/api/client"
+import {getBundledCompilerAbis} from "./explorer/api/compilerAbiCatalog"
 import {AccountPage} from "./explorer/pages/AccountPage"
 import {AbiCatalogPage, AbiDetailsPage} from "./explorer/pages/AbiCatalogPage"
 import {BlockDetailsPage, BlocksPage} from "./explorer/pages/BlocksPage"
@@ -114,6 +115,7 @@ export const App: FC = () => {
         localnetApiToken,
         onUnauthorized: handleUnauthorized,
         toncenterApiKey: TONCENTER_API_KEY,
+        compilerAbiLoader: getBundledCompilerAbis,
       }),
     [handleUnauthorized, localnetApiToken],
   )

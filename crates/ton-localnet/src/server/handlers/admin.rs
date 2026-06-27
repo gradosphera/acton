@@ -13,13 +13,13 @@ use crate::server::{
     ApiCallLog, NetworkConditions, NetworkConditionsInfo, StartupWallet, StateSourceInfo,
 };
 use crate::types::Hash256;
+use anyhow::Context;
 use axum::{
     Json,
     body::Bytes,
     extract::Query,
     extract::{RawQuery, State},
 };
-use base64::Engine;
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -27,6 +27,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 const VERIFIER_SOURCE_URL: &str = "https://verifier.acton.monster/api/v1/verification/source";
+const VERIFIER_ABI_URL: &str = "https://verifier.acton.monster/api/v1/abi";
 const VERIFIER_REQUEST_TIMEOUT: Duration = Duration::from_secs(8);
 
 pub async fn faucet(
@@ -348,7 +349,13 @@ pub async fn get_verified_source(
     handle_result(
         async move {
             let value = fetch_verified_source(payload).await?;
-            let entries = verified_source_compiler_abis(&value);
+            let entries = match fetch_verified_compiler_abis(&value).await {
+                Ok(entries) => entries,
+                Err(error) => {
+                    tracing::warn!(?error, "failed to fetch verifier compiler ABI records");
+                    verified_source_compiler_abis(&value)
+                }
+            };
             if !entries.is_empty()
                 && let Err(error) = node.register_compiler_abis(entries).await
             {
@@ -401,6 +408,52 @@ async fn fetch_verified_source(payload: GetVerifiedSourceRequest) -> anyhow::Res
     Ok(value)
 }
 
+async fn fetch_verified_compiler_abis(source: &Value) -> anyhow::Result<Vec<(Hash256, Value)>> {
+    let code_hash = source
+        .get("code_hash")
+        .and_then(Value::as_str)
+        .context("Verifier source response does not contain code_hash")?;
+
+    let mut url = reqwest::Url::parse(VERIFIER_ABI_URL)?;
+    url.query_pairs_mut().append_pair("code_hash", code_hash);
+
+    let response = reqwest::Client::builder()
+        .timeout(VERIFIER_REQUEST_TIMEOUT)
+        .build()?
+        .get(url)
+        .send()
+        .await?;
+    let status = response.status();
+    let body = response.text().await?;
+    let value = serde_json::from_str::<Value>(&body).unwrap_or(Value::String(body));
+
+    if !status.is_success() {
+        let message = value.get("error").and_then(Value::as_str).map_or_else(
+            || format!("Verifier ABI request failed with status {status}"),
+            ToOwned::to_owned,
+        );
+        anyhow::bail!("{message}");
+    }
+
+    Ok(abi_response_compiler_abis(&value))
+}
+
+fn abi_response_compiler_abis(value: &Value) -> Vec<(Hash256, Value)> {
+    let Some(items) = value.get("items").and_then(Value::as_array) else {
+        return Vec::new();
+    };
+
+    items
+        .iter()
+        .filter_map(|item| {
+            let code_hash = item.get("code_hash").and_then(Value::as_str)?;
+            let code_hash = parse_hash_any(code_hash).ok()?;
+            let compiler_abi = item.get("abi").filter(|abi| abi.is_object())?.clone();
+            Some((code_hash, compiler_abi))
+        })
+        .collect()
+}
+
 fn non_empty_text(value: Option<String>) -> Option<String> {
     value.filter(|value| !value.trim().is_empty())
 }
@@ -451,15 +504,9 @@ fn compiler_abi_from_verified_source_file(file: &Value) -> Option<Value> {
 }
 
 fn verified_source_file_content(file: &Value) -> Option<String> {
-    if let Some(content_text) = file.get("content_text").and_then(Value::as_str) {
-        return Some(content_text.to_owned());
-    }
-
-    let content_base64 = file.get("content_base64").and_then(Value::as_str)?;
-    let bytes = base64::engine::general_purpose::STANDARD
-        .decode(content_base64)
-        .ok()?;
-    String::from_utf8(bytes).ok()
+    file.get("content")
+        .and_then(Value::as_str)
+        .map(str::to_owned)
 }
 
 fn parse_hash_any(hash: &str) -> anyhow::Result<Hash256> {
@@ -520,7 +567,6 @@ fn parse_optional_balance(balance: Option<String>) -> anyhow::Result<u128> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use base64::engine::general_purpose::STANDARD;
     use serde_json::json;
 
     #[test]
@@ -533,7 +579,7 @@ mod tests {
                     "files": [
                         {
                             "path": "output/counter.abi.json",
-                            "content_text": r#"{"contract_name":"Counter","get_methods":[]}"#
+                            "content": r#"{"contract_name":"Counter","get_methods":[]}"#
                         }
                     ]
                 }
@@ -548,24 +594,21 @@ mod tests {
     }
 
     #[test]
-    fn extracts_compiler_abi_from_verified_source_file_base64() {
+    fn extracts_compiler_abi_from_abi_response() {
         let code_hash = Hash256([0x24; 32]);
-        let compiler_abi = r#"{"contract_name":"Wallet","get_methods":[]}"#;
-        let source = json!({
-            "code_hash": code_hash.to_hex(),
-            "bundles": [
+        let abi_response = json!({
+            "items": [
                 {
-                    "files": [
-                        {
-                            "path": "output/wallet.abi.json",
-                            "content_base64": STANDARD.encode(compiler_abi)
-                        }
-                    ]
+                    "code_hash": code_hash.to_hex(),
+                    "abi": {
+                        "contract_name": "Wallet",
+                        "get_methods": []
+                    }
                 }
             ]
         });
 
-        let entries = verified_source_compiler_abis(&source);
+        let entries = abi_response_compiler_abis(&abi_response);
 
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].0, code_hash);
@@ -582,11 +625,11 @@ mod tests {
                     "files": [
                         {
                             "path": "output/broken.abi.json",
-                            "content_text": "not json"
+                            "content": "not json"
                         },
                         {
                             "path": "src/main.tolk",
-                            "content_text": "fun main() {}"
+                            "content": "fun main() {}"
                         }
                     ]
                 }

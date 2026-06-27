@@ -87,24 +87,29 @@ pub struct SourceTraceInMessageContextRequest {
 #[derive(Deserialize)]
 pub struct SourceTraceBundleRequest {
     pub source_bundle_hash: String,
-    pub language: String,
-    pub compiler_version: String,
     pub entrypoint: String,
-    pub compile_params: Value,
+    pub compiler: SourceTraceCompilerRequest,
     pub files: Vec<SourceTraceFileRequest>,
+}
+
+#[derive(Deserialize)]
+pub struct SourceTraceCompilerRequest {
+    pub language: String,
+    pub version: String,
+    pub params: Value,
 }
 
 #[derive(Deserialize)]
 pub struct SourceTraceFileRequest {
     pub path: String,
-    pub content_base64: String,
-    pub content_text: Option<String>,
+    pub content: String,
 }
 
 impl SourceTraceBundleRequest {
     #[must_use]
     pub fn import_mappings(&self) -> Option<BTreeMap<String, String>> {
-        self.compile_params
+        self.compiler
+            .params
             .get("import_mappings")
             .and_then(Value::as_object)
             .map(|mappings| {

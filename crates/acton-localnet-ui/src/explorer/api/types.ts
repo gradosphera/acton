@@ -1301,41 +1301,33 @@ export interface JettonWalletData {
 }
 
 export interface VerificationSourceResponse {
-  readonly address: string | null
   readonly code_hash: string
   readonly verified: boolean
-  readonly onchain: OnchainVerification
   readonly bundles: readonly SourceBundle[]
-}
-
-export interface OnchainVerification {
-  readonly master_address: string
-  readonly verification_record_address: string
 }
 
 export interface SourceBundle {
   readonly source_bundle_hash: string
   readonly verified_at: number
-  readonly commit: string | null
-  readonly bundle_path: string
-  readonly language: string
-  readonly compiler_version: string
+  readonly storage_revision: string
   readonly entrypoint: string
-  readonly compile_params: unknown
-  readonly sources: readonly SourceFileSummary[]
+  readonly compiler: SourceCompiler
   readonly files: readonly SourceFile[]
 }
 
-export interface SourceFileSummary {
-  readonly path: string
-  readonly is_entrypoint: boolean
+export interface SourceCompiler {
+  readonly language: string
+  readonly version: string
+  readonly params: unknown
 }
 
 export interface SourceFile {
   readonly path: string
-  readonly sha256: string
-  readonly content_base64: string
-  readonly content_text: string | null
+  readonly content_hash: string
+  readonly include_in_command: boolean | null
+  readonly is_stdlib: boolean | null
+  readonly has_include_directives: boolean | null
+  readonly content: string
 }
 
 export interface BuildSourceTraceRequest {

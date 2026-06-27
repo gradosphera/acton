@@ -2,14 +2,14 @@ mod snapshot;
 mod status;
 
 use crate::context::Wallet;
-use crate::wallets;
+use crate::wallets::{self, wallet_message_expire_at};
 use acton_config::color::OwoColorize;
 use acton_config::config::ActonConfig;
 use anyhow::Context;
 use rand::RngCore;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 use ton::ton_core::cell::TonCell;
 use ton::ton_core::traits::tlb::TLB;
 use ton::ton_wallet::WalletVersion;
@@ -30,7 +30,6 @@ use tycho_types::models::{
 
 const STARTUP_ACCOUNT_TOPUP_NANOGRAMS: u128 = 100_000_000_000; // 100 GRAM
 const STARTUP_DEPLOY_TRANSFER_NANOGRAMS: u128 = 50_000_000; // 0.05 GRAM
-const WALLET_MSG_TTL_SECONDS: u64 = 600;
 pub(crate) const LOCALNET_AUTH_TOKEN_ENV: &str = LOCALNET_API_KEY_ENV;
 pub use snapshot::{
     localnet_snapshot_create_cmd, localnet_snapshot_export_cmd, localnet_snapshot_import_cmd,
@@ -318,9 +317,7 @@ const fn wallet_version_to_string(version: WalletVersion) -> &'static str {
 }
 
 fn build_wallet_deploy_message(wallet: &Wallet) -> anyhow::Result<String> {
-    let expire_at = (SystemTime::now() + Duration::from_secs(WALLET_MSG_TTL_SECONDS))
-        .duration_since(UNIX_EPOCH)?
-        .as_secs() as u32;
+    let expire_at = wallet_message_expire_at(&Network::Localnet)?;
 
     let wallet_addr = wallet.address();
     let message_info = IntMsgInfo {

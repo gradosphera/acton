@@ -1,5 +1,6 @@
 use crate::types::{BocBytes, Lt};
 use anyhow::Context;
+use std::cell::RefCell;
 use ton_executor::ExecutorVerbosity;
 use ton_executor::message::{EmulationResult, Executor, PrevBlocksInfo, RunTransactionArgs};
 use tycho_types::boc::Boc;
@@ -60,12 +61,16 @@ pub trait TvmExecutor {
 
 pub struct TvmEmulatorAdapter {
     inner: Executor,
+    last_config: RefCell<Option<BocBytes>>,
 }
 
 impl TvmEmulatorAdapter {
     pub fn new() -> anyhow::Result<Self> {
         let inner = Executor::new(ExecutorVerbosity::Short, None)?;
-        Ok(Self { inner })
+        Ok(Self {
+            inner,
+            last_config: RefCell::new(None),
+        })
     }
 }
 
@@ -79,10 +84,16 @@ impl TvmExecutor for TvmEmulatorAdapter {
         libs: Option<&BocBytes>,
     ) -> anyhow::Result<ExecResult> {
         // 1. Prepare inputs
-        let config_b64 = config.to_base64();
-        self.inner
-            .set_config(&config_b64)
-            .context("Failed to set config")?;
+        {
+            let mut last_config = self.last_config.borrow_mut();
+            if last_config.as_ref() != Some(config) {
+                let config_b64 = config.to_base64();
+                self.inner
+                    .set_config(&config_b64)
+                    .context("Failed to set config")?;
+                *last_config = Some(config.clone());
+            }
+        }
 
         let in_msg_b64 = in_msg.to_base64();
         let shard_account_b64 = shard_account.to_base64();

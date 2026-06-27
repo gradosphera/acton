@@ -1160,20 +1160,13 @@
       },
       "VerificationSource": {
         "type": "object",
-        "required": ["address", "code_hash", "verified", "onchain", "bundles"],
+        "required": ["code_hash", "verified", "bundles"],
         "properties": {
-          "address": {
-            "type": "string",
-            "nullable": true
-          },
           "code_hash": {
             "$ref": "#/components/schemas/Hash"
           },
           "verified": {
             "type": "boolean"
-          },
-          "onchain": {
-            "$ref": "#/components/schemas/OnchainVerification"
           },
           "bundles": {
             "type": "array",
@@ -1200,12 +1193,9 @@
         "required": [
           "source_bundle_hash",
           "verified_at",
-          "bundle_path",
-          "language",
-          "compiler_version",
+          "storage_revision",
           "entrypoint",
-          "compile_params",
-          "sources",
+          "compiler",
           "files"
         ],
         "properties": {
@@ -1216,28 +1206,14 @@
             "type": "integer",
             "minimum": 0
           },
-          "commit": {
-            "type": "string",
-            "nullable": true
-          },
-          "bundle_path": {
-            "type": "string"
-          },
-          "language": {
-            "type": "string"
-          },
-          "compiler_version": {
+          "storage_revision": {
             "type": "string"
           },
           "entrypoint": {
             "type": "string"
           },
-          "compile_params": {},
-          "sources": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SourceFileSummary"
-            }
+          "compiler": {
+            "$ref": "#/components/schemas/SourceCompiler"
           },
           "files": {
             "type": "array",
@@ -1247,34 +1223,50 @@
           }
         }
       },
-      "SourceFileSummary": {
+      "SourceCompiler": {
         "type": "object",
-        "required": ["path", "is_entrypoint"],
+        "required": ["language", "version", "params"],
         "properties": {
-          "path": {
+          "language": {
             "type": "string"
           },
-          "is_entrypoint": {
-            "type": "boolean"
-          }
+          "version": {
+            "type": "string"
+          },
+          "params": {}
         }
       },
       "SourceFile": {
         "type": "object",
-        "required": ["path", "sha256", "content_base64", "content_text"],
+        "required": [
+          "path",
+          "content_hash",
+          "include_in_command",
+          "is_stdlib",
+          "has_include_directives",
+          "content"
+        ],
         "properties": {
           "path": {
             "type": "string"
           },
-          "sha256": {
+          "content_hash": {
             "type": "string"
           },
-          "content_base64": {
-            "type": "string"
-          },
-          "content_text": {
-            "type": "string",
+          "include_in_command": {
+            "type": "boolean",
             "nullable": true
+          },
+          "is_stdlib": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "has_include_directives": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "content": {
+            "type": "string"
           }
         }
       },
