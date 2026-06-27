@@ -130,7 +130,7 @@ const TRANSACTION_FILTERS_STORAGE_KEY = "acton.account.transactionFilters.v1"
 type PaginationItem = number | "ellipsis-left" | "ellipsis-right"
 type AccountHistoryMode = "actions" | "transactions"
 type AccountSortOrder = "desc" | "asc"
-type AccountTimeFormat = "relative" | "smart" | "absolute"
+export type AccountTimeFormat = "relative" | "smart" | "absolute"
 type HistoryValueTone = "positive" | "negative" | "empty" | "neutral"
 
 interface HistoryTechnicalLabel {
@@ -175,7 +175,7 @@ interface HistorySwapValueLine {
 
 type HistoryValueLine = HistoryTextValueLine | HistorySwapValueLine
 
-interface HistoryActionInfo {
+export interface HistoryActionInfo {
   readonly rowKey: string
   readonly transactionHash?: string
   readonly transactionHashes: readonly string[]
@@ -191,7 +191,7 @@ interface HistoryActionInfo {
   readonly valueLines: readonly HistoryValueLine[]
 }
 
-interface HistoryActionRow {
+export interface HistoryActionRow {
   readonly action: V3Action
   readonly info: HistoryActionInfo
 }
@@ -337,17 +337,7 @@ export const AccountDetails: FC<AccountDetailsProps> = ({
     [transactions, browsedAddr, messageNamesByAddress],
   )
   const actionRows = useMemo<readonly HistoryActionRow[]>(
-    () =>
-      actions.map((action, index) => ({
-        action,
-        info: getHistoryActionInfo(
-          action,
-          ownerAddress,
-          actionMetadata,
-          messageNamesByAddress,
-          index,
-        ),
-      })),
+    () => buildHistoryActionRows(actions, ownerAddress, actionMetadata, messageNamesByAddress),
     [actions, ownerAddress, actionMetadata, messageNamesByAddress],
   )
   const highlightedTransactionHashSet = useMemo(
@@ -809,94 +799,14 @@ export const AccountDetails: FC<AccountDetailsProps> = ({
                   </TableCell>
                 </TableRow>
               ) : effectiveHistoryMode === "actions" ? (
-                displayedActionRows.map(({action, info}, index) => {
-                  const formattedTime = formatTransactionTime(
-                    info.utime,
-                    nowSeconds,
-                    transactionFilters.timeFormat,
-                  )
-                  const isAddressHovered =
-                    hoveredAddress && info.address
-                      ? isSameAddress(info.address, hoveredAddress)
-                      : false
-                  const isHighlighted = info.transactionHashes.some(hash =>
-                    highlightedTransactionHashSet.has(hash),
-                  )
-                  const canOpenTransaction = info.transactionHash !== undefined
-                  const ActionIcon = getHistoryActionIcon(action, info)
-                  const continuesTrace = isSameActionTrace(
-                    action,
-                    displayedActionRows[index + 1]?.action,
-                  )
-                  const continuesFromTrace = isSameActionTrace(
-                    displayedActionRows[index - 1]?.action,
-                    action,
-                  )
-
-                  return (
-                    <TableRow
-                      key={info.rowKey}
-                      className={`${styles.row} ${
-                        canOpenTransaction ? styles.clickableRow : ""
-                      } ${isHighlighted ? styles.newTransactionRow : ""} ${
-                        continuesTrace ? styles.actionChainContinues : ""
-                      } ${continuesFromTrace ? styles.actionChainContinuation : ""}`}
-                      onClick={event => {
-                        if (info.transactionHash) onTransactionClick?.(info.transactionHash, event)
-                      }}
-                    >
-                      <TableCell className={`${styles.time} ${styles.timeColumn}`}>
-                        {!continuesFromTrace && (
-                          <span title={formattedTime.title}>{formattedTime.label}</span>
-                        )}
-                      </TableCell>
-                      <TableCell className={styles.actionColumn}>
-                        <div className={styles.action}>
-                          <ActionIcon className={styles.actionIcon} aria-hidden="true" />
-                          <span
-                            className={`${styles.actionText} ${styles.opcode}`}
-                            title={action.type ?? info.actionLabel}
-                          >
-                            {info.actionLabel}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className={styles.addressWrapper}>
-                          {info.relationLabel && (
-                            <span className={styles.addressRelation}>{info.relationLabel}</span>
-                          )}
-                          {info.address ? (
-                            <AddressChip
-                              address={info.address}
-                              fallback={info.displayAddressFallback}
-                              highlighted={isAddressHovered}
-                              onAddressClick={onAddressClick}
-                              onHoverAddressChange={setHoveredAddress}
-                            />
-                          ) : (
-                            <span className={styles.addressFallback}>
-                              {info.displayAddressFallback}
-                            </span>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className={styles.technicalColumn}>
-                        <HistoryTechnicalCell technicalLabel={info.technicalLabel} />
-                      </TableCell>
-                      <TableCell className={styles.valueContainer}>
-                        <div className={styles.historyValueStack}>
-                          {info.valueLines.map((line, index) => (
-                            <HistoryValueCellLine
-                              key={`${info.rowKey}:value:${index}`}
-                              line={line}
-                            />
-                          ))}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  )
-                })
+                <ActionHistoryRows
+                  rows={displayedActionRows}
+                  nowSeconds={nowSeconds}
+                  timeFormat={transactionFilters.timeFormat}
+                  highlightedTransactionHashSet={highlightedTransactionHashSet}
+                  onAddressClick={onAddressClick}
+                  onTransactionClick={onTransactionClick}
+                />
               ) : (
                 displayedTransactionRows.map(({tx, info}) => {
                   const transactionHash = tx.hash
@@ -1332,6 +1242,201 @@ function HistoryValueCellLine({line}: {readonly line: HistoryValueLine}): JSX.El
   )
 }
 
+interface ActionHistoryRowsProps {
+  readonly rows: readonly HistoryActionRow[]
+  readonly nowSeconds: number
+  readonly timeFormat: AccountTimeFormat
+  readonly highlightedTransactionHashSet?: ReadonlySet<string>
+  readonly showTimeColumn?: boolean
+  readonly interactiveRows?: boolean
+  readonly onAddressClick?: (addr: string, event?: MouseEvent<HTMLElement>) => void
+  readonly onActionHoverChange?: (action: V3Action | undefined) => void
+  readonly onTransactionClick?: (hash: string, event?: MouseEvent<HTMLElement>) => void
+}
+
+export function ActionHistoryRows({
+  rows,
+  nowSeconds,
+  timeFormat,
+  highlightedTransactionHashSet,
+  showTimeColumn = true,
+  interactiveRows = true,
+  onAddressClick,
+  onActionHoverChange,
+  onTransactionClick,
+}: ActionHistoryRowsProps): JSX.Element {
+  const [hoveredAddress, setHoveredAddress] = useState<string | undefined>()
+
+  return (
+    <>
+      {rows.map(({action, info}, index) => {
+        const formattedTime = showTimeColumn
+          ? formatTransactionTime(info.utime, nowSeconds, timeFormat)
+          : undefined
+        const isAddressHovered =
+          hoveredAddress && info.address ? isSameAddress(info.address, hoveredAddress) : false
+        const isHighlighted =
+          highlightedTransactionHashSet !== undefined &&
+          info.transactionHashes.some(hash => highlightedTransactionHashSet.has(hash))
+        const canOpenTransaction =
+          interactiveRows && info.transactionHash !== undefined && onTransactionClick !== undefined
+        const ActionIcon = getHistoryActionIcon(action, info)
+        const continuesTrace = isSameActionTrace(action, rows[index + 1]?.action)
+        const continuesFromTrace = isSameActionTrace(rows[index - 1]?.action, action)
+
+        return (
+          <TableRow
+            key={info.rowKey}
+            className={`${styles.row} ${interactiveRows ? "" : styles.rowStatic} ${
+              canOpenTransaction ? styles.clickableRow : ""
+            } ${isHighlighted ? styles.newTransactionRow : ""} ${
+              continuesTrace ? styles.actionChainContinues : ""
+            } ${continuesFromTrace ? styles.actionChainContinuation : ""}`}
+            onClick={
+              canOpenTransaction
+                ? event => {
+                    if (info.transactionHash) onTransactionClick(info.transactionHash, event)
+                  }
+                : undefined
+            }
+            onMouseEnter={onActionHoverChange ? () => onActionHoverChange(action) : undefined}
+            onMouseLeave={onActionHoverChange ? () => onActionHoverChange(undefined) : undefined}
+          >
+            {showTimeColumn && (
+              <TableCell className={`${styles.time} ${styles.timeColumn}`}>
+                {!continuesFromTrace && formattedTime && (
+                  <span title={formattedTime.title}>{formattedTime.label}</span>
+                )}
+              </TableCell>
+            )}
+            <TableCell className={styles.actionColumn}>
+              <div className={styles.action}>
+                <ActionIcon className={styles.actionIcon} aria-hidden="true" />
+                <span
+                  className={`${styles.actionText} ${styles.opcode}`}
+                  title={action.type ?? info.actionLabel}
+                >
+                  {info.actionLabel}
+                </span>
+              </div>
+            </TableCell>
+            <TableCell>
+              <div className={styles.addressWrapper}>
+                {info.relationLabel && (
+                  <span className={styles.addressRelation}>{info.relationLabel}</span>
+                )}
+                {info.address ? (
+                  <AddressChip
+                    address={info.address}
+                    fallback={info.displayAddressFallback}
+                    highlighted={isAddressHovered}
+                    onAddressClick={onAddressClick}
+                    onHoverAddressChange={setHoveredAddress}
+                  />
+                ) : (
+                  <span className={styles.addressFallback}>{info.displayAddressFallback}</span>
+                )}
+              </div>
+            </TableCell>
+            <TableCell className={styles.technicalColumn}>
+              <HistoryTechnicalCell technicalLabel={info.technicalLabel} />
+            </TableCell>
+            <TableCell className={styles.valueContainer}>
+              <div className={styles.historyValueStack}>
+                {info.valueLines.map((line, lineIndex) => (
+                  <HistoryValueCellLine key={`${info.rowKey}:value:${lineIndex}`} line={line} />
+                ))}
+              </div>
+            </TableCell>
+          </TableRow>
+        )
+      })}
+    </>
+  )
+}
+
+interface ActionHistoryTableProps {
+  readonly actions: readonly V3Action[]
+  readonly actionMetadata?: V3Metadata
+  readonly ownerAddress: string
+  readonly client: TonClient
+  readonly nowSeconds: number
+  readonly timeFormat?: AccountTimeFormat
+  readonly emptyState?: string
+  readonly className?: string
+  readonly showTimeColumn?: boolean
+  readonly interactiveRows?: boolean
+  readonly onAddressClick?: (addr: string, event?: MouseEvent<HTMLElement>) => void
+  readonly onActionHoverChange?: (action: V3Action | undefined) => void
+  readonly onTransactionClick?: (hash: string, event?: MouseEvent<HTMLElement>) => void
+}
+
+export function ActionHistoryTable({
+  actions,
+  actionMetadata = {},
+  ownerAddress,
+  client,
+  nowSeconds,
+  timeFormat = "smart",
+  emptyState = "No actions found",
+  className,
+  showTimeColumn = true,
+  interactiveRows = true,
+  onAddressClick,
+  onActionHoverChange,
+  onTransactionClick,
+}: ActionHistoryTableProps): JSX.Element {
+  const actionAddresses = useMemo(() => collectActionMessageNameAddresses(actions), [actions])
+  const messageNamesByAddress = useMessageNamesByAddress({
+    client,
+    addresses: actionAddresses,
+  })
+  const rows = useMemo(
+    () => buildHistoryActionRows(actions, ownerAddress, actionMetadata, messageNamesByAddress),
+    [actions, actionMetadata, messageNamesByAddress, ownerAddress],
+  )
+
+  return (
+    <div className={`${styles.historyContent} ${className ?? ""}`}>
+      <Table>
+        <TableHeader className={styles.historyHeaderGroup}>
+          <TableRow className={styles.historyHeaderRow}>
+            {showTimeColumn && (
+              <TableHead className={`${styles.tableHeader} ${styles.timeColumn}`}>Time</TableHead>
+            )}
+            <TableHead className={`${styles.tableHeader} ${styles.actionColumn}`}>Action</TableHead>
+            <TableHead className={styles.tableHeader}>Address</TableHead>
+            <TableHead className={`${styles.tableHeader} ${styles.technicalColumn}`} />
+            <TableHead className={`${styles.tableHeader} ${styles.valueContainer}`}>
+              Value
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.length === 0 ? (
+            <TableRow className={styles.emptyRow}>
+              <TableCell colSpan={showTimeColumn ? 5 : 4} className={styles.emptyCell}>
+                <div className={styles.tableState}>{emptyState}</div>
+              </TableCell>
+            </TableRow>
+          ) : (
+            <ActionHistoryRows
+              rows={rows}
+              nowSeconds={nowSeconds}
+              timeFormat={timeFormat}
+              showTimeColumn={showTimeColumn}
+              interactiveRows={interactiveRows}
+              onAddressClick={onAddressClick}
+              onActionHoverChange={onActionHoverChange}
+              onTransactionClick={onTransactionClick}
+            />
+          )}
+        </TableBody>
+      </Table>
+    </div>
+  )
+}
+
 function getHistoryTransactionInfo(
   tx: V3TransactionListItem,
   browsedAddr: ReturnType<typeof parseAddress>,
@@ -1607,6 +1712,18 @@ function getHistoryActionInfo(
     technicalLabel: getHistoryActionTechnicalLabel(action, messageNamesByAddress),
     valueLines: display.valueLines,
   }
+}
+
+function buildHistoryActionRows(
+  actions: readonly V3Action[],
+  ownerAddress: string,
+  metadata: V3Metadata,
+  messageNamesByAddress: MessageNamesByAddress,
+): readonly HistoryActionRow[] {
+  return actions.map((action, index) => ({
+    action,
+    info: getHistoryActionInfo(action, ownerAddress, metadata, messageNamesByAddress, index),
+  }))
 }
 
 function getHistoryActionLabel(action: V3Action, isIncoming: boolean): string {

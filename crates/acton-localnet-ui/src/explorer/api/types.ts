@@ -1173,7 +1173,7 @@ export interface V3Trace {
   readonly trace: V3TraceNode
   readonly transactions: Record<string, V3Transaction>
   readonly transactions_order: readonly string[]
-  readonly actions: readonly V3Action[]
+  readonly actions?: readonly V3Action[]
   readonly trace_info: {
     readonly transactions: number
     readonly messages: number

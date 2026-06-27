@@ -1,4 +1,4 @@
-import {type CSSProperties, useEffect, useLayoutEffect, useRef, useState} from "react"
+import {type CSSProperties, useEffect, useState} from "react"
 import {X} from "lucide-react"
 import type {ContractABI} from "@ton/tolk-abi-to-typescript"
 
@@ -6,6 +6,7 @@ import {useToast, type ContractData} from "@acton/shared-ui"
 
 import type {TonClient} from "../../../../api/client"
 import {useNetworkInfo} from "../../../../hooks/useNetworkInfo"
+import {useAvailableFlowMetrics} from "../../../../hooks/useAvailableFlowMetrics"
 import {traceTx} from "../../lib/traceTx"
 import type {RetraceResultAndCode} from "../../lib/types"
 import InlineLoader from "../InlineLoader"
@@ -47,63 +48,8 @@ export default function TransactionRetracePanel({
 }: TransactionRetracePanelProps) {
   const {network} = useNetworkInfo()
   const {showToast} = useToast()
-  const rootRef = useRef<HTMLDivElement | null>(null)
-  const [flowMetrics, setFlowMetrics] = useState({offset: 0, width: 0})
+  const {flowMetrics, rootRef} = useAvailableFlowMetrics<HTMLDivElement>(MAX_RETRACE_FLOW_WIDTH)
   const [state, setState] = useState<RetracePanelState>({type: "loading"})
-
-  useLayoutEffect(() => {
-    const updateFlowMetrics = () => {
-      const root = rootRef.current
-      if (!root) {
-        return
-      }
-
-      const anchor = root.parentElement ?? root
-      const viewportWidth = Math.round(
-        document.documentElement.clientWidth || globalThis.innerWidth,
-      )
-      const availableRect = root.closest("main")?.getBoundingClientRect()
-      const availableLeft = Math.max(0, Math.round(availableRect?.left ?? 0))
-      const availableRight = Math.min(
-        viewportWidth,
-        Math.round(availableRect?.right ?? viewportWidth),
-      )
-      const availableWidth = Math.max(0, availableRight - availableLeft)
-      const flowContainerLeft = availableWidth > 0 ? availableLeft : 0
-      const flowContainerWidth = availableWidth || viewportWidth
-      const width = Math.min(flowContainerWidth, MAX_RETRACE_FLOW_WIDTH)
-      const flowLeft = flowContainerLeft + Math.round((flowContainerWidth - width) / 2)
-      const offset = Math.round(anchor.getBoundingClientRect().left - flowLeft)
-      setFlowMetrics(current =>
-        current.offset === offset && current.width === width ? current : {offset, width},
-      )
-    }
-
-    updateFlowMetrics()
-
-    const resizeObserver =
-      typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(updateFlowMetrics)
-    const flowContainer = rootRef.current?.closest("main")
-    const observedElements = [
-      rootRef.current?.parentElement,
-      flowContainer,
-      flowContainer?.parentElement,
-    ]
-    if (resizeObserver) {
-      for (const element of observedElements) {
-        if (element) {
-          resizeObserver.observe(element)
-        }
-      }
-    }
-
-    globalThis.addEventListener("resize", updateFlowMetrics)
-
-    return () => {
-      resizeObserver?.disconnect()
-      globalThis.removeEventListener("resize", updateFlowMetrics)
-    }
-  }, [])
 
   useEffect(() => {
     let isActive = true

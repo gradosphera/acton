@@ -90,6 +90,10 @@ interface GetBlockTransactionsOptions {
   readonly limit?: number
 }
 
+interface GetTracesOptions {
+  readonly includeActions?: boolean
+}
+
 type JettonWalletMetadata = Record<
   string,
   {
@@ -566,9 +570,12 @@ export class TonClient {
     return results.flat()
   }
 
-  async getTraces(hash: string): Promise<V3TracesResponse> {
+  async getTraces(hash: string, options: GetTracesOptions = {}): Promise<V3TracesResponse> {
     const url = this.buildUrl(this.v3BaseUrl, "/traces")
     url.searchParams.append("tx_hash", hash)
+    if (options.includeActions) {
+      url.searchParams.append("include_actions", "true")
+    }
     return this.request(url, "Failed to fetch traces")
   }
 

@@ -12,16 +12,12 @@
   max-height: 90vh;
   overflow-y: auto;
   opacity: 0;
-  transform: scale(0.95);
   pointer-events: auto;
-  transition:
-    opacity 0.1s,
-    transform 0.1s;
+  transition: opacity 0.1s;
 }
 
 .tooltipVisible {
   opacity: 1;
-  transform: scale(1);
 }
 
 .content {
@@ -33,5 +29,6 @@
   position: fixed;
   z-index: 9999;
   pointer-events: auto;
+  cursor: default;
   background: transparent;
 }

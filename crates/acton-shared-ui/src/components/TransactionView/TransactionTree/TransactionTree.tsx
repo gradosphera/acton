@@ -30,7 +30,8 @@ import {buildStorageDiff, type StorageDiffNode} from "./storageDiff"
 import {useTooltip} from "./useTooltip"
 
 interface EdgeTransactionTooltipData {
-  readonly fromAddress: string
+  readonly fromAddress: string | undefined
+  readonly fromLabel: string | undefined
   readonly computePhase: {
     readonly success: boolean
     readonly exitCode?: number
@@ -47,7 +48,7 @@ interface EdgeTransactionTooltipData {
 interface NodeTransactionTooltipData {
   readonly contract: {
     readonly typeName: string
-    readonly address: string
+    readonly address: string | undefined
   }
   readonly account: {
     readonly isCreated: boolean
@@ -63,7 +64,12 @@ interface TransactionTreeProps {
   readonly verifiedSourcesByCodeHash?: ReadonlyMap<string, ContractVerifiedSource>
   readonly allContracts: readonly BackendContractInfo[]
   readonly selectedTransactionId?: string
+  readonly highlightedTransactionIds?: ReadonlySet<string>
   readonly onContractClick?: (address: string) => void
+  readonly renderAddressChip?: (
+    address: string,
+    options: {readonly shorten: boolean},
+  ) => React.ReactNode
   readonly renderSourceLocation?: (location: SourceLocation) => React.ReactNode
   readonly renderSelectedTransactionExtra?: (tx: TransactionInfo) => React.ReactNode
   readonly renderSelectedTransactionMessageRouteAction?: (tx: TransactionInfo) => React.ReactNode
@@ -85,6 +91,7 @@ const TREE_MIN_SIZE = {height: 80, width: 800} as const
 const TREE_PADDING = {top: 8, right: 32, bottom: 8, left: 50} as const
 const TREE_DETAILS_GAP = 15
 const TREE_EDGE_LABEL = {width: 150, height: 64, failedHeight: 84, x: -180, y: -40} as const
+const ACTION_HIGHLIGHT_SCROLL_DELAY_MS = 200
 
 const INITIAL_TREE_LAYOUT: TreeLayout = {
   height: TREE_MIN_SIZE.height,
@@ -97,14 +104,24 @@ const INITIAL_TREE_LAYOUT: TreeLayout = {
 
 function EdgeTransactionTooltipContent({
   data,
+  renderAddressChip,
 }: {
   data: EdgeTransactionTooltipData
+  renderAddressChip?: (address: string, options: {readonly shorten: boolean}) => React.ReactNode
 }): React.JSX.Element {
   return (
     <div className={styles.tooltipContent}>
       <div className={styles.tooltipField}>
         <div className={styles.tooltipFieldLabel}>From Address</div>
-        <div className={styles.tooltipFieldValue}>{data.fromAddress}</div>
+        <div className={styles.tooltipFieldValue}>
+          {data.fromAddress ? (
+            <span className={styles.tooltipAddressChip}>
+              {renderAddressChip?.(data.fromAddress, {shorten: true}) ?? data.fromAddress}
+            </span>
+          ) : (
+            (data.fromLabel ?? "unknown")
+          )}
+        </div>
       </div>
 
       <div className={styles.tooltipField}>
@@ -152,36 +169,49 @@ function NodeTransactionTooltipContent({
   data,
   contracts,
   onContractClick,
+  renderAddressChip,
 }: {
   data: NodeTransactionTooltipData
   contracts: Map<string, ContractData>
   onContractClick?: (address: string) => void
+  renderAddressChip?: (address: string, options: {readonly shorten: boolean}) => React.ReactNode
 }): React.JSX.Element {
   return (
     <div className={styles.tooltipContent}>
       <div className={styles.tooltipField}>
         <div className={styles.tooltipFieldLabel}>{data.contract.typeName}</div>
-        <div className={styles.tooltipFieldValue}>{data.contract.address}</div>
+        <div className={styles.tooltipFieldValue}>
+          {data.contract.address ? (
+            <span className={styles.tooltipAddressChip}>
+              {renderAddressChip?.(data.contract.address, {shorten: false}) ??
+                data.contract.address}
+            </span>
+          ) : (
+            "unknown"
+          )}
+        </div>
       </div>
 
-      <div className={styles.tooltipField}>
-        <div className={styles.tooltipFieldLabel}>Storage</div>
-        <div className={`${styles.tooltipFieldValue} ${styles.tooltipFieldValueStructured}`}>
-          {(data.account.isCreated || data.account.isDestroyed) && (
-            <div className={styles.storageMeta}>
-              {data.account.isCreated && (
-                <span className={`${styles.storageMetaBadge} ${styles.storageMetaBadgeCreated}`}>
-                  Account created
-                </span>
-              )}
-              {data.account.isDestroyed && (
-                <span className={`${styles.storageMetaBadge} ${styles.storageMetaBadgeDestroyed}`}>
-                  Account destroyed
-                </span>
-              )}
-            </div>
-          )}
-          {data.storageDiff ? (
+      {data.storageDiff && (
+        <div className={styles.tooltipField}>
+          <div className={styles.tooltipFieldLabel}>Storage</div>
+          <div className={`${styles.tooltipFieldValue} ${styles.tooltipFieldValueStructured}`}>
+            {(data.account.isCreated || data.account.isDestroyed) && (
+              <div className={styles.storageMeta}>
+                {data.account.isCreated && (
+                  <span className={`${styles.storageMetaBadge} ${styles.storageMetaBadgeCreated}`}>
+                    Account created
+                  </span>
+                )}
+                {data.account.isDestroyed && (
+                  <span
+                    className={`${styles.storageMetaBadge} ${styles.storageMetaBadgeDestroyed}`}
+                  >
+                    Account destroyed
+                  </span>
+                )}
+              </div>
+            )}
             <div className={styles.storageDiffScroll}>
               <StorageDiffView
                 diff={data.storageDiff}
@@ -189,11 +219,9 @@ function NodeTransactionTooltipContent({
                 onContractClick={onContractClick}
               />
             </div>
-          ) : (
-            <span className={styles.storageUnavailable}>Storage data unavailable</span>
-          )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }
@@ -205,7 +233,9 @@ export function TransactionTree({
   verifiedSourcesByCodeHash,
   allContracts,
   selectedTransactionId,
+  highlightedTransactionIds,
   onContractClick,
+  renderAddressChip,
   renderSourceLocation,
   renderSelectedTransactionExtra,
   renderSelectedTransactionMessageRouteAction,
@@ -261,13 +291,14 @@ export function TransactionTree({
 
     const computePhase = getTransactionComputePhase(tx.transaction)
     const sourceLabel = getTransactionSourceLabel(tx.transaction)
+    const sourceAddress =
+      sourceLabel === undefined && tx.transaction.inMessage?.info.src
+        ? tx.transaction.inMessage.info.src.toString()
+        : undefined
 
     const tooltipData: EdgeTransactionTooltipData = {
-      fromAddress:
-        sourceLabel ??
-        (tx.transaction.inMessage?.info.src
-          ? formatAddress(tx.transaction.inMessage.info.src as Address, contracts)
-          : "unknown"),
+      fromAddress: sourceAddress,
+      fromLabel: sourceLabel,
       computePhase: {
         success: computePhase?.type === "vm" ? computePhase.success : true,
         exitCode: computePhase?.type === "vm" ? computePhase.exitCode : undefined,
@@ -288,7 +319,9 @@ export function TransactionTree({
     showTooltip({
       x: rect.left,
       y: rect.top,
-      content: <EdgeTransactionTooltipContent data={tooltipData} />,
+      content: (
+        <EdgeTransactionTooltipContent data={tooltipData} renderAddressChip={renderAddressChip} />
+      ),
     })
   }
 
@@ -296,7 +329,7 @@ export function TransactionTree({
     const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
     triggerRectReference.current = rect
 
-    const contractAddress = tx.address ? tx.address.toString({testOnly: true}) : "unknown"
+    const contractAddress = tx.address ? tx.address.toString() : undefined
     const isCreated =
       tx.transaction.oldStatus === "non-existing" && tx.transaction.endStatus === "active"
     const isDestroyed =
@@ -323,6 +356,7 @@ export function TransactionTree({
           data={tooltipData}
           contracts={contracts}
           onContractClick={onContractClick}
+          renderAddressChip={renderAddressChip}
         />
       ),
     })
@@ -362,6 +396,7 @@ export function TransactionTree({
       const lt = tx.lt
       const id = tx.id
       const isSelected = selectedTransactionIdState === id
+      const isActionHighlighted = highlightedTransactionIds?.has(id) ?? false
 
       const hasExternalOut = [...tx.transaction.outMessages.values()].some(outMessage => {
         return outMessage.info.type === "external-out"
@@ -399,6 +434,7 @@ export function TransactionTree({
           isBounced,
           contractLetter,
           isSelected,
+          isActionHighlighted,
         },
         children: [...tx.children.map(it => convertTransactionToNode(it)), ...externalOutChildren],
       } satisfies RawNodeDatum
@@ -452,7 +488,13 @@ export function TransactionTree({
       },
       children: [],
     } satisfies RawNodeDatum
-  }, [rootTransactions, contracts, selectedTransactionIdState, allContracts])
+  }, [
+    rootTransactions,
+    contracts,
+    selectedTransactionIdState,
+    highlightedTransactionIds,
+    allContracts,
+  ])
 
   const renderCustomNodeElement = ({nodeDatum}: CustomNodeElementProps): React.JSX.Element => {
     if (nodeDatum.attributes?.isRoot === "hidden") {
@@ -583,6 +625,7 @@ export function TransactionTree({
     const isSelected = nodeDatum.attributes?.isSelected as boolean
     const id = nodeDatum.attributes?.id as string
     const tx = transactionMap.get(id)
+    const isActionHighlighted = nodeDatum.attributes?.isActionHighlighted as boolean
     const exitCode = (nodeDatum.attributes?.exitCode as string | undefined) ?? "0"
     const hasFailureDetails = exitCode !== "0"
     const successMark = nodeDatum.attributes?.success as string | undefined
@@ -590,6 +633,7 @@ export function TransactionTree({
     const nodeCircleClassName = [
       styles.nodeCircle,
       isSelected ? styles.nodeCircleSelected : undefined,
+      isActionHighlighted ? styles.nodeCircleActionHighlighted : undefined,
     ]
       .filter(Boolean)
       .join(" ")
@@ -623,14 +667,22 @@ export function TransactionTree({
           tabIndex={0}
           aria-label={`Transaction ${id}`}
           fill={
-            isFailed
-              ? "var(--transaction-tree-failed-node-fill)"
-              : isSelected
-                ? "var(--text-primary)"
-                : "var(--bg-color)"
+            isActionHighlighted
+              ? "var(--transaction-tree-action-highlight-fill)"
+              : isFailed
+                ? "var(--transaction-tree-failed-node-fill)"
+                : isSelected
+                  ? "var(--text-primary)"
+                  : "var(--bg-color)"
           }
-          stroke={isFailed ? "var(--transaction-tree-failed-node-stroke)" : "var(--text-primary)"}
-          strokeWidth={isFailed ? 2 : 1.5}
+          stroke={
+            isActionHighlighted
+              ? "var(--transaction-tree-action-highlight-stroke)"
+              : isFailed
+                ? "var(--transaction-tree-failed-node-stroke)"
+                : "var(--text-primary)"
+          }
+          strokeWidth={isActionHighlighted || isFailed ? 2 : 1.5}
           onClick={() => {
             handleNodeClick(id)
           }}
@@ -651,11 +703,13 @@ export function TransactionTree({
 
         <text
           fill={
-            isFailed
-              ? "var(--transaction-tree-failed-node-text)"
-              : isSelected
-                ? "var(--bg-color)"
-                : "var(--text-primary)"
+            isActionHighlighted
+              ? "var(--transaction-tree-action-highlight-text)"
+              : isFailed
+                ? "var(--transaction-tree-failed-node-text)"
+                : isSelected
+                  ? "var(--bg-color)"
+                  : "var(--text-primary)"
           }
           strokeWidth="0"
           x="0"
@@ -835,6 +889,58 @@ export function TransactionTree({
     }
   }, [selectedTransactionIdState, treeLayout])
 
+  useLayoutEffect(() => {
+    const container = treeContainerRef.current
+    const wrapper = treeWrapperRef.current
+    if (
+      !container ||
+      !wrapper ||
+      !highlightedTransactionIds ||
+      highlightedTransactionIds.size === 0
+    ) {
+      return
+    }
+
+    const highlightedNodes = [
+      ...wrapper.querySelectorAll<SVGCircleElement>('circle[aria-label^="Transaction "]'),
+    ].filter(node => {
+      const label = node.getAttribute("aria-label") ?? ""
+      const id = label.slice("Transaction ".length)
+      return highlightedTransactionIds.has(id)
+    })
+
+    if (highlightedNodes.length === 0) {
+      return
+    }
+
+    const containerRect = container.getBoundingClientRect()
+    const nodeRects = highlightedNodes.map(node => node.getBoundingClientRect())
+    const minLeft = Math.min(...nodeRects.map(rect => rect.left)) - containerRect.left
+    const maxRight = Math.max(...nodeRects.map(rect => rect.right)) - containerRect.left
+    const inlineMargin = Math.min(96, container.clientWidth / 4)
+    const visibleLeft = inlineMargin
+    const visibleRight = container.clientWidth - inlineMargin
+
+    if (minLeft >= visibleLeft && maxRight <= visibleRight) {
+      return
+    }
+
+    const timeoutId = globalThis.setTimeout(() => {
+      const highlightedCenter = container.scrollLeft + minLeft + (maxRight - minLeft) / 2
+      const maxScrollLeft = container.scrollWidth - container.clientWidth
+      const nextScrollLeft = Math.max(
+        0,
+        Math.min(maxScrollLeft, highlightedCenter - container.clientWidth / 2),
+      )
+
+      if (Math.abs(container.scrollLeft - nextScrollLeft) > 1) {
+        container.scrollTo({left: nextScrollLeft, behavior: "smooth"})
+      }
+    }, ACTION_HIGHLIGHT_SCROLL_DELAY_MS)
+
+    return () => globalThis.clearTimeout(timeoutId)
+  }, [highlightedTransactionIds, treeLayout])
+
   return (
     <div className={styles.container}>
       <div
@@ -901,17 +1007,19 @@ export function TransactionTree({
 
       {selectedTransaction && (
         <div className={styles.transactionDetails}>
-          <TransactionDetails
-            tx={selectedTransaction}
-            contracts={contracts}
-            compilerAbisByCodeHash={compilerAbisByCodeHash}
-            verifiedSourcesByCodeHash={verifiedSourcesByCodeHash}
-            allContracts={allContracts}
-            onContractClick={onContractClick}
-            renderSourceLocation={renderSourceLocation}
-            loadActions={loadActions}
-            renderMessageRouteAction={renderSelectedTransactionMessageRouteAction}
-          />
+          <div className={styles.transactionDetailsCard}>
+            <TransactionDetails
+              tx={selectedTransaction}
+              contracts={contracts}
+              compilerAbisByCodeHash={compilerAbisByCodeHash}
+              verifiedSourcesByCodeHash={verifiedSourcesByCodeHash}
+              allContracts={allContracts}
+              onContractClick={onContractClick}
+              renderSourceLocation={renderSourceLocation}
+              loadActions={loadActions}
+              renderMessageRouteAction={renderSelectedTransactionMessageRouteAction}
+            />
+          </div>
           {renderSelectedTransactionExtra?.(selectedTransaction)}
         </div>
       )}

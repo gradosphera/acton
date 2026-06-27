@@ -12,6 +12,7 @@ import {
   DeveloperTransactionListSkeleton,
 } from "../components/DeveloperTransactionList"
 import {AddressChip} from "../components/AddressChip"
+import {hashToHex} from "../components/utils"
 import {useAddressBook} from "../hooks/useAddressBook"
 import {useExplorerRoutePaths} from "../hooks/useExplorerRoutePaths"
 import {useOpenExplorerPath, type ExplorerNavigationClickEvent} from "../hooks/useOpenExplorerPath"
@@ -371,7 +372,9 @@ export const BlockDetailsPage: FC<BlocksPageProps> = ({client}) => {
             <BlockTransactionsTable
               transactions={state.transactions}
               onOpenAccount={(address, event) => openPath(routes.addressPath(address), event)}
-              onOpenTransaction={(hash, event) => openPath(routes.transactionPath(hash), event)}
+              onOpenTransaction={(hash, event) =>
+                openPath(routes.transactionPath(hashToHex(hash) ?? hash), event)
+              }
             />
           </>
         )}

@@ -404,6 +404,20 @@
   width: 100%;
   min-height: 400px;
   padding-top: 20px;
+  box-sizing: border-box;
+}
+
+.treeSectionWide {
+  width: min(var(--trace-tree-flow-width, 100%), var(--trace-tree-max-width));
+  max-width: min(var(--trace-tree-flow-width, 100%), var(--trace-tree-max-width));
+  margin-left: calc(-1 * var(--trace-tree-flow-offset, 0px));
+  --trace-tree-max-width: 1800px;
+  --transaction-tree-details-inline-offset: var(--trace-tree-flow-offset, 0px);
+  --transaction-tree-details-width: calc(
+    var(--trace-tree-flow-width, 100%) -
+    var(--trace-tree-flow-offset, 0px) -
+    var(--trace-tree-flow-offset, 0px)
+  );
 }
 
 .sectionTitle {
@@ -660,6 +674,114 @@
   height: 16px;
 }
 
+.skeletonEventCard {
+  width: 100%;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  overflow: visible;
+}
+
+.skeletonEventHeader,
+.skeletonEventRow {
+  display: grid;
+  grid-template-columns: minmax(150px, 14rem) minmax(220px, 1fr) minmax(120px, 12rem) minmax(
+      150px,
+      13rem
+    );
+  align-items: center;
+  column-gap: 20px;
+  box-sizing: border-box;
+}
+
+.skeletonEventHeader {
+  min-height: 48px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--tonscan-border, var(--border-color));
+  color: var(--tonscan-text-secondary, var(--text-secondary));
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.skeletonEventHeader > span:last-child {
+  text-align: right;
+}
+
+.skeletonEventRow {
+  min-height: 46px;
+  padding: 12px 20px;
+}
+
+.skeletonEventAction,
+.skeletonEventAddress {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.skeletonEventAction {
+  gap: 10px;
+}
+
+.skeletonEventAddress {
+  gap: 12px;
+}
+
+.skeletonEventTechnical {
+  display: flex;
+  justify-content: flex-start;
+  min-width: 0;
+}
+
+.skeletonEventValue {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.skeletonEventIcon {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+
+.skeletonEventActionText {
+  width: min(132px, 80%);
+  height: 18px;
+}
+
+.skeletonEventDirection {
+  width: 24px;
+  height: 12px;
+  flex: 0 0 auto;
+}
+
+.skeletonEventAddressText {
+  width: min(220px, 72%);
+  height: 18px;
+}
+
+.skeletonEventOpcode {
+  width: min(150px, 70%);
+  height: 16px;
+}
+
+.skeletonEventValueText {
+  width: min(174px, 82%);
+  height: 18px;
+}
+
+.skeletonEventIcon,
+.skeletonEventActionText,
+.skeletonEventDirection,
+.skeletonEventAddressText,
+.skeletonEventOpcode,
+.skeletonEventValueText {
+  border-radius: 999px;
+}
+
 .skeletonDetailCard {
   border: 1px solid var(--border-color);
   border-radius: var(--border-radius-md);
@@ -821,6 +943,14 @@
     width: 48%;
     margin-left: calc(22px + var(--spacing-sm));
     justify-content: flex-start;
+  }
+
+  .skeletonEventHeader,
+  .skeletonEventRow {
+    grid-template-columns: minmax(140px, 0.9fr) minmax(180px, 1.1fr) minmax(96px, 0.7fr) minmax(
+        120px,
+        0.8fr
+      );
   }
 
   .skeletonDetailRow {

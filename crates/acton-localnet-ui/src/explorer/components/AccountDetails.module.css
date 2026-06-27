@@ -355,6 +355,10 @@
   background-color: var(--tonscan-row-hover) !important;
 }
 
+.rowStatic:hover {
+  background-color: transparent !important;
+}
+
 .newTransactionRow {
   animation: newTransactionAppear 1.4s ease-out;
 }

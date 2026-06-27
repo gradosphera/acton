@@ -10,6 +10,9 @@
   --transaction-tree-failed-badge-text: var(--bg-color);
   --transaction-tree-failed-badge-stroke: var(--bg-color);
   --transaction-tree-failed-badge-mark-stroke: var(--bg-color);
+  --transaction-tree-action-highlight-fill: var(--color-todo-bg);
+  --transaction-tree-action-highlight-stroke: var(--color-todo);
+  --transaction-tree-action-highlight-text: var(--color-todo-text);
 }
 
 .container:has(:global(.retraceRoot)) {
@@ -23,20 +26,50 @@
   position: relative;
   padding-bottom: 15px;
   box-sizing: border-box;
+  cursor: default;
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--transaction-tree-edge-fade),
+    #000 calc(100% - var(--transaction-tree-edge-fade)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--transaction-tree-edge-fade),
+    #000 calc(100% - var(--transaction-tree-edge-fade)),
+    transparent 100%
+  );
+  --transaction-tree-edge-fade: 44px;
 }
 
 .treeWrapper {
   height: 100%;
   position: relative;
+  cursor: default;
 }
 
 .treeContainer :global(.rd3t-tree-container) {
   width: 100%;
   height: 100%;
+  cursor: default;
 }
 
-.treeContainer :global(.rd3t-node) {
-  cursor: pointer;
+.treeContainer :global(svg) {
+  cursor: default;
+}
+
+.treeContainer :global(.rd3t-node),
+.treeContainer :global(.rd3t-leaf-node) {
+  cursor: default;
+}
+
+.treeContainer :global(.rd3t-node foreignObject),
+.treeContainer :global(.rd3t-node foreignObject *),
+.treeContainer :global(.rd3t-leaf-node foreignObject),
+.treeContainer :global(.rd3t-leaf-node foreignObject *) {
+  cursor: default;
 }
 
 .treeContainer :global(.rd3t-node text) {
@@ -73,7 +106,7 @@
   flex-direction: column;
   gap: 8px;
   text-align: end;
-  cursor: pointer;
+  cursor: default;
 }
 
 .rootNode {
@@ -151,6 +184,12 @@
   overflow-wrap: break-word;
 }
 
+.tooltipAddressChip {
+  display: inline-block;
+  max-width: calc(100% + 6px);
+  margin-left: -6px;
+}
+
 .tooltipFieldValueStructured {
   word-wrap: normal;
   word-break: normal;
@@ -183,8 +222,26 @@
 }
 
 .transactionDetails {
+  margin: 0 0 var(--spacing-2xl);
+}
+
+.transactionDetailsCard {
+  width: calc(var(--transaction-tree-details-width, 100%) - var(--spacing-md) - var(--spacing-md));
+  max-width: calc(
+    100% -
+    var(--transaction-tree-details-inline-offset, 0px) -
+    var(--spacing-md) -
+    var(--spacing-md)
+  );
+  margin-left: calc(var(--transaction-tree-details-inline-offset, 0px) + var(--spacing-md));
+  margin-right: var(--spacing-md);
   border-radius: 0 0 var(--border-radius-md) var(--border-radius-md);
-  margin: 0 var(--spacing-md) var(--spacing-2xl);
+  box-sizing: border-box;
+}
+
+.transactionDetailsCard > :global(*) {
+  width: 100%;
+  box-sizing: border-box;
 }
 
 @media (max-width: 520px) {
@@ -194,6 +251,12 @@
 
   .transactionDetails {
     margin: 0 0 var(--spacing-xl);
+  }
+
+  .transactionDetailsCard {
+    width: 100%;
+    max-width: 100%;
+    margin-inline: 0;
   }
 }
 
@@ -232,10 +295,6 @@
   padding-bottom: var(--spacing-xs);
 }
 
-.storageUnavailable {
-  color: var(--text-muted);
-}
-
 .topText {
   display: flex;
   flex-direction: column;
@@ -251,6 +310,10 @@
 .nodeCircle,
 .nodeCircleSelected {
   cursor: pointer;
+}
+
+.nodeCircleActionHighlighted {
+  filter: drop-shadow(0 0 0.25rem color-mix(in srgb, var(--color-todo) 42%, transparent));
 }
 
 .failedBadge {

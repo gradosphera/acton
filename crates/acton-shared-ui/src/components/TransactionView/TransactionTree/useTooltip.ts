@@ -49,84 +49,72 @@ export function useTooltip(): UseTooltipReturn {
         height: window.innerHeight,
       }
 
-      const margin = 10
-      const positions = [
+      const viewportPadding = 8
+      const triggerGap = 10
+      const maxX = Math.max(viewportPadding, viewport.width - tooltipWidth - viewportPadding)
+      const maxY = Math.max(viewportPadding, viewport.height - tooltipHeight - viewportPadding)
+      const clampX = (x: number): number => Math.max(viewportPadding, Math.min(x, maxX))
+      const clampY = (y: number): number => Math.max(viewportPadding, Math.min(y, maxY))
+      const centeredX = triggerRect.left + triggerRect.width / 2 - tooltipWidth / 2
+      const centeredY = triggerRect.top + triggerRect.height / 2 - tooltipHeight / 2
+
+      const positions: readonly TooltipPosition[] = [
         {
-          placement: "right" as const,
-          x: triggerRect.right + margin,
-          y: triggerRect.top + triggerRect.height / 2 - tooltipHeight / 2,
-          score: 0,
+          placement: "top",
+          x: clampX(centeredX),
+          y: triggerRect.top - tooltipHeight - triggerGap,
         },
         {
-          placement: "left" as const,
-          x: triggerRect.left - tooltipWidth - margin,
-          y: triggerRect.top + triggerRect.height / 2 - tooltipHeight / 2,
-          score: 0,
+          placement: "bottom",
+          x: clampX(centeredX),
+          y: triggerRect.bottom + triggerGap,
         },
         {
-          placement: "bottom" as const,
-          x: triggerRect.left + triggerRect.width / 2 - tooltipWidth / 2,
-          y: triggerRect.bottom + margin,
-          score: 0,
+          placement: "right",
+          x: triggerRect.right + triggerGap,
+          y: clampY(centeredY),
         },
         {
-          placement: "top" as const,
-          x: triggerRect.left + triggerRect.width / 2 - tooltipWidth / 2,
-          y: triggerRect.top - tooltipHeight - margin,
-          score: 0,
+          placement: "left",
+          x: triggerRect.left - tooltipWidth - triggerGap,
+          y: clampY(centeredY),
         },
       ]
 
-      for (const pos of positions) {
-        const fitsHorizontally = pos.x >= margin && pos.x + tooltipWidth <= viewport.width - margin
-        const fitsVertically = pos.y >= margin && pos.y + tooltipHeight <= viewport.height - margin
-
-        if (fitsHorizontally && fitsVertically) {
-          pos.score += 100
-        }
-
-        if (pos.x < margin) pos.score -= (margin - pos.x) * 2
-        if (pos.x + tooltipWidth > viewport.width - margin) {
-          pos.score -= (pos.x + tooltipWidth - viewport.width + margin) * 2
-        }
-        if (pos.y < margin) pos.score -= (margin - pos.y) * 2
-        if (pos.y + tooltipHeight > viewport.height - margin) {
-          pos.score -= (pos.y + tooltipHeight - viewport.height + margin) * 2
-        }
-
-        const distanceFromLeft = pos.x
-        const distanceFromRight = viewport.width - (pos.x + tooltipWidth)
-        const distanceFromTop = pos.y
-        const distanceFromBottom = viewport.height - (pos.y + tooltipHeight)
-
-        pos.score += Math.min(
-          distanceFromLeft,
-          distanceFromRight,
-          distanceFromTop,
-          distanceFromBottom,
+      const fitsViewport = (position: TooltipPosition): boolean => {
+        return (
+          position.x >= viewportPadding &&
+          position.x + tooltipWidth <= viewport.width - viewportPadding &&
+          position.y >= viewportPadding &&
+          position.y + tooltipHeight <= viewport.height - viewportPadding
         )
       }
 
-      const bestPosition = positions.reduce((best, current) =>
-        current.score > best.score ? current : best,
-      )
+      const visibleArea = (position: TooltipPosition): number => {
+        const visibleLeft = Math.max(viewportPadding, position.x)
+        const visibleRight = Math.min(viewport.width - viewportPadding, position.x + tooltipWidth)
+        const visibleTop = Math.max(viewportPadding, position.y)
+        const visibleBottom = Math.min(
+          viewport.height - viewportPadding,
+          position.y + tooltipHeight,
+        )
 
-      const finalX = Math.max(
-        margin,
-        Math.min(bestPosition.x, viewport.width - tooltipWidth - margin),
-      )
-      const finalY = Math.max(
-        margin,
-        Math.min(bestPosition.y, viewport.height - tooltipHeight - margin),
-      )
+        return Math.max(0, visibleRight - visibleLeft) * Math.max(0, visibleBottom - visibleTop)
+      }
 
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
-      const placement = bestPosition.placement as "top" | "bottom" | "left" | "right"
+      const bestPosition =
+        positions.find(position => fitsViewport(position)) ??
+        positions.reduce((best, current) =>
+          visibleArea(current) > visibleArea(best) ? current : best,
+        )
+
+      const finalX = clampX(bestPosition.x)
+      const finalY = clampY(bestPosition.y)
 
       return {
         x: finalX,
         y: finalY,
-        placement: placement,
+        placement: bestPosition.placement,
       }
     },
     [],
